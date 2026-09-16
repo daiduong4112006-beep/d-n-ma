@@ -1,0 +1,8 @@
+{
+  "name": "Remix Remix Remix Remix Remix: Remix: Remix: Remix: MCQ Master - Quizlet MCQ Review",
+  "description": "Modern MCQ practice and quiz review app with practice mistakes, detailed statistics, import/export, and smart review tools.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

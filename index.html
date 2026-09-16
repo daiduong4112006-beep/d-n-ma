@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <script>
+      // Fix "Cannot set property fetch of #<Window> which has only a getter" in sandboxed iframes/extensions
+      (function () {
+        try {
+          var originalFetch = typeof window !== 'undefined' && window.fetch ? window.fetch.bind(window) : undefined;
+          var customFetch = originalFetch;
+
+          try {
+            Object.defineProperty(window, 'fetch', {
+              get: function () {
+                return customFetch;
+              },
+              set: function (newFetch) {
+                customFetch = newFetch;
+              },
+              configurable: true,
+              enumerable: true,
+            });
+          } catch (err1) {
+            if (typeof Window !== 'undefined' && Window.prototype) {
+              Object.defineProperty(Window.prototype, 'fetch', {
+                get: function () {
+                  return customFetch;
+                },
+                set: function (newFetch) {
+                  customFetch = newFetch;
+                },
+                configurable: true,
+                enumerable: true,
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('[Fetch Shim] Failed to define fetch setter:', e);
+        }
+      })();
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Remix Remix Remix: Remix: Remix: Remix: MCQ Master - Quizlet MCQ Review</title>
+    <meta name="description" content="Modern MCQ practice and quiz review app with practice mistakes, detailed statistics, import/export, and smart review tools." />
+    <meta property="og:title" content="Remix Remix Remix: Remix: Remix: Remix: MCQ Master - Quizlet MCQ Review" />
+    <meta property="og:description" content="Modern MCQ practice and quiz review app with practice mistakes, detailed statistics, import/export, and smart review tools." />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

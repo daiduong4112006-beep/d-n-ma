@@ -1,0 +1,51 @@
+{
+  "entities": {
+    "quizzes": {
+      "title": "Quizzes",
+      "description": "User quiz sets",
+      "properties": {
+        "userId": { "type": "string", "description": "ID of the user" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "subject": { "type": "string" },
+        "topic": { "type": "string" },
+        "questions": { "type": "array" },
+        "timesCompleted": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "attempts": {
+      "title": "Attempts",
+      "description": "User quiz attempts",
+      "properties": {
+        "userId": { "type": "string" },
+        "quizId": { "type": "string" },
+        "quizTitle": { "type": "string" },
+        "score": { "type": "number" },
+        "totalQuestions": { "type": "number" },
+        "accuracy": { "type": "number" },
+        "timeSpentSeconds": { "type": "number" },
+        "date": { "type": "string" },
+        "mode": { "type": "string" },
+        "questionResults": { "type": "array" }
+      }
+    },
+    "japanese_courses": {
+      "title": "Japanese Courses",
+      "description": "Japanese course data and lessons",
+      "properties": {
+        "code": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "level": { "type": "string" },
+        "lessons": { "type": "array" },
+        "kanjiList": { "type": "array" },
+        "grammarPoints": { "type": "array" },
+        "materials": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    }
+  }
+}
