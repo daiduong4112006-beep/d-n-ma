@@ -110,7 +110,7 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
               <div>
                 <h1 className="font-extrabold text-base text-slate-900 dark:text-slate-100 tracking-tight leading-none">
-                  MCQ Master
+                  DUN MASTER
                 </h1>
                 <p className="text-[10px] font-medium text-slate-400 mt-0.5 hidden sm:block">
                   Ôn luyện trắc nghiệm MCQ

@@ -1,6 +1,6 @@
 {
-  "name": "Remix Remix Remix Remix Remix: Remix: Remix: Remix: MCQ Master - Quizlet MCQ Review",
-  "description": "Modern MCQ practice and quiz review app with practice mistakes, detailed statistics, import/export, and smart review tools.",
+  "name": "DUN MASTER",
+  "description": "DUN MASTER - Ứng dụng ôn luyện trắc nghiệm MCQ & Học tiếng Nhật thông minh.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
