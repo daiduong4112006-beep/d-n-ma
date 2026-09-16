@@ -936,81 +936,86 @@ export function getJapaneseCourses(email?: string | null): JapaneseCourse[] {
         return initialList;
       }
 
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        // Ensure course-jpd123 has full data for Lessons 4-7
-        let changed = false;
-        const jpdCourse = parsed.find((c: JapaneseCourse) => c.id === 'course-jpd123');
-        if (jpdCourse) {
-          if (!jpdCourse.grammarPoints || jpdCourse.grammarPoints.length <= 1) {
-            jpdCourse.grammarPoints = JPD123_GRAMMAR_POINTS;
-            changed = true;
-          } else {
-            // Synchronize default grammar points if user has older version
-            for (const defGp of JPD123_GRAMMAR_POINTS) {
-              const existingIdx = jpdCourse.grammarPoints.findIndex((g: JapaneseGrammarPoint) => g.id === defGp.id);
-              if (existingIdx !== -1) {
-                const existing = jpdCourse.grammarPoints[existingIdx];
-                if (
-                  (defGp.id === 'g-b4-1' && !existing.structure.includes('Trả lời')) ||
-                  (defGp.id === 'g-b4-2' && !existing.structure.includes('Danh từ')) ||
-                  (defGp.id === 'g-b5-4' && !existing.structure.includes('Trả lời')) ||
-                  (defGp.id === 'g-b6-2' && !existing.structure.includes('Đồng ý'))
-                ) {
-                  jpdCourse.grammarPoints[existingIdx] = {
-                    ...existing,
-                    structure: defGp.structure,
-                    title: defGp.title,
-                  };
-                  changed = true;
-                }
-              }
-            }
-          }
-          const hasOldKanjiLessons =
-            !jpdCourse.lessons ||
-            jpdCourse.lessons.length <= 4 ||
-            jpdCourse.lessons.some((l: JapaneseLesson) => l.id.startsWith('lesson-jpd123-l'));
-          if (hasOldKanjiLessons) {
-            jpdCourse.lessons = JPD123_VOCAB_LESSONS;
-            changed = true;
-          }
-          if (!jpdCourse.kanjiList || jpdCourse.kanjiList.length < ALL_KANJI_CORE_LIST.length) {
-            jpdCourse.kanjiList = ALL_KANJI_CORE_LIST;
-            changed = true;
-          }
-          if (!jpdCourse.kanjiVocabList || jpdCourse.kanjiVocabList.length < ALL_KANJI_VOCAB_LIST.length) {
-            jpdCourse.kanjiVocabList = ALL_KANJI_VOCAB_LIST;
-            changed = true;
-          }
-          if (jpdCourse.materials === undefined) {
-            jpdCourse.materials = JPD123_MATERIALS;
-            changed = true;
-          } else {
-            // Respect user-deleted materials: filter out any in deletedMaterialIds
-            if (Array.isArray(jpdCourse.deletedMaterialIds) && jpdCourse.deletedMaterialIds.length > 0) {
-              const beforeCount = jpdCourse.materials.length;
-              jpdCourse.materials = jpdCourse.materials.filter(
-                (m: JapaneseMaterial) => !jpdCourse.deletedMaterialIds.includes(m.id)
-              );
-              if (jpdCourse.materials.length !== beforeCount) {
+      let parsed: any = [];
+      try {
+        parsed = raw ? JSON.parse(raw) : [];
+      } catch {
+        parsed = [];
+      }
+      if (!Array.isArray(parsed)) parsed = [];
+
+      // Ensure course-jpd123 has full data for Lessons 4-7 or restore if deleted
+      let changed = false;
+      const jpdCourse = parsed.find((c: JapaneseCourse) => c && (c.id === 'course-jpd123' || c.code?.toLowerCase().replace(/\s+/g, '') === 'jpd123'));
+      if (jpdCourse) {
+        if (!jpdCourse.grammarPoints || jpdCourse.grammarPoints.length <= 1) {
+          jpdCourse.grammarPoints = JPD123_GRAMMAR_POINTS;
+          changed = true;
+        } else {
+          // Synchronize default grammar points if user has older version
+          for (const defGp of JPD123_GRAMMAR_POINTS) {
+            const existingIdx = jpdCourse.grammarPoints.findIndex((g: JapaneseGrammarPoint) => g.id === defGp.id);
+            if (existingIdx !== -1) {
+              const existing = jpdCourse.grammarPoints[existingIdx];
+              if (
+                (defGp.id === 'g-b4-1' && !existing.structure.includes('Trả lời')) ||
+                (defGp.id === 'g-b4-2' && !existing.structure.includes('Danh từ')) ||
+                (defGp.id === 'g-b5-4' && !existing.structure.includes('Trả lời')) ||
+                (defGp.id === 'g-b6-2' && !existing.structure.includes('Đồng ý'))
+              ) {
+                jpdCourse.grammarPoints[existingIdx] = {
+                  ...existing,
+                  structure: defGp.structure,
+                  title: defGp.title,
+                };
                 changed = true;
               }
             }
           }
-        } else {
-          // If course-jpd123 was not found in admin list, add it
-          parsed.unshift(DEFAULT_JPD123_COURSE);
+        }
+        const hasOldKanjiLessons =
+          !jpdCourse.lessons ||
+          jpdCourse.lessons.length <= 4 ||
+          jpdCourse.lessons.some((l: JapaneseLesson) => l.id.startsWith('lesson-jpd123-l'));
+        if (hasOldKanjiLessons) {
+          jpdCourse.lessons = JPD123_VOCAB_LESSONS;
           changed = true;
         }
-        if (changed) {
-          localStorage.setItem(userKey, JSON.stringify(parsed));
+        if (!jpdCourse.kanjiList || jpdCourse.kanjiList.length < ALL_KANJI_CORE_LIST.length) {
+          jpdCourse.kanjiList = ALL_KANJI_CORE_LIST;
+          changed = true;
         }
-        return parsed;
+        if (!jpdCourse.kanjiVocabList || jpdCourse.kanjiVocabList.length < ALL_KANJI_VOCAB_LIST.length) {
+          jpdCourse.kanjiVocabList = ALL_KANJI_VOCAB_LIST;
+          changed = true;
+        }
+        if (jpdCourse.materials === undefined) {
+          jpdCourse.materials = JPD123_MATERIALS;
+          changed = true;
+        } else {
+          // Respect user-deleted materials: filter out any in deletedMaterialIds
+          if (Array.isArray(jpdCourse.deletedMaterialIds) && jpdCourse.deletedMaterialIds.length > 0) {
+            const beforeCount = jpdCourse.materials.length;
+            jpdCourse.materials = jpdCourse.materials.filter(
+              (m: JapaneseMaterial) => !jpdCourse.deletedMaterialIds.includes(m.id)
+            );
+            if (jpdCourse.materials.length !== beforeCount) {
+              changed = true;
+            }
+          }
+        }
+      } else {
+        // If course-jpd123 was missing (e.g. accidentally deleted), automatically recover it for authorized users!
+        parsed.unshift(DEFAULT_JPD123_COURSE);
+        changed = true;
+        if (isJapaneseAdmin(targetEmail)) {
+          syncJapaneseCourseToFirestore(DEFAULT_JPD123_COURSE).catch(() => {});
+        }
       }
-      const initialList = [DEFAULT_JPD123_COURSE];
-      localStorage.setItem(userKey, JSON.stringify(initialList));
-      return initialList;
+      if (changed) {
+        localStorage.setItem(userKey, JSON.stringify(parsed));
+      }
+      return parsed;
     }
 
     // Non-admin account (or guest): Must NEVER have jpd123, completely empty by default!
@@ -1071,14 +1076,30 @@ export function saveJapaneseCourses(courses: JapaneseCourse[], email?: string | 
 
 export function getJapaneseCourseById(id: string, email?: string | null): JapaneseCourse | null {
   const targetEmail = (email !== undefined ? (email || '') : getCurrentUserEmail()).toLowerCase().trim();
-  const isAdmin = isJapaneseAdmin(targetEmail);
+  const hasAccess = canAccessJpd123(targetEmail);
 
-  if ((id === 'course-jpd123' || id.toLowerCase().includes('jpd123')) && !isAdmin) {
+  if ((id === 'course-jpd123' || id.toLowerCase().includes('jpd123')) && !hasAccess) {
     return null;
   }
 
   const courses = getJapaneseCourses(targetEmail);
   return courses.find((c) => c.id === id) || null;
+}
+
+export function restoreDefaultJpd123Course(email?: string | null): JapaneseCourse[] {
+  const targetEmail = (email !== undefined ? (email || '') : getCurrentUserEmail()).toLowerCase().trim();
+  const current = getJapaneseCourses(targetEmail);
+  const withoutJpd = current.filter(
+    (c) => c && c.id !== 'course-jpd123' && c.code?.toLowerCase().replace(/\s+/g, '') !== 'jpd123'
+  );
+  const restoredCourse: JapaneseCourse = {
+    ...DEFAULT_JPD123_COURSE,
+    updatedAt: new Date().toISOString(),
+  };
+  const next = [restoredCourse, ...withoutJpd];
+  saveJapaneseCourses(next, targetEmail);
+  syncJapaneseCourseToFirestore(restoredCourse).catch(() => {});
+  return next;
 }
 
 export function saveJapaneseCourse(course: JapaneseCourse, email?: string | null): JapaneseCourse[] {

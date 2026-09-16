@@ -12,6 +12,7 @@ import {
   Sparkles,
   X,
   ShieldCheck,
+  RotateCcw,
 } from 'lucide-react';
 import { JapaneseCourse } from '../types/japanese';
 import {
@@ -21,8 +22,10 @@ import {
   isJapaneseAdmin,
   saveJapaneseCourses,
   canAccessJpd123,
+  restoreDefaultJpd123Course,
+  DEFAULT_JPD123_COURSE,
 } from '../utils/japaneseStorage';
-import { subscribeJapaneseCourses } from '../lib/firebase';
+import { subscribeJapaneseCourses, syncJapaneseCourseToFirestore } from '../lib/firebase';
 import { JapaneseCourseDetail } from './JapaneseCourseDetail';
 import { sound } from '../utils/audio';
 
@@ -73,6 +76,15 @@ export const JapaneseLearningPage: React.FC<Props> = ({ currentUser, onBackToDas
           allowed = cloudCourses.filter(
             (c) => c && c.id !== 'course-jpd123' && c.code?.toLowerCase().replace(/\s+/g, '') !== 'jpd123'
           );
+        } else {
+          // If authorized user/admin, guarantee JPD123 is always available even if accidentally deleted
+          const hasJpd = allowed.some((c) => c && (c.id === 'course-jpd123' || c.code?.toLowerCase().replace(/\s+/g, '') === 'jpd123'));
+          if (!hasJpd) {
+            allowed = [DEFAULT_JPD123_COURSE, ...allowed];
+            if (isAdmin) {
+              syncJapaneseCourseToFirestore(DEFAULT_JPD123_COURSE).catch(() => {});
+            }
+          }
         }
         setCourses(allowed);
         saveJapaneseCourses(allowed, currentUser?.email, true);
@@ -235,14 +247,34 @@ export const JapaneseLearningPage: React.FC<Props> = ({ currentUser, onBackToDas
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="px-5 py-3 rounded-2xl bg-linear-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs sm:text-sm shadow-lg shadow-orange-500/30 flex items-center gap-2 cursor-pointer active:scale-95 shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>+ Tạo File Tổng / Khóa Học Mới</span>
-          </button>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm('Khôi phục lại toàn bộ khóa học JPD123 gốc (Từ vựng Bài 4-7, Chữ Hán, Ngữ pháp, Tài liệu)?')) {
+                    const restored = restoreDefaultJpd123Course(currentUser?.email);
+                    setCourses(restored);
+                    sound.playSuccess();
+                  }
+                }}
+                className="px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-black text-xs border border-white/20 flex items-center gap-2 cursor-pointer active:scale-95 shrink-0 transition-colors"
+                title="Khôi phục lại dữ liệu JPD123 gốc nếu lỡ tay xóa"
+              >
+                <RotateCcw className="w-4 h-4 text-emerald-400" />
+                <span>Khôi phục JPD123 gốc</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="px-5 py-3 rounded-2xl bg-linear-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs sm:text-sm shadow-lg shadow-orange-500/30 flex items-center gap-2 cursor-pointer active:scale-95 shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Tạo File Tổng / Khóa Học Mới</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -283,14 +315,30 @@ export const JapaneseLearningPage: React.FC<Props> = ({ currentUser, onBackToDas
                 : 'Danh sách khóa học của bạn đang trống trơn. Bấm nút tạo khóa học mới để bắt đầu.'}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="px-6 py-2.5 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-black text-xs inline-flex items-center gap-2 cursor-pointer shadow-md shadow-orange-500/30"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Tạo khóa học mới</span>
-          </button>
+          <div className="flex items-center justify-center gap-3 flex-wrap pt-2">
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  const restored = restoreDefaultJpd123Course(currentUser?.email);
+                  setCourses(restored);
+                  sound.playSuccess();
+                }}
+                className="px-6 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs inline-flex items-center gap-2 cursor-pointer shadow-md shadow-indigo-600/30 active:scale-95"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Khôi phục lại Khóa học JPD123 gốc</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="px-6 py-2.5 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-black text-xs inline-flex items-center gap-2 cursor-pointer shadow-md shadow-orange-500/30 active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tạo khóa học mới</span>
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">

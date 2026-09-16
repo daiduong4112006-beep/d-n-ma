@@ -23,7 +23,12 @@ import {
   getAllowedJpd123Emails,
   addJpd123AccessEmail,
   removeJpd123AccessEmail,
+  restoreDefaultJpd123Course,
 } from '../utils/japaneseStorage';
+import {
+  saveJpd123AccessListToFirestore,
+  subscribeJpd123AccessList,
+} from '../lib/firebase';
 import { sound } from '../utils/audio';
 
 interface SettingsProps {
@@ -58,18 +63,30 @@ export const SettingsPage: React.FC<SettingsProps> = ({
 
   useEffect(() => {
     setAllowedEmails(getAllowedJpd123Emails());
+    const unSub = subscribeJpd123AccessList((emails) => {
+      if (Array.isArray(emails)) {
+        setAllowedEmails(emails);
+      }
+    });
+    return () => {
+      if (unSub) unSub();
+    };
   }, []);
 
-  const handleAddEmail = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newEmail.trim()) return;
+  const handleAddEmail = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanEmail = newEmail.trim().toLowerCase();
+    if (!cleanEmail) return;
 
-    const res = addJpd123AccessEmail(newEmail.trim());
+    const res = addJpd123AccessEmail(cleanEmail);
     if (res.success) {
       sound.playSuccess();
-      setAllowedEmails(getAllowedJpd123Emails());
+      const updated = getAllowedJpd123Emails();
+      setAllowedEmails(updated);
       setNewEmail('');
       setFeedback({ type: 'success', text: res.message });
+      // Ensure Firestore receives the whitelist immediately
+      saveJpd123AccessListToFirestore(updated).catch(() => {});
     } else {
       sound.playMistake();
       setFeedback({ type: 'error', text: res.message });
@@ -83,12 +100,30 @@ export const SettingsPage: React.FC<SettingsProps> = ({
   const handleRemoveEmail = (email: string) => {
     if (window.confirm(`Xác nhận thu hồi quyền xem JPD123 của tài khoản: ${email}?`)) {
       removeJpd123AccessEmail(email);
-      setAllowedEmails(getAllowedJpd123Emails());
+      const updated = getAllowedJpd123Emails();
+      setAllowedEmails(updated);
+      saveJpd123AccessListToFirestore(updated).catch(() => {});
       sound.playClick();
       setFeedback({ type: 'success', text: `Đã thu hồi quyền xem của ${email}` });
       setTimeout(() => {
         setFeedback(null);
       }, 3500);
+    }
+  };
+
+  const handleRestoreJpd123 = () => {
+    if (
+      window.confirm(
+        'Khôi phục lại toàn bộ khóa học JPD123 gốc (Từ vựng Bài 4-7, Chữ Hán, Ngữ pháp, Tài liệu PDF) và đồng bộ lên đám mây?'
+      )
+    ) {
+      restoreDefaultJpd123Course(currentUser?.email);
+      sound.playSuccess();
+      setFeedback({
+        type: 'success',
+        text: 'Đã khôi phục thành công toàn bộ khóa học JPD123 gốc và đồng bộ lên server!',
+      });
+      setTimeout(() => setFeedback(null), 4500);
     }
   };
 
@@ -245,10 +280,32 @@ export const SettingsPage: React.FC<SettingsProps> = ({
               </div>
               <button
                 type="submit"
+                onClick={(e) => handleAddEmail(e)}
                 className="inline-flex items-center justify-center gap-2 px-4 py-2.5 font-bold text-xs rounded-xl shadow-xs bg-indigo-600 hover:bg-indigo-700 text-white transition-all cursor-pointer active:scale-95 shrink-0"
               >
                 <UserPlus className="w-4 h-4" />
                 <span>+ Cấp Quyền Xem</span>
+              </button>
+            </div>
+
+            {/* Action to restore deleted JPD123 */}
+            <div className="p-3.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200/60 dark:border-indigo-900/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <h5 className="font-black text-xs text-indigo-950 dark:text-indigo-200 flex items-center gap-1.5">
+                  <RotateCcw className="w-3.5 h-3.5 text-indigo-600" />
+                  Khôi phục khóa học JPD123 gốc:
+                </h5>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Nếu bạn từng lỡ tay xóa mất khóa học JPD123, bấm nút này để phục hồi lại đầy đủ Từ vựng Bài 4-7, Kanji, Ngữ pháp và đồng bộ lên server.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleRestoreJpd123}
+                className="inline-flex items-center justify-center gap-2 px-3.5 py-2 font-black text-xs rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Khôi phục JPD123 gốc</span>
               </button>
             </div>
 
