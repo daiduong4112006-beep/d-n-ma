@@ -78,7 +78,7 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
 
   // Active study mode
   const [activeStudyMode, setActiveStudyMode] = useState<
-    'none' | 'kanji-study' | 'kanji-flashcard' | 'vocab-flashcard' | 'vocab-typing' | 'vocab-multichoice'
+    'none' | 'kanji-study' | 'kanji-flashcard' | 'kanji-typing' | 'vocab-flashcard' | 'vocab-typing' | 'vocab-multichoice'
   >('none');
 
   // Modals
@@ -269,6 +269,27 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
     sound.playClick();
   };
 
+  // Virtual lesson helper for Kanji Core typing
+  const virtualLessonForKanjiCore: JapaneseLesson = {
+    id: `kanji_core_${selectedFolder || 'all'}`,
+    title: `Gõ Chữ Hán Cốt Lõi • ${
+      !selectedFolder || selectedFolder === 'ALL'
+        ? 'Tất cả bài học'
+        : LESSON_FOLDER_METADATA[selectedFolder]?.title || selectedFolder
+    }`,
+    cards: currentFolderKanji.map((k) => ({
+      id: k.id,
+      term: k.kanji,
+      reading: (k.kunyomi || k.onyomi || '').split(/[,、/]/)[0]?.replace(/[・.]/g, '').trim(),
+      definition: `${k.hanViet ? `${k.hanViet} • ` : ''}${k.meaning}`,
+      romaji: '',
+      mastered: !!k.mastered,
+    })),
+    description: `Luyện gõ ${currentFolderKanji.length} chữ Hán cốt lõi`,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
   // Virtual lesson helper for typing & multichoice study modes
   const virtualLessonForVocab: JapaneseLesson = {
     id: `kanji_vocab_${selectedFolder || 'all'}`,
@@ -317,6 +338,17 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
     );
   }
 
+  if (activeStudyMode === 'kanji-typing') {
+    return (
+      <JapaneseTypingMode
+        lesson={virtualLessonForKanjiCore}
+        isKanjiSection={true}
+        onExit={() => setActiveStudyMode('none')}
+        onCardMastered={(id) => handleToggleKanjiMastered(id)}
+      />
+    );
+  }
+
   if (activeStudyMode === 'vocab-flashcard') {
     return (
       <JapaneseFlashcardMode
@@ -337,6 +369,7 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
     return (
       <JapaneseTypingMode
         lesson={virtualLessonForVocab}
+        isKanjiSection={true}
         onExit={() => setActiveStudyMode('none')}
         onCardMastered={(id) => handleToggleVocabMastered(id)}
       />
@@ -846,6 +879,17 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
               >
                 <Layers className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
                 <span>FLASHCARD</span>
+              </button>
+
+              {/* GÕ KANJI Button */}
+              <button
+                type="button"
+                onClick={() => setActiveStudyMode('kanji-typing')}
+                className="px-3 sm:px-3.5 py-2 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 text-white font-bold text-xs shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+                title="Luyện gõ cách đọc chữ Hán"
+              >
+                <Keyboard className="w-3.5 h-3.5 text-orange-400" />
+                <span>GÕ</span>
               </button>
             </div>
           </div>
