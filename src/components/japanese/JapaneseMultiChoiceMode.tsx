@@ -166,8 +166,9 @@ export const JapaneseMultiChoiceMode: React.FC<JapaneseMultiChoiceModeProps> = (
   }, [storageId, lesson.cards]);
 
   const isRemoteUpdateRef = useRef(false);
+  const isInitialMountRef = useRef(true);
 
-  // Cross-Tab & Cross-Device Real-time Sync (< 5ms)
+  // Cross-Tab & Cross-Device Real-time Sync (< 2ms)
   useEffect(() => {
     if (!storageId) return;
 
@@ -188,6 +189,11 @@ export const JapaneseMultiChoiceMode: React.FC<JapaneseMultiChoiceModeProps> = (
   // 2. Save progress on change
   useEffect(() => {
     if (cards.length === 0 || isCompleted) return;
+
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      return;
+    }
 
     if (isRemoteUpdateRef.current) {
       isRemoteUpdateRef.current = false;

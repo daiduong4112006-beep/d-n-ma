@@ -6,6 +6,8 @@ import {
   syncAttemptToFirestore,
   syncFlashcardProgressToFirestore,
   syncQuizLearningProgressToFirestore,
+  syncPracticeMistakesProgressToFirestore,
+  PracticeMistakesProgressCloud,
 } from '../lib/firebase';
 import { realtimeSync } from './realtimeSync';
 
@@ -538,44 +540,55 @@ export const resetQuizWrongQuestions = (quizId: string): void => {
 export interface FlashcardProgress {
   currentIndex: number;
   knownQuestionIds: string[];
+  updatedAt?: number;
 }
 
 export const getFlashcardProgress = (quizId: string): FlashcardProgress => {
-  if (!quizId) return { currentIndex: 0, knownQuestionIds: [] };
+  if (!quizId) return { currentIndex: 0, knownQuestionIds: [], updatedAt: 0 };
   try {
-    const raw = localStorage.getItem(`flashcard_progress_${quizId}`);
+    const cleanId = String(quizId).trim();
+    const raw = localStorage.getItem(`flashcard_progress_${cleanId}`);
     if (raw) {
       const parsed = JSON.parse(raw);
       return {
         currentIndex: typeof parsed.currentIndex === 'number' ? parsed.currentIndex : 0,
         knownQuestionIds: Array.isArray(parsed.knownQuestionIds) ? parsed.knownQuestionIds : [],
+        updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : 0,
       };
     }
   } catch (e) {
     console.error('Error reading flashcard progress:', e);
   }
-  return { currentIndex: 0, knownQuestionIds: [] };
+  return { currentIndex: 0, knownQuestionIds: [], updatedAt: 0 };
 };
 
 export const saveFlashcardProgress = (
   quizId: string,
-  progress: { currentIndex: number; knownQuestionIds: string[] },
+  progress: { currentIndex: number; knownQuestionIds: string[]; updatedAt?: number },
   skipBroadcast = false
 ): void => {
   if (!quizId) return;
+  const cleanId = String(quizId).trim();
+  const timestamp = progress.updatedAt || Date.now();
+  const enrichedProgress: FlashcardProgress = {
+    ...progress,
+    updatedAt: timestamp,
+  };
+
   try {
-    localStorage.setItem(`flashcard_progress_${quizId}`, JSON.stringify(progress));
+    localStorage.setItem(`flashcard_progress_${cleanId}`, JSON.stringify(enrichedProgress));
     
-    // Broadcast immediately to all other tabs (< 5ms)
+    // Broadcast immediately to all other tabs (< 2ms)
     if (!skipBroadcast) {
-      realtimeSync.broadcast('MCQ_FLASHCARD', quizId, progress.currentIndex, {
-        knownQuestionIds: progress.knownQuestionIds,
-      });
+      realtimeSync.broadcast('MCQ_FLASHCARD', cleanId, enrichedProgress.currentIndex, {
+        knownQuestionIds: enrichedProgress.knownQuestionIds,
+        updatedAt: timestamp,
+      }, timestamp);
     }
 
     const userEmail = getCurrentUserEmail();
     if (userEmail) {
-      syncFlashcardProgressToFirestore(userEmail, quizId, progress).catch(() => {});
+      syncFlashcardProgressToFirestore(userEmail, cleanId, enrichedProgress).catch(() => {});
     }
   } catch (e) {
     console.error('Error saving flashcard progress:', e);
@@ -584,11 +597,41 @@ export const saveFlashcardProgress = (
 
 export const resetFlashcardProgress = (quizId: string): void => {
   if (!quizId) return;
+  const cleanId = String(quizId).trim();
   try {
-    localStorage.removeItem(`flashcard_progress_${quizId}`);
-    realtimeSync.broadcast('MCQ_FLASHCARD', quizId, 0, { knownQuestionIds: [] });
+    localStorage.removeItem(`flashcard_progress_${cleanId}`);
+    realtimeSync.broadcast('MCQ_FLASHCARD', cleanId, 0, { knownQuestionIds: [], updatedAt: Date.now() });
   } catch (e) {
     console.error('Error resetting flashcard progress:', e);
+  }
+};
+
+export const updateAllFlashcardProgressFromCloud = (
+  items: Record<string, { currentIndex: number; knownQuestionIds: string[]; updatedAt?: number }>
+): void => {
+  if (typeof window === 'undefined' || !items) return;
+  try {
+    Object.entries(items).forEach(([quizId, cloudData]) => {
+      const cleanQuizId = String(quizId).trim();
+      const key = `flashcard_progress_${cleanQuizId}`;
+      const local = getFlashcardProgress(cleanQuizId);
+      const cloudTimestamp = cloudData.updatedAt || 0;
+      const localTimestamp = local.updatedAt || 0;
+
+      // Cloud takes precedence if newer timestamp or if local is at 0 and cloud has actual progress
+      if (cloudTimestamp >= localTimestamp || (local.currentIndex === 0 && cloudData.currentIndex > 0)) {
+        const merged: FlashcardProgress = {
+          currentIndex: cloudData.currentIndex,
+          knownQuestionIds: cloudData.knownQuestionIds || [],
+          updatedAt: cloudTimestamp || Date.now(),
+        };
+        localStorage.setItem(key, JSON.stringify(merged));
+        // Notify any active FlashcardViewer component
+        realtimeSync.notifyLocal('MCQ_FLASHCARD', cleanQuizId, cloudData.currentIndex, merged, merged.updatedAt);
+      }
+    });
+  } catch (e) {
+    console.error('Error updating flashcard progress from cloud:', e);
   }
 };
 
@@ -604,9 +647,10 @@ export const getQuizLearningProgress = (
   isWrongQuestions = false
 ): QuizLearningProgressState | null => {
   if (!quizId) return null;
+  const cleanId = String(quizId).trim();
   const progressKey = isWrongQuestions
-    ? `mcq_learning_progress_${quizId}_wrong`
-    : `mcq_learning_progress_${quizId}`;
+    ? `mcq_learning_progress_${cleanId}_wrong`
+    : `mcq_learning_progress_${cleanId}`;
   try {
     const raw = localStorage.getItem(progressKey);
     if (raw) return JSON.parse(raw);
@@ -623,21 +667,27 @@ export const saveQuizLearningProgress = (
   skipBroadcast = false
 ): void => {
   if (!quizId) return;
+  const cleanId = String(quizId).trim();
   const progressKey = isWrongQuestions
-    ? `mcq_learning_progress_${quizId}_wrong`
-    : `mcq_learning_progress_${quizId}`;
+    ? `mcq_learning_progress_${cleanId}_wrong`
+    : `mcq_learning_progress_${cleanId}`;
   try {
-    localStorage.setItem(progressKey, JSON.stringify(progress));
+    const timestamp = progress.updatedAt || Date.now();
+    const enriched: QuizLearningProgressState = {
+      ...progress,
+      updatedAt: timestamp,
+    };
+    localStorage.setItem(progressKey, JSON.stringify(enriched));
 
-    // Broadcast immediately to other tabs (< 5ms)
+    // Broadcast immediately to other tabs (< 2ms)
     if (!skipBroadcast) {
-      realtimeSync.broadcast('MCQ_PRACTICE', quizId, progress.currentIndex, progress, progress.updatedAt);
+      realtimeSync.broadcast('MCQ_PRACTICE', cleanId, enriched.currentIndex, enriched, timestamp);
     }
 
     // Sync to Cloud Firestore for Cross-Device sync
     const userEmail = getCurrentUserEmail();
     if (userEmail && !isWrongQuestions) {
-      syncQuizLearningProgressToFirestore(userEmail, quizId, progress).catch(() => {});
+      syncQuizLearningProgressToFirestore(userEmail, cleanId, enriched).catch(() => {});
     }
   } catch (e) {
     console.error('Error saving quiz learning progress:', e);
@@ -646,13 +696,111 @@ export const saveQuizLearningProgress = (
 
 export const clearQuizLearningProgress = (quizId: string, isWrongQuestions = false): void => {
   if (!quizId) return;
+  const cleanId = String(quizId).trim();
   const progressKey = isWrongQuestions
-    ? `mcq_learning_progress_${quizId}_wrong`
-    : `mcq_learning_progress_${quizId}`;
+    ? `mcq_learning_progress_${cleanId}_wrong`
+    : `mcq_learning_progress_${cleanId}`;
   try {
     localStorage.removeItem(progressKey);
   } catch (e) {
     console.error('Error clearing quiz learning progress:', e);
+  }
+};
+
+export const updateAllQuizLearningProgressFromCloud = (
+  items: Record<string, any>
+): void => {
+  if (typeof window === 'undefined' || !items) return;
+  try {
+    Object.entries(items).forEach(([quizId, cloudData]) => {
+      const cleanQuizId = String(quizId).trim();
+      const progressKey = `mcq_learning_progress_${cleanQuizId}`;
+      const local = getQuizLearningProgress(cleanQuizId);
+      const cloudTimestamp = cloudData.updatedAt || 0;
+      const localTimestamp = local?.updatedAt || 0;
+
+      if (cloudTimestamp >= localTimestamp || (!local && cloudData.currentIndex > 0)) {
+        const merged: QuizLearningProgressState = {
+          currentIndex: cloudData.currentIndex,
+          userAnswers: cloudData.userAnswers || {},
+          currentOptions: cloudData.currentOptions,
+          updatedAt: cloudTimestamp || Date.now(),
+        };
+        localStorage.setItem(progressKey, JSON.stringify(merged));
+        // Notify active QuizPage component
+        realtimeSync.notifyLocal('MCQ_PRACTICE', cleanQuizId, cloudData.currentIndex, merged, merged.updatedAt);
+      }
+    });
+  } catch (e) {
+    console.error('Error updating quiz learning progress from cloud:', e);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Practice Mistakes (Luyện câu hay sai) Progress Storage & Realtime Sync
+// ---------------------------------------------------------------------------
+export interface PracticeMistakesProgressState {
+  currentIndex: number;
+  masteredCount: number;
+  updatedAt: number;
+}
+
+export const getPracticeMistakesProgress = (): PracticeMistakesProgressState | null => {
+  try {
+    const raw = localStorage.getItem('mcq_practice_mistakes_progress');
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    console.error(e);
+  }
+  return null;
+};
+
+export const savePracticeMistakesProgress = (
+  currentIndex: number,
+  masteredCount: number,
+  skipBroadcast = false
+): void => {
+  try {
+    const state: PracticeMistakesProgressState = {
+      currentIndex,
+      masteredCount,
+      updatedAt: Date.now(),
+    };
+    localStorage.setItem('mcq_practice_mistakes_progress', JSON.stringify(state));
+
+    if (!skipBroadcast) {
+      realtimeSync.broadcast('MCQ_MISTAKES', 'global', currentIndex, state, state.updatedAt);
+    }
+
+    const userEmail = getCurrentUserEmail();
+    if (userEmail) {
+      syncPracticeMistakesProgressToFirestore(userEmail, state).catch(() => {});
+    }
+  } catch (e) {
+    console.error('Error saving practice mistakes progress:', e);
+  }
+};
+
+export const updatePracticeMistakesProgressFromCloud = (
+  cloudData: PracticeMistakesProgressCloud
+): void => {
+  if (typeof window === 'undefined' || !cloudData) return;
+  try {
+    const local = getPracticeMistakesProgress();
+    const cloudTimestamp = cloudData.updatedAt || 0;
+    const localTimestamp = local?.updatedAt || 0;
+
+    if (cloudTimestamp >= localTimestamp || (!local && cloudData.currentIndex > 0)) {
+      const merged: PracticeMistakesProgressState = {
+        currentIndex: cloudData.currentIndex,
+        masteredCount: cloudData.masteredCount || 0,
+        updatedAt: cloudTimestamp || Date.now(),
+      };
+      localStorage.setItem('mcq_practice_mistakes_progress', JSON.stringify(merged));
+      realtimeSync.notifyLocal('MCQ_MISTAKES', 'global', cloudData.currentIndex, merged, merged.updatedAt);
+    }
+  } catch (e) {
+    console.error('Error updating practice mistakes progress from cloud:', e);
   }
 };
 

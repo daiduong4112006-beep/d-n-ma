@@ -20,25 +20,82 @@ import { getCurrentUserEmail } from './storage';
 import {
   syncJapaneseCourseToFirestore,
   deleteJapaneseCourseFromFirestore,
+  saveJpd123AccessListToFirestore,
 } from '../lib/firebase';
 
 const STORAGE_KEY = 'mcq_japanese_lessons_v2';
 const COURSES_STORAGE_KEY = 'mcq_japanese_courses_v1';
+const JPD123_ACCESS_LIST_KEY = 'mcq_jpd123_allowed_emails';
+
+// Primary Super Admin email
+export const SUPER_ADMIN_EMAIL = 'daiduong4112006@gmail.com';
 
 // Only these admin accounts have the JPD123 course folder
 export const JAPANESE_ADMIN_EMAILS: string[] = [
-  'hsk9hbt@gmail.com',
-  'trinhthichien10101979@gmail.com',
-  'daiduong4112006@gmail.com',
-  'kieuduong41126@gmail.com',
-  'huha41126@gmail.com',
-  'hihu41126@gmail.com',
+  SUPER_ADMIN_EMAIL,
 ];
 
 export function isJapaneseAdmin(email?: string | null): boolean {
   const targetEmail = (email !== undefined ? (email || '') : getCurrentUserEmail()).toLowerCase().trim();
   if (!targetEmail) return false;
   return JAPANESE_ADMIN_EMAILS.some((admin) => admin.toLowerCase().trim() === targetEmail);
+}
+
+export function getAllowedJpd123Emails(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(JPD123_ACCESS_LIST_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return [];
+}
+
+export function saveAllowedJpd123Emails(emails: string[], skipCloudSync = false): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const cleanList = Array.from(new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean)));
+    localStorage.setItem(JPD123_ACCESS_LIST_KEY, JSON.stringify(cleanList));
+    if (!skipCloudSync) {
+      saveJpd123AccessListToFirestore(cleanList).catch(() => {});
+    }
+  } catch (e) {
+    console.error('saveAllowedJpd123Emails error:', e);
+  }
+}
+
+export function addJpd123AccessEmail(email: string): { success: boolean; message: string } {
+  const clean = email.trim().toLowerCase();
+  if (!clean || !clean.includes('@')) {
+    return { success: false, message: 'Email không hợp lệ. Vui lòng nhập đúng định dạng Gmail!' };
+  }
+  if (isJapaneseAdmin(clean)) {
+    return { success: false, message: 'Email này là Super Admin, đã có toàn quyền!' };
+  }
+  const current = getAllowedJpd123Emails();
+  if (current.includes(clean)) {
+    return { success: false, message: 'Email này đã được cấp quyền từ trước!' };
+  }
+  const next = [...current, clean];
+  saveAllowedJpd123Emails(next);
+  return { success: true, message: `Đã cấp quyền xem JPD123 thành công cho: ${clean}` };
+}
+
+export function removeJpd123AccessEmail(email: string): void {
+  const clean = email.trim().toLowerCase();
+  const current = getAllowedJpd123Emails();
+  const next = current.filter((e) => e !== clean);
+  saveAllowedJpd123Emails(next);
+}
+
+export function canAccessJpd123(email?: string | null): boolean {
+  const targetEmail = (email !== undefined ? (email || '') : getCurrentUserEmail()).toLowerCase().trim();
+  if (!targetEmail) return false;
+  if (isJapaneseAdmin(targetEmail)) return true;
+  const allowed = getAllowedJpd123Emails();
+  return allowed.includes(targetEmail);
 }
 
 export function getCoursesStorageKey(email?: string | null): string {
@@ -859,10 +916,10 @@ export function getJapaneseCourses(email?: string | null): JapaneseCourse[] {
   if (typeof window === 'undefined') return [];
   try {
     const targetEmail = (email !== undefined ? (email || '') : getCurrentUserEmail()).toLowerCase().trim();
-    const isAdmin = isJapaneseAdmin(targetEmail);
+    const hasAccess = canAccessJpd123(targetEmail);
     const userKey = getCoursesStorageKey(targetEmail);
 
-    if (isAdmin) {
+    if (hasAccess) {
       let raw = localStorage.getItem(userKey);
       // Migrate from legacy global key if user key does not exist yet
       if (!raw) {
@@ -987,11 +1044,11 @@ export function getJapaneseCourses(email?: string | null): JapaneseCourse[] {
 export function saveJapaneseCourses(courses: JapaneseCourse[], email?: string | null, skipCloudSync = false): void {
   try {
     const targetEmail = (email !== undefined ? (email || '') : getCurrentUserEmail()).toLowerCase().trim();
-    const isAdmin = isJapaneseAdmin(targetEmail);
+    const hasAccess = canAccessJpd123(targetEmail);
     const userKey = getCoursesStorageKey(targetEmail);
 
     let toSave = courses;
-    if (!isAdmin) {
+    if (!hasAccess) {
       toSave = courses.filter(
         (c) =>
           c &&

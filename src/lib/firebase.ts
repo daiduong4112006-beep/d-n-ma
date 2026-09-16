@@ -585,6 +585,52 @@ export const getUserSettingsFromFirestore = async (email: string): Promise<any |
 };
 
 // ---------------------------------------------------------------------------
+// JPD123 Course Access Whitelist Sync
+// ---------------------------------------------------------------------------
+export const saveJpd123AccessListToFirestore = async (allowedEmails: string[]): Promise<void> => {
+  if (!isFirestoreAvailable()) return;
+  try {
+    const ref = doc(db, 'settings', 'jpd123_access_list');
+    await setDoc(
+      ref,
+      {
+        allowedEmails: allowedEmails.map((e) => e.trim().toLowerCase()),
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    handleFirestoreError('saveJpd123AccessListToFirestore', err);
+  }
+};
+
+export const subscribeJpd123AccessList = (
+  onUpdate: (allowedEmails: string[]) => void
+): (() => void) => {
+  if (!isFirestoreAvailable()) return () => {};
+  try {
+    const ref = doc(db, 'settings', 'jpd123_access_list');
+    return onSnapshot(
+      ref,
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (Array.isArray(data?.allowedEmails)) {
+            onUpdate(data.allowedEmails);
+          }
+        }
+      },
+      (err) => {
+        handleFirestoreError('subscribeJpd123AccessList', err);
+      }
+    );
+  } catch (err) {
+    handleFirestoreError('subscribeJpd123AccessList catch', err);
+    return () => {};
+  }
+};
+
+// ---------------------------------------------------------------------------
 // Real-time Cloud Sync for Starred Vocabulary ("Từ cần lưu ý ghi nhớ")
 // ---------------------------------------------------------------------------
 export const syncStarredVocabularyToFirestore = async (email: string, words: any[]): Promise<void> => {
@@ -684,36 +730,70 @@ export const subscribeStarredQuestions = (
 // ---------------------------------------------------------------------------
 // Real-time Cloud Sync for Flashcards Progress (MCQ Master)
 // ---------------------------------------------------------------------------
+const pendingFlashcardWrites = new Map<string, { email: string; quizId: string; progress: any }>();
+let flashcardWriteTimer: any = null;
+
+const executeFlashcardWrite = async (item: { email: string; quizId: string; progress: any }) => {
+  if (!isFirestoreAvailable() || !item.email || !item.quizId) return;
+  try {
+    const cleanEmail = item.email.trim().toLowerCase();
+    const docId = `${cleanEmail.replace(/[^a-z0-9]/g, '_')}_${String(item.quizId).trim()}`;
+    const ref = doc(db, 'flashcard_progress', docId);
+    await setDoc(
+      ref,
+      {
+        email: cleanEmail,
+        quizId: String(item.quizId).trim(),
+        progress: {
+          currentIndex: item.progress.currentIndex,
+          knownQuestionIds: item.progress.knownQuestionIds || [],
+          updatedAt: item.progress.updatedAt || Date.now(),
+        },
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    handleFirestoreError('syncFlashcardProgressToFirestore', err);
+  }
+};
+
 export const syncFlashcardProgressToFirestore = async (
   email: string,
   quizId: string,
-  progress: { currentIndex: number; knownQuestionIds: string[] }
+  progress: { currentIndex: number; knownQuestionIds: string[]; updatedAt?: number },
+  immediate = false
 ): Promise<void> => {
-  if (!isFirestoreAvailable() || !email || !quizId) return;
-  try {
-    const cleanEmail = email.trim().toLowerCase();
-    const docId = `${cleanEmail.replace(/[^a-z0-9]/g, '_')}_${quizId}`;
-    const ref = doc(db, 'flashcard_progress', docId);
-    await setDoc(ref, {
-      email: cleanEmail,
-      quizId,
-      progress,
-      updatedAt: new Date().toISOString(),
-    }, { merge: true });
-  } catch (err) {
-    handleFirestoreError('syncFlashcardProgressToFirestore', err);
+  if (!email || !quizId) return;
+  const key = `${email}_${quizId}`;
+  pendingFlashcardWrites.set(key, { email, quizId, progress });
+
+  if (immediate) {
+    if (flashcardWriteTimer) clearTimeout(flashcardWriteTimer);
+    await executeFlashcardWrite({ email, quizId, progress });
+    pendingFlashcardWrites.delete(key);
+    return;
+  }
+
+  if (!flashcardWriteTimer) {
+    flashcardWriteTimer = setTimeout(() => {
+      flashcardWriteTimer = null;
+      const items = Array.from(pendingFlashcardWrites.values());
+      pendingFlashcardWrites.clear();
+      items.forEach((item) => executeFlashcardWrite(item).catch(() => {}));
+    }, 200); // Ultra-responsive 200ms debounce
   }
 };
 
 export const subscribeFlashcardProgress = (
   email: string,
   quizId: string,
-  onUpdate: (progress: { currentIndex: number; knownQuestionIds: string[] }) => void
+  onUpdate: (progress: { currentIndex: number; knownQuestionIds: string[]; updatedAt?: number }) => void
 ): (() => void) => {
   if (!isFirestoreAvailable() || !email || !quizId) return () => {};
   try {
     const cleanEmail = email.trim().toLowerCase();
-    const docId = `${cleanEmail.replace(/[^a-z0-9]/g, '_')}_${quizId}`;
+    const docId = `${cleanEmail.replace(/[^a-z0-9]/g, '_')}_${String(quizId).trim()}`;
     const ref = doc(db, 'flashcard_progress', docId);
     return onSnapshot(
       ref,
@@ -721,7 +801,10 @@ export const subscribeFlashcardProgress = (
         if (snap.exists()) {
           const data = snap.data();
           if (data?.progress) {
-            onUpdate(data.progress);
+            onUpdate({
+              ...data.progress,
+              updatedAt: data.progress.updatedAt || (data.updatedAt ? new Date(data.updatedAt).getTime() : Date.now()),
+            });
           }
         }
       },
@@ -735,6 +818,41 @@ export const subscribeFlashcardProgress = (
   }
 };
 
+// Global subscription for all flashcard progress of this user across devices
+export const subscribeAllFlashcardProgress = (
+  email: string,
+  onUpdate: (items: Record<string, { currentIndex: number; knownQuestionIds: string[]; updatedAt?: number }>) => void
+): (() => void) => {
+  if (!isFirestoreAvailable() || !email) return () => {};
+  try {
+    const cleanEmail = email.trim().toLowerCase();
+    const q = query(collection(db, 'flashcard_progress'), where('email', '==', cleanEmail));
+    return onSnapshot(
+      q,
+      (snap) => {
+        const result: Record<string, any> = {};
+        snap.docs.forEach((d) => {
+          const data = d.data();
+          if (data?.quizId && data?.progress) {
+            result[data.quizId] = {
+              currentIndex: typeof data.progress.currentIndex === 'number' ? data.progress.currentIndex : 0,
+              knownQuestionIds: Array.isArray(data.progress.knownQuestionIds) ? data.progress.knownQuestionIds : [],
+              updatedAt: data.progress.updatedAt || (data.updatedAt ? new Date(data.updatedAt).getTime() : Date.now()),
+            };
+          }
+        });
+        onUpdate(result);
+      },
+      (err) => {
+        handleFirestoreError('subscribeAllFlashcardProgress', err);
+      }
+    );
+  } catch (err) {
+    handleFirestoreError('subscribeAllFlashcardProgress catch', err);
+    return () => {};
+  }
+};
+
 // ---------------------------------------------------------------------------
 // Real-time Cloud Sync for Quiz MCQ Practice Learning Progress (QuizPage)
 // ---------------------------------------------------------------------------
@@ -742,29 +860,28 @@ export interface QuizLearningProgressCloud {
   currentIndex: number;
   userAnswers: Record<string, number | number[]>;
   currentOptions?: any;
-  updatedAt?: number | string;
+  updatedAt?: number;
 }
 
-export const syncQuizLearningProgressToFirestore = async (
-  email: string,
-  quizId: string,
-  progress: QuizLearningProgressCloud
-): Promise<void> => {
-  if (!isFirestoreAvailable() || !email || !quizId) return;
+const pendingQuizWrites = new Map<string, { email: string; quizId: string; progress: QuizLearningProgressCloud }>();
+let quizWriteTimer: any = null;
+
+const executeQuizWrite = async (item: { email: string; quizId: string; progress: QuizLearningProgressCloud }) => {
+  if (!isFirestoreAvailable() || !item.email || !item.quizId) return;
   try {
-    const cleanEmail = email.trim().toLowerCase();
-    const docId = `${cleanEmail.replace(/[^a-z0-9]/g, '_')}_${quizId}`;
+    const cleanEmail = item.email.trim().toLowerCase();
+    const docId = `${cleanEmail.replace(/[^a-z0-9]/g, '_')}_${String(item.quizId).trim()}`;
     const ref = doc(db, 'quiz_learning_progress', docId);
     await setDoc(
       ref,
       {
         email: cleanEmail,
-        quizId,
+        quizId: String(item.quizId).trim(),
         progress: {
-          currentIndex: progress.currentIndex,
-          userAnswers: progress.userAnswers || {},
-          currentOptions: progress.currentOptions || null,
-          updatedAt: progress.updatedAt || Date.now(),
+          currentIndex: item.progress.currentIndex,
+          userAnswers: item.progress.userAnswers || {},
+          currentOptions: item.progress.currentOptions || null,
+          updatedAt: item.progress.updatedAt || Date.now(),
         },
         updatedAt: new Date().toISOString(),
       },
@@ -772,6 +889,33 @@ export const syncQuizLearningProgressToFirestore = async (
     );
   } catch (err) {
     handleFirestoreError('syncQuizLearningProgressToFirestore', err);
+  }
+};
+
+export const syncQuizLearningProgressToFirestore = async (
+  email: string,
+  quizId: string,
+  progress: QuizLearningProgressCloud,
+  immediate = false
+): Promise<void> => {
+  if (!email || !quizId) return;
+  const key = `${email}_${quizId}`;
+  pendingQuizWrites.set(key, { email, quizId, progress });
+
+  if (immediate) {
+    if (quizWriteTimer) clearTimeout(quizWriteTimer);
+    await executeQuizWrite({ email, quizId, progress });
+    pendingQuizWrites.delete(key);
+    return;
+  }
+
+  if (!quizWriteTimer) {
+    quizWriteTimer = setTimeout(() => {
+      quizWriteTimer = null;
+      const items = Array.from(pendingQuizWrites.values());
+      pendingQuizWrites.clear();
+      items.forEach((item) => executeQuizWrite(item).catch(() => {}));
+    }, 200); // Ultra-responsive 200ms debounce
   }
 };
 
@@ -783,7 +927,7 @@ export const subscribeQuizLearningProgress = (
   if (!isFirestoreAvailable() || !email || !quizId) return () => {};
   try {
     const cleanEmail = email.trim().toLowerCase();
-    const docId = `${cleanEmail.replace(/[^a-z0-9]/g, '_')}_${quizId}`;
+    const docId = `${cleanEmail.replace(/[^a-z0-9]/g, '_')}_${String(quizId).trim()}`;
     const ref = doc(db, 'quiz_learning_progress', docId);
     return onSnapshot(
       ref,
@@ -791,7 +935,10 @@ export const subscribeQuizLearningProgress = (
         if (snap.exists()) {
           const data = snap.data();
           if (data?.progress) {
-            onUpdate(data.progress);
+            onUpdate({
+              ...data.progress,
+              updatedAt: data.progress.updatedAt || (data.updatedAt ? new Date(data.updatedAt).getTime() : Date.now()),
+            });
           }
         }
       },
@@ -803,6 +950,135 @@ export const subscribeQuizLearningProgress = (
     handleFirestoreError('subscribeQuizLearningProgress catch', err);
     return () => {};
   }
+};
+
+// Global subscription for all quiz learning progress of this user across devices
+export const subscribeAllQuizLearningProgress = (
+  email: string,
+  onUpdate: (items: Record<string, QuizLearningProgressCloud>) => void
+): (() => void) => {
+  if (!isFirestoreAvailable() || !email) return () => {};
+  try {
+    const cleanEmail = email.trim().toLowerCase();
+    const q = query(collection(db, 'quiz_learning_progress'), where('email', '==', cleanEmail));
+    return onSnapshot(
+      q,
+      (snap) => {
+        const result: Record<string, QuizLearningProgressCloud> = {};
+        snap.docs.forEach((d) => {
+          const data = d.data();
+          if (data?.quizId && data?.progress) {
+            result[data.quizId] = {
+              currentIndex: typeof data.progress.currentIndex === 'number' ? data.progress.currentIndex : 0,
+              userAnswers: data.progress.userAnswers || {},
+              currentOptions: data.progress.currentOptions || null,
+              updatedAt: data.progress.updatedAt || (data.updatedAt ? new Date(data.updatedAt).getTime() : Date.now()),
+            };
+          }
+        });
+        onUpdate(result);
+      },
+      (err) => {
+        handleFirestoreError('subscribeAllQuizLearningProgress', err);
+      }
+    );
+  } catch (err) {
+    handleFirestoreError('subscribeAllQuizLearningProgress catch', err);
+    return () => {};
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Real-time Cloud Sync for Practice Mistakes Progress (Luyện câu hay sai)
+// ---------------------------------------------------------------------------
+export interface PracticeMistakesProgressCloud {
+  currentIndex: number;
+  masteredCount: number;
+  updatedAt: number;
+}
+
+export const syncPracticeMistakesProgressToFirestore = async (
+  email: string,
+  progress: PracticeMistakesProgressCloud
+): Promise<void> => {
+  if (!isFirestoreAvailable() || !email) return;
+  try {
+    const cleanEmail = email.trim().toLowerCase();
+    const docId = `${cleanEmail.replace(/[^a-z0-9]/g, '_')}_practice_mistakes`;
+    const ref = doc(db, 'practice_mistakes_progress', docId);
+    await setDoc(
+      ref,
+      {
+        email: cleanEmail,
+        progress: {
+          currentIndex: progress.currentIndex,
+          masteredCount: progress.masteredCount || 0,
+          updatedAt: progress.updatedAt || Date.now(),
+        },
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    handleFirestoreError('syncPracticeMistakesProgressToFirestore', err);
+  }
+};
+
+export const subscribePracticeMistakesProgress = (
+  email: string,
+  onUpdate: (progress: PracticeMistakesProgressCloud) => void
+): (() => void) => {
+  if (!isFirestoreAvailable() || !email) return () => {};
+  try {
+    const cleanEmail = email.trim().toLowerCase();
+    const docId = `${cleanEmail.replace(/[^a-z0-9]/g, '_')}_practice_mistakes`;
+    const ref = doc(db, 'practice_mistakes_progress', docId);
+    return onSnapshot(
+      ref,
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data?.progress) {
+            onUpdate({
+              currentIndex: typeof data.progress.currentIndex === 'number' ? data.progress.currentIndex : 0,
+              masteredCount: data.progress.masteredCount || 0,
+              updatedAt: data.progress.updatedAt || (data.updatedAt ? new Date(data.updatedAt).getTime() : Date.now()),
+            });
+          }
+        }
+      },
+      (err) => {
+        handleFirestoreError('subscribePracticeMistakesProgress', err);
+      }
+    );
+  } catch (err) {
+    handleFirestoreError('subscribePracticeMistakesProgress catch', err);
+    return () => {};
+  }
+};
+
+// Flush all pending debounced writes immediately (on visibility hidden, unload, or route change)
+export const flushAllPendingProgressSync = async (): Promise<void> => {
+  if (flashcardWriteTimer) {
+    clearTimeout(flashcardWriteTimer);
+    flashcardWriteTimer = null;
+  }
+  if (quizWriteTimer) {
+    clearTimeout(quizWriteTimer);
+    quizWriteTimer = null;
+  }
+
+  const flashcardPromises = Array.from(pendingFlashcardWrites.values()).map((item) =>
+    executeFlashcardWrite(item).catch(() => {})
+  );
+  pendingFlashcardWrites.clear();
+
+  const quizPromises = Array.from(pendingQuizWrites.values()).map((item) =>
+    executeQuizWrite(item).catch(() => {})
+  );
+  pendingQuizWrites.clear();
+
+  await Promise.all([...flashcardPromises, ...quizPromises]);
 };
 
 // ---------------------------------------------------------------------------
@@ -858,3 +1134,4 @@ export const subscribeStudyProgress = (
     return () => {};
   }
 };
+

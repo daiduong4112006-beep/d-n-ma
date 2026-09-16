@@ -14,6 +14,9 @@ import {
   clearAllUserData,
   getDeletedQuizIds,
   transferGuestDataToUser,
+  updateAllFlashcardProgressFromCloud,
+  updateAllQuizLearningProgressFromCloud,
+  updatePracticeMistakesProgressFromCloud,
 } from './utils/storage';
 import { getSubjectsList } from './utils/statistics';
 import {
@@ -25,6 +28,11 @@ import {
   subscribeStarredVocabulary,
   subscribeJapaneseCourses,
   subscribeStudyProgress,
+  subscribeAllFlashcardProgress,
+  subscribeAllQuizLearningProgress,
+  subscribePracticeMistakesProgress,
+  subscribeJpd123AccessList,
+  flushAllPendingProgressSync,
   syncQuizToFirestore,
   flushQuizWrites,
   saveUserToFirestore,
@@ -37,7 +45,7 @@ import {
 } from './lib/firebase';
 import { sound } from './utils/audio';
 import { updateStarredWordsFromCloud } from './utils/vocabulary';
-import { saveJapaneseCourses } from './utils/japaneseStorage';
+import { saveJapaneseCourses, saveAllowedJpd123Emails } from './utils/japaneseStorage';
 import { updateStudyProgressFromCloud } from './utils/studyProgressStorage';
 
 // Components
@@ -345,6 +353,10 @@ export default function App() {
     let unSubStarredVocab: (() => void) | null = null;
     let unSubCourses: (() => void) | null = null;
     let unSubProgress: (() => void) | null = null;
+    let unSubAllFlashcards: (() => void) | null = null;
+    let unSubAllQuizProgress: (() => void) | null = null;
+    let unSubPracticeMistakes: (() => void) | null = null;
+    let unSubJpd123Access: (() => void) | null = null;
 
     refreshData();
 
@@ -393,6 +405,21 @@ export default function App() {
       unSubProgress = subscribeStudyProgress(email, (items) => {
         updateStudyProgressFromCloud(items);
       });
+
+      // Global real-time sync for All Flashcards Progress (PC <-> Phone)
+      unSubAllFlashcards = subscribeAllFlashcardProgress(email, (cloudData) => {
+        updateAllFlashcardProgressFromCloud(cloudData);
+      });
+
+      // Global real-time sync for All Quiz Practice Learning Progress (PC <-> Phone)
+      unSubAllQuizProgress = subscribeAllQuizLearningProgress(email, (cloudData) => {
+        updateAllQuizLearningProgressFromCloud(cloudData);
+      });
+
+      // Global real-time sync for Practice Mistakes Progress (PC <-> Phone)
+      unSubPracticeMistakes = subscribePracticeMistakesProgress(email, (cloudData) => {
+        updatePracticeMistakesProgressFromCloud(cloudData);
+      });
     }
 
     // Real-time sync for Japanese Courses across PC and Phone (regardless of active tab)
@@ -400,6 +427,11 @@ export default function App() {
       if (Array.isArray(cloudCourses)) {
         saveJapaneseCourses(cloudCourses, email, true);
       }
+    });
+
+    // Real-time sync for JPD123 access list across all devices
+    unSubJpd123Access = subscribeJpd123AccessList((emails) => {
+      saveAllowedJpd123Emails(emails, true);
     });
 
     const activeUserId = getEffectiveUserId();
@@ -450,11 +482,21 @@ export default function App() {
 
     const handleBeforeUnload = () => {
       flushQuizWrites().catch(() => {});
+      flushAllPendingProgressSync().catch(() => {});
     };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        flushAllPendingProgressSync().catch(() => {});
+      }
+    };
+
     window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       unSubAuth();
       if (unSubUserDoc) unSubUserDoc();
       if (unSubQuizzes) unSubQuizzes();
@@ -462,6 +504,10 @@ export default function App() {
       if (unSubStarredVocab) unSubStarredVocab();
       if (unSubCourses) unSubCourses();
       if (unSubProgress) unSubProgress();
+      if (unSubAllFlashcards) unSubAllFlashcards();
+      if (unSubAllQuizProgress) unSubAllQuizProgress();
+      if (unSubPracticeMistakes) unSubPracticeMistakes();
+      if (unSubJpd123Access) unSubJpd123Access();
     };
   }, [currentUser?.email]);
 
@@ -527,9 +573,15 @@ export default function App() {
   };
 
   const handleClearAll = async () => {
+    const SUPER_ADMIN = 'daiduong4112006@gmail.com';
+    if (currentUser?.email?.toLowerCase().trim() !== SUPER_ADMIN) {
+      alert('BẢO MẬT HỆ THỐNG:\n\nChỉ tài khoản Quản trị viên tối cao (daiduong4112006@gmail.com) mới có quyền Reset Server và xóa toàn bộ dữ liệu!');
+      return;
+    }
+
     if (
       window.confirm(
-        'XÁC NHẬN XÓA TOÀN BỘ TÀI KHOẢN VÀ DỮ LIỆU SEVER:\n\nBạn có chắc chắn muốn xóa tất cả tài khoản và toàn bộ dữ liệu bộ đề trên hệ thống? Sau khi xóa, tất cả dữ liệu sẽ được đưa về trạng thái trống hoàn toàn.'
+        'XÁC NHẬN XÓA TOÀN BỘ TÀI KHOẢN VÀ DỮ LIỆU SERVER:\n\nBạn có chắc chắn muốn xóa tất cả tài khoản và toàn bộ dữ liệu bộ đề trên hệ thống? Sau khi xóa, tất cả dữ liệu sẽ được đưa về trạng thái trống hoàn toàn.'
       )
     ) {
       if (currentUser?.email) {
@@ -894,6 +946,7 @@ export default function App() {
           {/* Settings */}
           {activeTab === 'settings' && (
             <SettingsPage
+              currentUser={currentUser}
               onResetDemoData={handleResetDemo}
               onExportAllBackup={handleExportBackup}
               onClearAllData={handleClearAll}

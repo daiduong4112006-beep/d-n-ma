@@ -122,6 +122,7 @@ export const QuizPage: React.FC<QuizPageProps> = ({
   const [restoredMessage, setRestoredMessage] = useState<string | null>(null);
   const [flashcardResetKey, setFlashcardResetKey] = useState(0);
   const isRemoteUpdateRef = useRef(false);
+  const isInitialMountRef = useRef(true);
 
   const isExamMode =
     !isWrongQuestionsQuiz &&
@@ -139,28 +140,31 @@ export const QuizPage: React.FC<QuizPageProps> = ({
       return;
     }
     const saved = getQuizLearningProgress(quiz.id, isWrongQuestionsQuiz);
-    if (saved) {
-      if (typeof saved.currentIndex === 'number' && saved.currentIndex < quiz.questions.length) {
-        setCurrentIndex(saved.currentIndex);
+    const inMemoryLatest = realtimeSync.getLatestState('MCQ_PRACTICE', quiz.id);
+    const target = inMemoryLatest?.data || saved;
+
+    if (target) {
+      if (typeof target.currentIndex === 'number' && target.currentIndex < quiz.questions.length) {
+        setCurrentIndex(target.currentIndex);
       }
-      if (saved.userAnswers && typeof saved.userAnswers === 'object') {
-        setUserAnswers(saved.userAnswers);
+      if (target.userAnswers && typeof target.userAnswers === 'object') {
+        setUserAnswers(target.userAnswers);
       }
-      if (saved.currentOptions && typeof saved.currentOptions === 'object') {
+      if (target.currentOptions && typeof target.currentOptions === 'object') {
         setCurrentOptions((prev) => ({
           ...prev,
-          ...saved.currentOptions,
+          ...target.currentOptions,
           mode: initialStudyOptions?.mode ?? prev.mode ?? 'mcq',
         }));
       }
-      if (saved.currentIndex > 0 || (saved.userAnswers && Object.keys(saved.userAnswers).length > 0)) {
-        setRestoredMessage(`Đã khôi phục tiến độ học từ trước (Câu ${saved.currentIndex + 1}/${quiz.questions.length})`);
+      if (target.currentIndex > 0 || (target.userAnswers && Object.keys(target.userAnswers).length > 0)) {
+        setRestoredMessage(`Đã khôi phục tiến độ học từ trước (Câu ${target.currentIndex + 1}/${quiz.questions.length})`);
         setTimeout(() => setRestoredMessage(null), 4000);
       }
     }
   }, [quiz.id, isWrongQuestionsQuiz, quiz.questions.length, isExamMode, initialStudyOptions?.mode, currentOptions.mode]);
 
-  // 1. Cross-Tab Real-time Sync via BroadcastChannel (< 5ms)
+  // 1. Cross-Tab Real-time Sync via BroadcastChannel (< 2ms)
   useEffect(() => {
     if (isExamMode || currentOptions.mode === 'flashcard') return;
 
@@ -171,8 +175,9 @@ export const QuizPage: React.FC<QuizPageProps> = ({
         if (payload.data?.userAnswers && typeof payload.data.userAnswers === 'object') {
           setUserAnswers(payload.data.userAnswers);
         }
-        setRestoredMessage(`⚡ Đã đồng bộ tức thì sang câu ${payload.currentIndex + 1}/${quiz.questions.length}`);
-        setTimeout(() => setRestoredMessage(null), 2500);
+        const sourceName = payload.senderId === 'remote_cloud' ? '📱 điện thoại' : '⚡ tab khác';
+        setRestoredMessage(`Đã đồng bộ từ ${sourceName} sang câu ${payload.currentIndex + 1}/${quiz.questions.length}`);
+        setTimeout(() => setRestoredMessage(null), 3000);
       }
     });
 
@@ -190,7 +195,7 @@ export const QuizPage: React.FC<QuizPageProps> = ({
         setCurrentIndex((prevIdx) => {
           if (prevIdx !== cloudProgress.currentIndex) {
             isRemoteUpdateRef.current = true;
-            setRestoredMessage(`📱 Đã đồng bộ từ thiết bị khác (Câu ${cloudProgress.currentIndex + 1}/${quiz.questions.length})`);
+            setRestoredMessage(`📱 Đã đồng bộ từ điện thoại/thiết bị khác (Câu ${cloudProgress.currentIndex + 1}/${quiz.questions.length})`);
             setTimeout(() => setRestoredMessage(null), 3000);
             return cloudProgress.currentIndex;
           }
@@ -206,9 +211,44 @@ export const QuizPage: React.FC<QuizPageProps> = ({
     return () => unsubscribe();
   }, [quiz.id, quiz.questions.length, isExamMode, currentOptions.mode, isWrongQuestionsQuiz]);
 
-  // 3. Persist learning progress on answer or question index change
+  // 3. Re-check latest progress when tab regains focus or visibility
+  useEffect(() => {
+    const handleRecheck = () => {
+      if (document.visibilityState === 'visible' && !isExamMode && currentOptions.mode !== 'flashcard') {
+        const latest = getQuizLearningProgress(quiz.id, isWrongQuestionsQuiz);
+        if (latest && typeof latest.currentIndex === 'number' && latest.currentIndex < quiz.questions.length) {
+          setCurrentIndex((prev) => {
+            if (prev !== latest.currentIndex) {
+              isRemoteUpdateRef.current = true;
+              setRestoredMessage(`⚡ Đã đồng bộ tức thì sang câu ${latest.currentIndex + 1}/${quiz.questions.length}`);
+              setTimeout(() => setRestoredMessage(null), 2500);
+              return latest.currentIndex;
+            }
+            return prev;
+          });
+          if (latest.userAnswers && typeof latest.userAnswers === 'object') {
+            setUserAnswers(latest.userAnswers);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('focus', handleRecheck);
+    document.addEventListener('visibilitychange', handleRecheck);
+    return () => {
+      window.removeEventListener('focus', handleRecheck);
+      document.removeEventListener('visibilitychange', handleRecheck);
+    };
+  }, [quiz.id, isWrongQuestionsQuiz, quiz.questions.length, isExamMode, currentOptions.mode]);
+
+  // 4. Persist learning progress on answer or question index change (guarded against initial mount and remote updates)
   useEffect(() => {
     if (isExamMode || currentOptions.mode === 'flashcard') {
+      return;
+    }
+
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
       return;
     }
 

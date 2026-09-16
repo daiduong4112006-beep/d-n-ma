@@ -1,6 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { WrongQuestionDetail, Question } from '../types/quiz';
-import { updateSingleQuestionStat } from '../utils/storage';
+import {
+  updateSingleQuestionStat,
+  getPracticeMistakesProgress,
+  savePracticeMistakesProgress,
+} from '../utils/storage';
+import { realtimeSync } from '../utils/realtimeSync';
 import { AnswerOption } from '../components/AnswerOption';
 import { ExplanationBox } from '../components/ExplanationBox';
 import { NoteBox } from '../components/NoteBox';
@@ -20,19 +25,66 @@ export const PracticeMistakes: React.FC<PracticeMistakesProps> = ({
   onRefreshList,
   onBackToDashboard,
 }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const initialSaved = getPracticeMistakesProgress();
+  const inMemoryLatest = realtimeSync.getLatestState('MCQ_MISTAKES', 'global');
+  const target = inMemoryLatest?.data || initialSaved;
+
+  const [currentIndex, setCurrentIndex] = useState(() => {
+    const idx = target?.currentIndex;
+    return typeof idx === 'number' && idx >= 0 && idx < wrongQuestionsList.length ? idx : 0;
+  });
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [isAnswered, setIsAnswered] = useState(false);
-  const [masteredCount, setMasteredCount] = useState(0);
+  const [masteredCount, setMasteredCount] = useState(() => {
+    return typeof target?.masteredCount === 'number' ? target.masteredCount : 0;
+  });
+  const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
+  const isRemoteUpdateRef = useRef(false);
+  const isInitialMountRef = useRef(true);
+
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiOptionIndex, setAiOptionIndex] = useState<number | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  // 1. Cross-Tab & Cross-Device Real-time Sync (< 2ms)
+  useEffect(() => {
+    const unsubscribe = realtimeSync.subscribeKey('MCQ_MISTAKES', 'global', (payload) => {
+      if (typeof payload.currentIndex === 'number' && payload.currentIndex >= 0 && payload.currentIndex < wrongQuestionsList.length) {
+        isRemoteUpdateRef.current = true;
+        setCurrentIndex(payload.currentIndex);
+        setSelectedAnswer(null);
+        setIsAnswered(false);
+        if (typeof payload.data?.masteredCount === 'number') {
+          setMasteredCount(payload.data.masteredCount);
+        }
+        const sourceName = payload.senderId === 'remote_cloud' ? '📱 điện thoại' : '⚡ tab khác';
+        setSyncStatusMsg(`Đã đồng bộ từ ${sourceName} sang câu ${payload.currentIndex + 1}/${wrongQuestionsList.length}`);
+        setTimeout(() => setSyncStatusMsg(null), 3000);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [wrongQuestionsList.length]);
+
+  // 2. Persist progress on user progress
+  useEffect(() => {
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      return;
+    }
+    if (isRemoteUpdateRef.current) {
+      isRemoteUpdateRef.current = false;
+      return;
+    }
+    savePracticeMistakesProgress(currentIndex, masteredCount);
+  }, [currentIndex, masteredCount]);
 
   const handleRestart = () => {
     setCurrentIndex(0);
     setSelectedAnswer(null);
     setIsAnswered(false);
     setMasteredCount(0);
+    savePracticeMistakesProgress(0, 0);
     onRefreshList();
     setShowResetConfirm(false);
   };
@@ -175,6 +227,12 @@ export const PracticeMistakes: React.FC<PracticeMistakesProps> = ({
           </button>
         </div>
       </div>
+
+      {syncStatusMsg && (
+        <div className="py-1.5 px-4 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 rounded-xl text-xs font-bold text-amber-700 dark:text-amber-300 text-center animate-pulse shadow-2xs">
+          {syncStatusMsg}
+        </div>
+      )}
 
       {/* Current Question Card */}
       <div className="p-6 md:p-8 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs space-y-6">

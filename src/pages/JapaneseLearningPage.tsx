@@ -20,6 +20,7 @@ import {
   deleteJapaneseCourse,
   isJapaneseAdmin,
   saveJapaneseCourses,
+  canAccessJpd123,
 } from '../utils/japaneseStorage';
 import { subscribeJapaneseCourses } from '../lib/firebase';
 import { JapaneseCourseDetail } from './JapaneseCourseDetail';
@@ -48,15 +49,16 @@ export const JapaneseLearningPage: React.FC<Props> = ({ currentUser, onBackToDas
   });
 
   const isAdmin = isJapaneseAdmin(currentUser?.email);
+  const hasJpdAccess = canAccessJpd123(currentUser?.email);
 
   useEffect(() => {
     const list = getJapaneseCourses(currentUser?.email);
     setCourses(list);
-    // If admin and there is 1 course (e.g. JPD 123), automatically open it for convenience
-    if (isAdmin && list.length === 1 && !selectedCourse) {
+    // If admin or delegated user and there is 1 course (e.g. JPD 123), automatically open it for convenience
+    if (hasJpdAccess && list.length === 1 && !selectedCourse) {
       setSelectedCourse(list[0]);
-    } else if (!isAdmin) {
-      // For non-admin, if they had JPD 123 open previously, close it
+    } else if (!hasJpdAccess) {
+      // For non-authorized user, if they had JPD 123 open previously, close it
       if (selectedCourse?.id === 'course-jpd123') {
         setSelectedCourse(null);
       }
@@ -65,9 +67,9 @@ export const JapaneseLearningPage: React.FC<Props> = ({ currentUser, onBackToDas
     // Subscribe to Firestore for real-time synchronization between phones, tablets, and computers
     const unSub = subscribeJapaneseCourses((cloudCourses) => {
       if (Array.isArray(cloudCourses)) {
-        // Filter out JPD123 for non-admins if present
+        // Filter out JPD123 for users without access
         let allowed = cloudCourses;
-        if (!isAdmin) {
+        if (!hasJpdAccess) {
           allowed = cloudCourses.filter(
             (c) => c && c.id !== 'course-jpd123' && c.code?.toLowerCase().replace(/\s+/g, '') !== 'jpd123'
           );
@@ -75,7 +77,7 @@ export const JapaneseLearningPage: React.FC<Props> = ({ currentUser, onBackToDas
         setCourses(allowed);
         saveJapaneseCourses(allowed, currentUser?.email, true);
         setSelectedCourse((prev) => {
-          if (!prev) return (isAdmin && allowed.length === 1 ? allowed[0] : null);
+          if (!prev) return (hasJpdAccess && allowed.length === 1 ? allowed[0] : null);
           const updated = allowed.find((c) => c.id === prev.id);
           return updated || null;
         });
@@ -85,7 +87,7 @@ export const JapaneseLearningPage: React.FC<Props> = ({ currentUser, onBackToDas
     return () => {
       if (unSub) unSub();
     };
-  }, [currentUser?.email, isAdmin]);
+  }, [currentUser?.email, isAdmin, hasJpdAccess]);
 
   const refreshCourses = () => {
     const list = getJapaneseCourses(currentUser?.email);
@@ -314,27 +316,29 @@ export const JapaneseLearningPage: React.FC<Props> = ({ currentUser, onBackToDas
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={(e) => openEditModal(c, e)}
-                      className="p-1.5 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                      title="Sửa thông tin"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setCourseToDelete(c);
-                      }}
-                      className="p-1.5 rounded-xl text-rose-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors cursor-pointer"
-                      title="Xóa khóa học"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  {(!c.id.includes('jpd123') && c.code?.toLowerCase().replace(/\s+/g, '') !== 'jpd123') || isAdmin ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={(e) => openEditModal(c, e)}
+                        className="p-1.5 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                        title="Sửa thông tin"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCourseToDelete(c);
+                        }}
+                        className="p-1.5 rounded-xl text-rose-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors cursor-pointer"
+                        title="Xóa khóa học"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
 
                 <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">

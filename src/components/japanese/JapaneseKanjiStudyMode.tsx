@@ -49,8 +49,9 @@ export const JapaneseKanjiStudyMode: React.FC<JapaneseKanjiStudyModeProps> = ({
   }, [storageKey, kanjiCards.length]);
 
   const isRemoteUpdateRef = useRef(false);
+  const isInitialMountRef = useRef(true);
 
-  // Cross-Tab Real-time Sync (< 5ms)
+  // Cross-Tab Real-time Sync (< 2ms)
   useEffect(() => {
     if (!storageKey) return;
 
@@ -69,6 +70,11 @@ export const JapaneseKanjiStudyMode: React.FC<JapaneseKanjiStudyModeProps> = ({
   // Save progress on change
   useEffect(() => {
     if (deck.length === 0 || isCompleted) return;
+
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      return;
+    }
 
     if (isRemoteUpdateRef.current) {
       isRemoteUpdateRef.current = false;

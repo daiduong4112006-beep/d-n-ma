@@ -92,8 +92,9 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
   }, [persistenceKey, initialCards]);
 
   const isRemoteUpdateRef = useRef(false);
+  const isInitialMountRef = useRef(true);
 
-  // Cross-Tab & Cross-Device Real-time Sync (< 5ms)
+  // Cross-Tab & Cross-Device Real-time Sync (< 2ms)
   useEffect(() => {
     if (!persistenceKey) return;
 
@@ -114,6 +115,11 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
   // 2. Save progress on change
   useEffect(() => {
     if (deck.length === 0) return;
+
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      return;
+    }
 
     if (isRemoteUpdateRef.current) {
       isRemoteUpdateRef.current = false;

@@ -52,6 +52,26 @@ function readFileAsText(file: File): Promise<string> {
   });
 }
 
+function openDataUrlInNewTab(dataUrl: string, filename?: string) {
+  try {
+    const arr = dataUrl.split(',');
+    const mimeMatch = arr[0].match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : 'application/pdf';
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    const blob = new Blob([u8arr], { type: mime });
+    const blobUrl = URL.createObjectURL(blob);
+    window.open(blobUrl, '_blank');
+  } catch (err) {
+    console.error('Error opening file in new tab:', err);
+    window.open(dataUrl, '_blank');
+  }
+}
+
 export const JapaneseMaterialsSection: React.FC<Props> = ({
   materials,
   onUpdateMaterials,
@@ -572,14 +592,24 @@ export const JapaneseMaterialsSection: React.FC<Props> = ({
                         <span>Đọc tài liệu</span>
                       </button>
                     ) : hasFile ? (
-                      <button
-                        type="button"
-                        onClick={() => handleOpenMaterial(mat)}
-                        className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black flex items-center gap-1.5 cursor-pointer shadow-xs shadow-emerald-600/20 active:scale-95 transition-all"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>Xem file</span>
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenMaterial(mat)}
+                          className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black flex items-center gap-1.5 cursor-pointer shadow-xs shadow-emerald-600/20 active:scale-95 transition-all"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Xem file</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openDataUrlInNewTab(mat.file!.dataUrl, mat.file!.name)}
+                          className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 text-slate-600 dark:text-slate-300 hover:text-emerald-600 font-bold cursor-pointer transition-colors"
+                          title="Mở file trong tab mới"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </button>
+                      </div>
                     ) : isLink ? (
                       mat.externalLink?.startsWith('file://') || /^[a-zA-Z]:[\\/]/.test(mat.externalLink || '') ? (
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -776,6 +806,18 @@ export const JapaneseMaterialsSection: React.FC<Props> = ({
                       )}
                     </button>
                   </>
+                )}
+
+                {activeMaterial.file?.dataUrl && (
+                  <button
+                    type="button"
+                    onClick={() => openDataUrlInNewTab(activeMaterial.file!.dataUrl, activeMaterial.file!.name)}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold flex items-center gap-1 cursor-pointer transition-all"
+                    title="Mở tài liệu trong tab mới"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Mở tab mới</span>
+                  </button>
                 )}
 
                 <button

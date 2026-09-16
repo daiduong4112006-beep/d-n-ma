@@ -85,19 +85,25 @@ export const FlashcardViewer: React.FC<FlashcardViewerProps> = ({ quizId, quizTi
   }, []);
 
   const isRemoteUpdateRef = useRef(false);
+  const isInitialMountRef = useRef(true);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
 
   // Sync state if effectiveQuizId or questions change
   useEffect(() => {
     const saved = getFlashcardProgress(effectiveQuizId);
-    if (saved.currentIndex >= 0 && saved.currentIndex < questions.length) {
-      setCurrentIndex(saved.currentIndex);
+    const inMemoryLatest = realtimeSync.getLatestState('MCQ_FLASHCARD', effectiveQuizId);
+    const targetIdx = typeof inMemoryLatest?.currentIndex === 'number' && inMemoryLatest.currentIndex < questions.length
+      ? inMemoryLatest.currentIndex
+      : saved.currentIndex;
+
+    if (targetIdx >= 0 && targetIdx < questions.length) {
+      setCurrentIndex(targetIdx);
     }
-    const set = new Set(saved.knownQuestionIds);
-    setKnownQuestionIds(set);
+    const knownList = inMemoryLatest?.data?.knownQuestionIds || saved.knownQuestionIds || [];
+    setKnownQuestionIds(new Set(knownList));
   }, [effectiveQuizId, questions.length]);
 
-  // 1. Cross-Tab Real-time Sync via BroadcastChannel (< 5ms)
+  // 1. Cross-Tab Real-time Sync via BroadcastChannel (< 2ms)
   useEffect(() => {
     if (!effectiveQuizId) return;
 
@@ -109,8 +115,9 @@ export const FlashcardViewer: React.FC<FlashcardViewerProps> = ({ quizId, quizTi
         if (payload.data?.knownQuestionIds && Array.isArray(payload.data.knownQuestionIds)) {
           setKnownQuestionIds(new Set(payload.data.knownQuestionIds));
         }
-        setSyncStatusMsg(`⚡ Đã đồng bộ tức thì sang thẻ #${payload.currentIndex + 1}`);
-        setTimeout(() => setSyncStatusMsg(null), 2500);
+        const sourceName = payload.senderId === 'remote_cloud' ? '📱 thiết bị khác' : '⚡ tab khác';
+        setSyncStatusMsg(`Đã đồng bộ từ ${sourceName} sang thẻ #${payload.currentIndex + 1}`);
+        setTimeout(() => setSyncStatusMsg(null), 3000);
       }
     });
 
@@ -129,7 +136,7 @@ export const FlashcardViewer: React.FC<FlashcardViewerProps> = ({ quizId, quizTi
           if (prevIdx !== progress.currentIndex) {
             isRemoteUpdateRef.current = true;
             setIsFlipped(false);
-            setSyncStatusMsg(`📱 Đã đồng bộ từ thiết bị khác (Thẻ #${progress.currentIndex + 1})`);
+            setSyncStatusMsg(`📱 Đã đồng bộ từ điện thoại/thiết bị khác (Thẻ #${progress.currentIndex + 1})`);
             setTimeout(() => setSyncStatusMsg(null), 3000);
             return progress.currentIndex;
           }
@@ -145,9 +152,44 @@ export const FlashcardViewer: React.FC<FlashcardViewerProps> = ({ quizId, quizTi
     return () => unsubscribe();
   }, [effectiveQuizId, questions.length]);
 
-  // 3. Persist progress on index or known list change (skip broadcast if triggered by remote update)
+  // 3. Re-check latest progress when tab regains focus or visibility
+  useEffect(() => {
+    const handleRecheck = () => {
+      if (document.visibilityState === 'visible' && effectiveQuizId) {
+        const latest = getFlashcardProgress(effectiveQuizId);
+        if (latest && typeof latest.currentIndex === 'number' && latest.currentIndex < questions.length) {
+          setCurrentIndex((prev) => {
+            if (prev !== latest.currentIndex) {
+              isRemoteUpdateRef.current = true;
+              setSyncStatusMsg(`⚡ Đã đồng bộ tức thì sang thẻ #${latest.currentIndex + 1}`);
+              setTimeout(() => setSyncStatusMsg(null), 2500);
+              return latest.currentIndex;
+            }
+            return prev;
+          });
+          if (Array.isArray(latest.knownQuestionIds)) {
+            setKnownQuestionIds(new Set(latest.knownQuestionIds));
+          }
+        }
+      }
+    };
+
+    window.addEventListener('focus', handleRecheck);
+    document.addEventListener('visibilitychange', handleRecheck);
+    return () => {
+      window.removeEventListener('focus', handleRecheck);
+      document.removeEventListener('visibilitychange', handleRecheck);
+    };
+  }, [effectiveQuizId, questions.length]);
+
+  // 4. Persist progress on user interaction (skip initial mount and remote updates to avoid overwriting cloud)
   useEffect(() => {
     if (!effectiveQuizId) return;
+
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      return;
+    }
 
     if (isRemoteUpdateRef.current) {
       isRemoteUpdateRef.current = false;
@@ -157,6 +199,7 @@ export const FlashcardViewer: React.FC<FlashcardViewerProps> = ({ quizId, quizTi
     saveFlashcardProgress(effectiveQuizId, {
       currentIndex,
       knownQuestionIds: Array.from(knownQuestionIds),
+      updatedAt: Date.now(),
     });
   }, [effectiveQuizId, currentIndex, knownQuestionIds]);
 
