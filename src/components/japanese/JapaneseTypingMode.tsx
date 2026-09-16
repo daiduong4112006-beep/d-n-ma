@@ -32,6 +32,7 @@ interface JapaneseTypingModeProps {
   lesson: JapaneseLesson;
   initialFilter?: 'original' | 'mastered' | 'all';
   isKanjiSection?: boolean;
+  initialDirection?: TypingDirection;
   onExit: () => void;
   onCardMastered?: (cardId: string, mastered: boolean) => void;
 }
@@ -40,6 +41,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
   lesson,
   initialFilter = 'original',
   isKanjiSection = false,
+  initialDirection,
   onExit,
   onCardMastered,
 }) => {
@@ -102,12 +104,15 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     return localStorage.getItem('typing_auto_speech') === 'true';
   });
   const [direction, setDirection] = useState<TypingDirection>(() => {
+    if (initialDirection) {
+      return initialDirection;
+    }
     if (isKanjiSection) {
       const saved = localStorage.getItem('typing_direction_kanji');
       return (saved as TypingDirection) || 'kanji-to-reading';
     }
-    const saved = localStorage.getItem('typing_direction');
-    return (saved as TypingDirection) === 'jp-to-vi' ? 'jp-to-vi' : 'vi-to-jp';
+    const saved = localStorage.getItem('typing_direction_vocab_user');
+    return (saved as TypingDirection) || 'vi-to-jp';
   });
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -170,6 +175,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     if (isKanjiSection) {
       localStorage.setItem('typing_direction_kanji', next);
     } else {
+      localStorage.setItem('typing_direction_vocab_user', next);
       localStorage.setItem('typing_direction', next);
     }
     setInputVal('');
@@ -269,9 +275,19 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     setIsAnswerChecked(false);
     setIsCorrect(null);
     setShowAudioHintFeedback(false);
-    if (inputRef.current) {
-      inputRef.current.focus();
-    }
+    
+    // Auto focus into input on every card transition
+    const focusTimer1 = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 20);
+    const focusTimer2 = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 80);
+
+    return () => {
+      clearTimeout(focusTimer1);
+      clearTimeout(focusTimer2);
+    };
   }, [currentIndex]);
 
   const handlePlayHintAudio = () => {
@@ -339,6 +355,12 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
   const handleNextCard = () => {
     if (currentIndex < cards.length - 1) {
       setCurrentIndex((i) => i + 1);
+      setInputVal('');
+      setIsAnswerChecked(false);
+      setIsCorrect(null);
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 30);
     } else {
       sound.playFinish();
       setIsCompleted(true);
@@ -350,9 +372,9 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     setIsAnswerChecked(false);
     setIsCorrect(null);
     setInputVal('');
-    if (inputRef.current) {
-      inputRef.current.focus();
-    }
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 20);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -943,7 +965,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
                 {direction === 'kanji-to-reading'
                   ? 'ĐỀ BÀI: CHỮ HÁN (KANJI)'
                   : direction === 'vi-to-jp'
-                  ? 'NGHĨA TIẾNG VIỆT'
+                  ? 'ĐỀ BÀI: NGHĨA TIẾNG VIỆT'
                   : 'THUẬT NGỮ TIẾNG NHẬT'}
               </span>
               {(direction === 'jp-to-vi' || direction === 'kanji-to-reading') && (
@@ -1004,7 +1026,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
                 <span className="text-xs font-black uppercase text-slate-400 tracking-wider">
                   {direction === 'kanji-to-reading'
                     ? 'GÕ CÁCH ĐỌC TIẾNG NHẬT (HIRAGANA)'
-                    : 'BỘ GÕ TRONG APP'}
+                    : 'GÕ TIẾNG NHẬT (HIRAGANA / KATAKANA)'}
                 </span>
 
                 {/* Pill Switcher for IME [ あ  ア ] */}
@@ -1071,7 +1093,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
                   value={inputVal}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
-                  disabled={isAnswerChecked && isCorrect === true}
+                  readOnly={isAnswerChecked && isCorrect === true}
                   placeholder={
                     direction === 'kanji-to-reading'
                       ? imeMode === 'off'

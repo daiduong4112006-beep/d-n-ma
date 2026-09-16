@@ -233,6 +233,7 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
       <JapaneseTypingMode
         lesson={selectedLesson}
         initialFilter={typingFilter}
+        initialDirection="vi-to-jp"
         onExit={() => setActiveSubView('lesson-detail')}
         onCardMastered={handleSetCardMastery}
       />
