@@ -75,6 +75,11 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     return initialFilter || 'original';
   });
 
+  const [isShuffleEnabled, setIsShuffleEnabled] = useState<boolean>(() => {
+    const saved = localStorage.getItem('typing_shuffle_enabled');
+    return saved !== null ? saved === 'true' : true; // Default ON
+  });
+
   const [cards, setCards] = useState<JapaneseVocabCard[]>(() => {
     const tab =
       initialFilter === 'original' && unmasteredCount === 0 && totalCount > 0
@@ -82,7 +87,10 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
         : initialFilter === 'mastered' && masteredCount === 0 && unmasteredCount > 0
         ? 'original'
         : initialFilter || 'original';
-    return shuffleArray(getCardsByTab(tab, lesson.cards));
+    const baseList = getCardsByTab(tab, lesson.cards);
+    const saved = localStorage.getItem('typing_shuffle_enabled');
+    const shouldShuffle = saved !== null ? saved === 'true' : true;
+    return shouldShuffle ? shuffleArray(baseList) : [...baseList];
   });
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -126,7 +134,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     if (newTab === filterTab) return;
     setFilterTab(newTab);
     const filtered = getCardsByTab(newTab, cardsSource);
-    setCards(shuffleArray(filtered));
+    setCards(isShuffleEnabled ? shuffleArray(filtered) : [...filtered]);
     setCurrentIndex(0);
     setInputVal('');
     setIsAnswerChecked(false);
@@ -388,7 +396,29 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     }
   };
 
-  // SHUFFLE ACTION (Trộn câu)
+  // SHUFFLE TOGGLE ACTION (Bật/tắt trộn câu)
+  const handleToggleShuffle = () => {
+    const next = !isShuffleEnabled;
+    setIsShuffleEnabled(next);
+    localStorage.setItem('typing_shuffle_enabled', String(next));
+    const baseCards = getCardsByTab(filterTab, cardsSource);
+    if (next) {
+      setCards(shuffleArray(baseCards));
+    } else {
+      setCards([...baseCards]);
+    }
+    setCurrentIndex(0);
+    setScore(0);
+    setSeconds(0);
+    setIsCompleted(false);
+    setIsAnswerChecked(false);
+    setIsCorrect(null);
+    setInputVal('');
+    setShowResumeBanner(false);
+    sound.playClick();
+  };
+
+  // SHUFFLE ACTION (Trộn lại câu)
   const handleShuffle = () => {
     const shuffled = shuffleArray(cards);
     setCards(shuffled);
@@ -408,10 +438,11 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     if (onlyMistakes) {
       const mistakeCards = cards.filter((c) => wrongCardIds.has(c.id));
       if (mistakeCards.length > 0) {
-        setCards(shuffleArray(mistakeCards));
+        setCards(isShuffleEnabled ? shuffleArray(mistakeCards) : [...mistakeCards]);
       }
     } else {
-      setCards(shuffleArray(getCardsByTab(filterTab, cardsSource)));
+      const baseCards = getCardsByTab(filterTab, cardsSource);
+      setCards(isShuffleEnabled ? shuffleArray(baseCards) : [...baseCards]);
       setWrongCardIds(new Set());
       clearTypingProgress(storageId);
     }
@@ -724,33 +755,64 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
                 </div>
               </div>
 
-              {/* Actions: Trộn câu & Khôi phục */}
-              <div className="space-y-2">
+              {/* Thứ tự câu hỏi & Trộn ngẫu nhiên */}
+              <div className="space-y-2.5">
                 <label className="text-[11px] font-black uppercase text-slate-400 tracking-wider">
                   Thứ tự câu hỏi
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-800/60 border border-slate-800">
+                  <div className="flex items-center gap-2.5">
+                    <Shuffle className={`w-4 h-4 ${isShuffleEnabled ? 'text-indigo-400' : 'text-slate-500'}`} />
+                    <div>
+                      <div className="text-xs font-bold">Trộn ngẫu nhiên câu hỏi</div>
+                      <div className="text-[10px] text-slate-400">
+                        {isShuffleEnabled ? 'Đang bật (câu hỏi được đảo ngẫu nhiên)' : 'Đang tắt (theo thứ tự gốc)'}
+                      </div>
+                    </div>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      handleShuffle();
-                      setShowOptionsModal(false);
-                    }}
-                    className="px-3.5 py-2.5 rounded-2xl bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white border border-slate-700 flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer"
+                    onClick={handleToggleShuffle}
+                    className={`w-11 h-6 rounded-full transition-colors cursor-pointer relative p-0.5 ${
+                      isShuffleEnabled ? 'bg-indigo-600' : 'bg-slate-700'
+                    }`}
+                    aria-label="Bật/tắt trộn câu hỏi"
                   >
-                    <Shuffle className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Trộn câu</span>
+                    <div
+                      className={`w-5 h-5 rounded-full bg-white transition-transform ${
+                        isShuffleEnabled ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
                   </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {isShuffleEnabled && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleShuffle();
+                        setShowOptionsModal(false);
+                      }}
+                      className="px-3.5 py-2.5 rounded-2xl bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white border border-slate-700 flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer"
+                    >
+                      <Shuffle className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Trộn lại lượt mới</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
                       handleRestore(false);
                       setShowOptionsModal(false);
                     }}
-                    className="px-3.5 py-2.5 rounded-2xl bg-slate-800 hover:bg-amber-600 text-slate-200 hover:text-white border border-slate-700 flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer"
+                    className={`px-3.5 py-2.5 rounded-2xl bg-slate-800 hover:bg-amber-600 text-slate-200 hover:text-white border border-slate-700 flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer ${
+                      !isShuffleEnabled ? 'col-span-2' : ''
+                    }`}
                   >
                     <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Khôi phục</span>
+                    <span>Khôi phục / Bắt đầu lại</span>
                   </button>
                 </div>
               </div>
