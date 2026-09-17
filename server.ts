@@ -36,7 +36,8 @@ function resolveGeminiApiKey(req: express.Request): string {
   }
 
   if (serverKeysStr) {
-    const keys = serverKeysStr.split(',').map((k) => k.trim()).filter((k) => k.length > 0);
+    // Split by comma or newline and filter out empty strings
+    const keys = serverKeysStr.split(/[,\n\r]+/).map((k) => k.trim()).filter((k) => k.length > 0);
     if (keys.length > 0) {
       // Rotate keys round-robin to balance load
       currentKeyIndex = (currentKeyIndex + 1) % keys.length;
