@@ -137,7 +137,7 @@ export async function callAiApi<T = any>(options: AiRequestOptions): Promise<T> 
     }
 
     // Check if error is due to missing key or service blocked
-    const errMsg = String(errorData?.error || errorData?.details || errorData?.reply || '');
+    const errMsg = String(errorData?.details || errorData?.error || errorData?.reply || '');
     const isKeyIssue =
       errorData?.needsApiKey ||
       errMsg.includes('MISSING_API_KEY') ||
