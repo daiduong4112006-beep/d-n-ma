@@ -70,28 +70,22 @@ async function generateGeminiContentWithFallback(
   config: any = {},
   timeoutMs = 25000
 ): Promise<string> {
-  // Ordered by priority for maximum stability: primary model is gemini-1.5-flash, followed by gemini-2.0-flash-lite, gemini-2.0-flash, and gemini-1.5-pro
+  // Ordered by priority for maximum compatibility with the user's API key
   const attempts = [
     {
-      model: 'gemini-1.5-flash',
+      model: 'gemini-flash-latest',
       config: {
         ...config,
       },
     },
     {
-      model: 'gemini-2.0-flash-lite',
+      model: 'gemini-1.5-flash-latest',
       config: {
         ...config,
       },
     },
     {
       model: 'gemini-2.0-flash',
-      config: {
-        ...config,
-      },
-    },
-    {
-      model: 'gemini-1.5-pro',
       config: {
         ...config,
       },
