@@ -1132,7 +1132,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
                   <span>
                     🔊 Đang phát âm gợi ý! {(direction === 'vi-to-jp' || direction === 'kanji-to-reading') && (
                       <span className="text-amber-300 font-bold ml-1">
-                        Từ này bắt đầu bằng &quot;{(currentCard.reading || currentCard.term).charAt(0)}...&quot;
+                        Từ này bắt đầu bằng &quot;{(currentCard.reading || currentCard.term).replace(/^[~～〜⁓〰\s(（]+/, '').charAt(0)}...&quot;
                       </span>
                     )}
                   </span>

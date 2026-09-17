@@ -178,8 +178,13 @@ export function speakJapanese(text: string, rate: number = 0.9): void {
   try {
     window.speechSynthesis.cancel(); // Stop any pending speech
 
-    // Remove parenthesis explanation for cleaner pronunciation
-    const cleanText = text.replace(/\(.*?\)/g, '').replace(/\[.*?\]/g, '').trim();
+    // Remove parenthesis explanation, tildes, and turn slashes into natural pauses
+    const cleanText = text
+      .replace(/[\(（].*?[\)）]/g, '')
+      .replace(/\[.*?\]/g, '')
+      .replace(/[~～〜⁓〰^]/g, '')
+      .replace(/[/／]+/g, '、 ')
+      .trim();
     if (!cleanText) return;
 
     const utterance = new SpeechSynthesisUtterance(cleanText);
@@ -202,45 +207,127 @@ export function speakJapanese(text: string, rate: number = 0.9): void {
 }
 
 /**
+ * Normalizes Japanese or input string for comparison:
+ * - Trims whitespace
+ * - Converts to lowercase
+ * - Strips tildes / wave dashes (~, ～, 〜, ⁓, 〰)
+ * - Strips punctuation, quotes, slashes, dashes, brackets, parentheses
+ */
+export function normalizeJapaneseText(str: string): string {
+  if (!str) return '';
+  return str
+    .trim()
+    .toLowerCase()
+    // Remove tildes and wave dashes: ASCII ~, fullwidth ～ (U+FF5E), wave dash 〜 (U+301C), etc.
+    .replace(/[~～〜⁓〰^]/g, '')
+    // Remove spaces, punctuation, slashes, dashes, parentheses
+    .replace(/[\s\-_—–.,/／()（）[\]{}<>《》「」『』・、。!?:;"'‘’“”]/g, '');
+}
+
+/**
+ * Extracts all valid target variants from a Japanese card field (term, reading, romaji).
+ * Handles:
+ * 1. Slashes / alternatives: "～ふん / ～ぷん" -> ["～ふん", "～ぷん"]
+ * 2. Parentheses (optional prefix/suffix/word): "（お）しろ" -> ["しろ", "おしろ"]
+ *    "たべます（たべる）" -> ["たべます", "たべる"]
+ * 3. Tildes and wave dashes: "～じかん" -> matches with or without "～"
+ */
+export function extractJapaneseVariants(raw: string | undefined): string[] {
+  if (!raw) return [];
+  const text = raw.trim();
+  if (!text) return [];
+
+  // 1. Split alternatives separated by slashes, commas, semicolons or pipes
+  const rawParts = text.split(/[/／,;、|]+/).map((p) => p.trim()).filter(Boolean);
+
+  const results = new Set<string>();
+
+  for (const part of rawParts) {
+    if (!part) continue;
+
+    // Add the part itself
+    results.add(part);
+
+    // Also version with tildes stripped directly
+    const withoutTilde = part.replace(/[~～〜⁓〰^]/g, '').trim();
+    if (withoutTilde) {
+      results.add(withoutTilde);
+    }
+
+    // Check for parentheses (both ASCII () and Japanese fullwidth （）)
+    const hasParens = /[\(（][^\)）]*[\)）]/.test(part);
+    if (hasParens) {
+      // 2a. Remove parenthesized text entirely: e.g. "（お）しろ" -> "しろ", "たべます（たべる）" -> "たべます"
+      const withoutParens = part.replace(/[\(（][^\)）]*[\)）]/g, '').trim();
+      if (withoutParens) {
+        results.add(withoutParens);
+        const withoutParensAndTilde = withoutParens.replace(/[~～〜⁓〰^]/g, '').trim();
+        if (withoutParensAndTilde) results.add(withoutParensAndTilde);
+      }
+
+      // 2b. Keep parenthesized content, remove only the parenthesis symbols: e.g. "（お）しろ" -> "おしろ"
+      const onlySymbolsRemoved = part.replace(/[\(（\)）]/g, '').trim();
+      if (onlySymbolsRemoved) {
+        results.add(onlySymbolsRemoved);
+        const onlySymbolsRemovedAndTilde = onlySymbolsRemoved.replace(/[~～〜⁓〰^]/g, '').trim();
+        if (onlySymbolsRemovedAndTilde) results.add(onlySymbolsRemovedAndTilde);
+      }
+
+      // 2c. Extract the text INSIDE parentheses: e.g. "たべます（たべる）" -> "たべる", "いく(ゆく)" -> "ゆく"
+      const insideMatches = part.match(/[\(（]([^\)）]+)[\)）]/g);
+      if (insideMatches) {
+        for (const m of insideMatches) {
+          const inner = m.replace(/[\(（\)）]/g, '').trim();
+          if (inner) {
+            results.add(inner);
+            const innerWithoutTilde = inner.replace(/[~～〜⁓〰^]/g, '').trim();
+            if (innerWithoutTilde) results.add(innerWithoutTilde);
+          }
+        }
+      }
+    }
+  }
+
+  return Array.from(results);
+}
+
+/**
  * Checks if user answer matches target Japanese card
  */
 export function checkJapaneseAnswer(
   userRawInput: string,
   card: { term: string; reading?: string; romaji?: string }
 ): boolean {
-  const norm = (s: string) =>
-    s
-      .trim()
-      .toLowerCase()
-      .replace(/[\s\-_.,/()（）[\]]/g, '');
-
-  const u = norm(userRawInput);
+  const u = normalizeJapaneseText(userRawInput);
   if (!u) return false;
 
-  const targetTerm = norm(card.term);
-  const targetReading = card.reading ? norm(card.reading) : '';
-  const targetRomaji = card.romaji ? norm(card.romaji) : '';
+  // Romaji-to-Kana converted user variants
+  const userConvertedHiragana = normalizeJapaneseText(convertRomajiToKana(userRawInput, 'hiragana'));
+  const userConvertedKatakana = normalizeJapaneseText(convertRomajiToKana(userRawInput, 'katakana'));
 
-  // Also test if user typed Romaji that converts to target reading
-  const userConvertedHiragana = norm(convertRomajiToKana(userRawInput, 'hiragana'));
-  const userConvertedKatakana = norm(convertRomajiToKana(userRawInput, 'katakana'));
+  // Collect all valid target variants from card reading, term, and romaji
+  const targetVariants = [
+    ...extractJapaneseVariants(card.reading),
+    ...extractJapaneseVariants(card.term),
+    ...extractJapaneseVariants(card.romaji),
+  ];
 
-  if (u === targetTerm || (targetReading && u === targetReading) || (targetRomaji && u === targetRomaji)) {
-    return true;
-  }
+  for (const variant of targetVariants) {
+    const normVariant = normalizeJapaneseText(variant);
+    if (!normVariant) continue;
 
-  if (
-    targetReading &&
-    (userConvertedHiragana === targetReading || userConvertedKatakana === targetReading)
-  ) {
-    return true;
-  }
+    // Direct match with user input
+    if (u === normVariant) {
+      return true;
+    }
 
-  if (
-    userConvertedHiragana === targetTerm ||
-    userConvertedKatakana === targetTerm
-  ) {
-    return true;
+    // Match with user converted kana (Hiragana or Katakana)
+    if (userConvertedHiragana && userConvertedHiragana === normVariant) {
+      return true;
+    }
+    if (userConvertedKatakana && userConvertedKatakana === normVariant) {
+      return true;
+    }
   }
 
   return false;
@@ -268,8 +355,10 @@ export function checkVietnameseAnswer(
     s
       .trim()
       .toLowerCase()
-      .replace(/[.,;:!?/\\()（）[\]"'`~]/g, ' ')
-      .replace(/\s+/g, ' ');
+      .replace(/[~～〜⁓〰^]/g, '')
+      .replace(/[.,;:!?/\\／()（）[\]"'`]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
 
   const u = clean(userRawInput);
   if (!u) return false;
@@ -278,10 +367,26 @@ export function checkVietnameseAnswer(
   if (u === target) return true;
 
   // Split synonyms by comma, semicolon, slash, or parentheses
-  const segments = targetDefinition
-    .split(/[,;/+]+/)
-    .map((seg) => clean(seg.replace(/\([^)]*\)/g, '')))
-    .filter(Boolean);
+  const rawSegments = targetDefinition.split(/[,;/／+、|]+/);
+  const segments: string[] = [];
+
+  for (const rawSeg of rawSegments) {
+    const c = clean(rawSeg);
+    if (c) segments.push(c);
+
+    // without parentheses
+    const withoutParens = clean(rawSeg.replace(/[\(（][^\)）]*[\)）]/g, ''));
+    if (withoutParens && withoutParens !== c) segments.push(withoutParens);
+
+    // inside parentheses
+    const insideMatches = rawSeg.match(/[\(（]([^\)）]+)[\)）]/g);
+    if (insideMatches) {
+      for (const m of insideMatches) {
+        const inner = clean(m.replace(/[\(（\)）]/g, ''));
+        if (inner) segments.push(inner);
+      }
+    }
+  }
 
   for (const seg of segments) {
     if (u === seg) return true;
