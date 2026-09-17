@@ -64,23 +64,10 @@ async function generateGeminiContentWithFallback(
   config: any = {},
   timeoutMs = 25000
 ): Promise<string> {
-  // Ordered by priority: primary model is gemini-2.5-flash, followed by gemini-2.0-flash, gemini-2.0-flash-lite, gemini-1.5-flash and gemini-1.5-pro
+  // Ordered by priority for maximum stability: primary model is gemini-1.5-flash, followed by gemini-2.0-flash-lite, gemini-2.0-flash, and gemini-1.5-pro
   const attempts = [
     {
-      model: 'gemini-2.5-flash',
-      config: {
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-        ...config,
-      },
-    },
-    {
-      model: 'gemini-2.5-flash',
-      config: {
-        ...config,
-      },
-    },
-    {
-      model: 'gemini-2.0-flash',
+      model: 'gemini-1.5-flash',
       config: {
         ...config,
       },
@@ -92,7 +79,7 @@ async function generateGeminiContentWithFallback(
       },
     },
     {
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.0-flash',
       config: {
         ...config,
       },
@@ -102,7 +89,7 @@ async function generateGeminiContentWithFallback(
       config: {
         ...config,
       },
-    },
+    }
   ];
 
   let lastError: any = null;
