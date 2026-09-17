@@ -131,11 +131,12 @@ async function generateGeminiContentWithFallback(
           try {
             const cleanConfig = { ...attempt.config };
             delete cleanConfig.thinkingConfig;
-            const retryRes = await ai.models.generateContent({
+            const retryPromise = ai.models.generateContent({
               model: attempt.model,
               contents,
               config: cleanConfig,
             });
+            const retryRes = await Promise.race([retryPromise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms on model ${attempt.model} (no-think)`)), timeoutMs))]);
             if (retryRes && retryRes.text && retryRes.text.trim()) {
               return retryRes.text;
             }
