@@ -20,12 +20,14 @@ import {
   CheckCircle,
   XCircle,
   RefreshCw,
+  Keyboard,
 } from 'lucide-react';
 import { JapaneseGrammarPoint, AttachedFile } from '../../types/japanese';
 import { JPD123_GRAMMAR_POINTS } from '../../data/jpd123Grammar';
 import { readFileAsDataUrl } from '../../utils/japaneseStorage';
 import { sound } from '../../utils/audio';
 import { speakJapanese } from '../../utils/japaneseKana';
+import { JapaneseGrammarPracticeMode } from './JapaneseGrammarPracticeMode';
 
 interface ParsedStructureLine {
   type: 'question' | 'answer' | 'affirmative' | 'negative' | 'agree' | 'decline' | 'contrast' | 'link' | 'note' | 'group' | 'formula';
@@ -538,6 +540,69 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
     setTimeout(() => setSyncNotice(null), 3500);
   };
 
+  // Practice session state
+  const [practiceSession, setPracticeSession] = useState<{
+    title: string;
+    grammarPointTitle?: string;
+    examples: { japanese: string; reading?: string; vietnamese: string; grammarTitle?: string; lessonTag?: string }[];
+  } | null>(null);
+
+  const handleStartPracticePoint = (gp: JapaneseGrammarPoint) => {
+    if (!gp.examples || gp.examples.length === 0) {
+      alert('Cấu trúc này chưa có câu ví dụ để luyện tập.');
+      return;
+    }
+    sound.playClick();
+    setPracticeSession({
+      title: `Luyện tập: ${gp.title}`,
+      grammarPointTitle: gp.title,
+      examples: gp.examples.map((ex) => ({
+        ...ex,
+        grammarTitle: gp.title,
+        lessonTag: gp.lessonTag,
+      })),
+    });
+  };
+
+  const handleStartPracticeAll = () => {
+    const allExamples: { japanese: string; reading?: string; vietnamese: string; grammarTitle?: string; lessonTag?: string }[] = [];
+    filtered.forEach((gp) => {
+      if (gp.examples) {
+        gp.examples.forEach((ex) => {
+          allExamples.push({
+            ...ex,
+            grammarTitle: gp.title,
+            lessonTag: gp.lessonTag,
+          });
+        });
+      }
+    });
+
+    if (allExamples.length === 0) {
+      alert('Không có câu ví dụ nào trong danh sách hiện tại để luyện tập.');
+      return;
+    }
+
+    sound.playClick();
+    const tagLabel = selectedLessonFilter === 'ALL' ? 'Tất cả bài' : selectedLessonFilter;
+    setPracticeSession({
+      title: `Luyện tập ví dụ • ${tagLabel}`,
+      grammarPointTitle: `Tổng hợp ví dụ ngữ pháp (${tagLabel})`,
+      examples: allExamples,
+    });
+  };
+
+  if (practiceSession) {
+    return (
+      <JapaneseGrammarPracticeMode
+        title={practiceSession.title}
+        grammarPointTitle={practiceSession.grammarPointTitle}
+        examples={practiceSession.examples}
+        onExit={() => setPracticeSession(null)}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header Banner */}
@@ -559,7 +624,17 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <button
+            type="button"
+            onClick={handleStartPracticeAll}
+            title="Luyện gõ tất cả câu ví dụ ngữ pháp trong danh sách lọc"
+            className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs sm:text-sm font-black shadow-md shadow-indigo-600/30 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
+          >
+            <Keyboard className="w-4 h-4 text-cyan-200" />
+            <span className="hidden sm:inline">Luyện gõ ví dụ</span>
+            <span className="sm:hidden">Luyện tập</span>
+          </button>
           <button
             type="button"
             onClick={handleSyncDefaultGrammar}
@@ -764,10 +839,19 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
                 {/* Examples */}
                 {gp.examples && gp.examples.length > 0 && (
                   <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
                       <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider">
                         Ví dụ minh họa ({gp.examples.length}):
                       </span>
+                      <button
+                        type="button"
+                        onClick={() => handleStartPracticePoint(gp)}
+                        className="px-3 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-950/70 hover:bg-indigo-600 text-indigo-600 dark:text-indigo-300 hover:text-white border border-indigo-200/80 dark:border-indigo-800/80 text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95 group/btn"
+                        title="Luyện gõ các ví dụ của cấu trúc này"
+                      >
+                        <Keyboard className="w-3.5 h-3.5 text-indigo-500 group-hover/btn:text-white" />
+                        <span>Luyện tập ({gp.examples.length})</span>
+                      </button>
                     </div>
                     <div className="space-y-2">
                       {gp.examples.map((ex, idx) => {
