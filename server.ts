@@ -17,7 +17,8 @@ app.get('/api/health', (_req, res) => {
 });
 
 // Helper function to call Gemini API with robust model fallbacks and exponential backoff for temporary 503/429 errors
-// Helper to resolve Gemini API key from request headers, body, or environment variables
+let currentKeyIndex = 0;
+
 function resolveGeminiApiKey(req: express.Request): string {
   const headerKey = req.headers['x-gemini-api-key'];
   if (typeof headerKey === 'string' && headerKey.trim()) {
@@ -26,12 +27,23 @@ function resolveGeminiApiKey(req: express.Request): string {
   if (req.body && typeof req.body.apiKey === 'string' && req.body.apiKey.trim()) {
     return req.body.apiKey.trim();
   }
+
+  let serverKeysStr = '';
   if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() && !process.env.GEMINI_API_KEY.includes('MY_GEMINI_API_KEY')) {
-    return process.env.GEMINI_API_KEY.trim();
+    serverKeysStr = process.env.GEMINI_API_KEY.trim();
+  } else if (process.env.VITE_GEMINI_API_KEY && process.env.VITE_GEMINI_API_KEY.trim()) {
+    serverKeysStr = process.env.VITE_GEMINI_API_KEY.trim();
   }
-  if (process.env.VITE_GEMINI_API_KEY && process.env.VITE_GEMINI_API_KEY.trim()) {
-    return process.env.VITE_GEMINI_API_KEY.trim();
+
+  if (serverKeysStr) {
+    const keys = serverKeysStr.split(',').map((k) => k.trim()).filter((k) => k.length > 0);
+    if (keys.length > 0) {
+      // Rotate keys round-robin to balance load
+      currentKeyIndex = (currentKeyIndex + 1) % keys.length;
+      return keys[currentKeyIndex];
+    }
   }
+
   try {
     const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
     if (fs.existsSync(configPath)) {
@@ -41,6 +53,7 @@ function resolveGeminiApiKey(req: express.Request): string {
       }
     }
   } catch (e) {}
+  
   return '';
 }
 
