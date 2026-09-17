@@ -82,7 +82,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
         : initialFilter === 'mastered' && masteredCount === 0 && unmasteredCount > 0
         ? 'original'
         : initialFilter || 'original';
-    return getCardsByTab(tab, lesson.cards);
+    return shuffleArray(getCardsByTab(tab, lesson.cards));
   });
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -126,7 +126,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     if (newTab === filterTab) return;
     setFilterTab(newTab);
     const filtered = getCardsByTab(newTab, cardsSource);
-    setCards(filtered);
+    setCards(shuffleArray(filtered));
     setCurrentIndex(0);
     setInputVal('');
     setIsAnswerChecked(false);
@@ -408,10 +408,10 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     if (onlyMistakes) {
       const mistakeCards = cards.filter((c) => wrongCardIds.has(c.id));
       if (mistakeCards.length > 0) {
-        setCards(mistakeCards);
+        setCards(shuffleArray(mistakeCards));
       }
     } else {
-      setCards(getCardsByTab(filterTab, cardsSource));
+      setCards(shuffleArray(getCardsByTab(filterTab, cardsSource)));
       setWrongCardIds(new Set());
       clearTypingProgress(storageId);
     }
