@@ -437,8 +437,8 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
       {/* Options Modal */}
       {showOptionsModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
-          <div className="w-full max-w-md bg-slate-900 rounded-3xl border border-slate-700 p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150 text-slate-100">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="w-full max-w-md bg-slate-900 rounded-3xl border border-slate-700 p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150 text-slate-100 max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
                   <SlidersHorizontal className="w-4 h-4" />
@@ -457,7 +457,7 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-y-auto flex-1 pr-1.5 custom-scrollbar">
               {/* Shuffle Toggle & Restart */}
               <div className="space-y-2.5">
                 <label className="text-[11px] font-black uppercase text-slate-400 tracking-wider">
@@ -626,7 +626,7 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
               </div>
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 shrink-0">
               <button
                 type="button"
                 onClick={() => setShowOptionsModal(false)}
