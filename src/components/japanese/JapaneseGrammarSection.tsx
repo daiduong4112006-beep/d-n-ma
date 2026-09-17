@@ -28,6 +28,7 @@ import { readFileAsDataUrl } from '../../utils/japaneseStorage';
 import { sound } from '../../utils/audio';
 import { speakJapanese } from '../../utils/japaneseKana';
 import { JapaneseGrammarPracticeMode } from './JapaneseGrammarPracticeMode';
+import { JapaneseGrammarAiModal } from './JapaneseGrammarAiModal';
 
 interface ParsedStructureLine {
   type: 'question' | 'answer' | 'affirmative' | 'negative' | 'agree' | 'decline' | 'contrast' | 'link' | 'note' | 'group' | 'formula';
@@ -564,6 +565,14 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
     });
   };
 
+  // AI Grammar Assistant state
+  const [aiGrammarPoint, setAiGrammarPoint] = useState<JapaneseGrammarPoint | null>(null);
+
+  const handleOpenAiGrammar = (gp: JapaneseGrammarPoint) => {
+    sound.playClick();
+    setAiGrammarPoint(gp);
+  };
+
   if (practiceSession) {
     return (
       <JapaneseGrammarPracticeMode
@@ -775,6 +784,15 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
                           {gp.examples.length}
                         </span>
                       )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenAiGrammar(gp)}
+                      className="px-3 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-950/70 hover:bg-purple-600 text-purple-600 dark:text-purple-300 hover:text-white border border-purple-200/80 dark:border-purple-800/80 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95 group/btn"
+                      title={`Trợ lý AI giải thích chuyên sâu & hỏi đáp cấu trúc: ${gp.title}`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-purple-500 group-hover/btn:text-white" />
+                      <span>Hỏi đáp AI</span>
                     </button>
                     <button
                       type="button"
@@ -1459,6 +1477,13 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
           </div>
         </div>
       )}
+
+      {/* AI GRAMMAR TUTOR MODAL */}
+      <JapaneseGrammarAiModal
+        grammarPoint={aiGrammarPoint}
+        isOpen={!!aiGrammarPoint}
+        onClose={() => setAiGrammarPoint(null)}
+      />
     </div>
   );
 };

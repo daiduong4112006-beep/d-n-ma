@@ -4,6 +4,7 @@ import { parseTextFormat, ParsedQuestion } from '../utils/parser';
 import { FileText, Upload, CheckCircle, AlertCircle, Plus, Copy, Sparkles, BookOpen, Edit3, Trash2, X, Check, Bot, Loader2, Wand2, Image, UploadCloud } from 'lucide-react';
 import { ClickableText } from '../components/ClickableText';
 import { compressImage } from '../utils/imageCompressor';
+import { callAiApi } from '../utils/aiClient';
 
 interface ImportQuizProps {
   quizzes: Quiz[];
@@ -283,16 +284,12 @@ D. PHP
     setAiError(null);
 
     try {
-      const res = await fetch('/api/parse-quiz-ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rawText: rawContent }),
+      const data = await callAiApi({
+        endpoint: '/api/parse-quiz-ai',
+        payload: { rawText: rawContent },
+        systemPromptFallback: 'Bạn là chuyên gia phân tích và chuẩn hóa đề thi trắc nghiệm.',
+        userPromptFallback: `Văn bản cần trích xuất câu hỏi: ${rawContent.slice(0, 10000)}`,
       });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Có lỗi xảy ra khi gọi AI phân tích.');
-      }
 
       if (data.questions && Array.isArray(data.questions)) {
         setParsedQuestions(data.questions);
@@ -302,7 +299,12 @@ D. PHP
       }
     } catch (err: any) {
       console.error('Error parsing with AI:', err);
-      setAiError(err.message || 'Không thể kết nối dịch vụ AI. Vui lòng thử lại!');
+      const isKeyErr = err.needsApiKey || String(err?.message || '').includes('GEMINI_API_KEY');
+      setAiError(
+        isKeyErr
+          ? 'Hệ thống AI cần Google Gemini API Key để phân tích đề. Vui lòng kiểm tra lại khóa API.'
+          : err.message || 'Không thể kết nối dịch vụ AI. Vui lòng thử lại!'
+      );
     } finally {
       setIsAiParsing(false);
     }

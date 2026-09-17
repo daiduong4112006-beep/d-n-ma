@@ -17,35 +17,75 @@ app.get('/api/health', (_req, res) => {
 });
 
 // Helper function to call Gemini API with robust model fallbacks and exponential backoff for temporary 503/429 errors
+// Helper to resolve Gemini API key from request headers, body, or environment variables
+function resolveGeminiApiKey(req: express.Request): string {
+  const headerKey = req.headers['x-gemini-api-key'];
+  if (typeof headerKey === 'string' && headerKey.trim()) {
+    return headerKey.trim();
+  }
+  if (req.body && typeof req.body.apiKey === 'string' && req.body.apiKey.trim()) {
+    return req.body.apiKey.trim();
+  }
+  if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() && !process.env.GEMINI_API_KEY.includes('MY_GEMINI_API_KEY')) {
+    return process.env.GEMINI_API_KEY.trim();
+  }
+  if (process.env.VITE_GEMINI_API_KEY && process.env.VITE_GEMINI_API_KEY.trim()) {
+    return process.env.VITE_GEMINI_API_KEY.trim();
+  }
+  try {
+    const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+    if (fs.existsSync(configPath)) {
+      const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      if (cfg.apiKey && typeof cfg.apiKey === 'string' && cfg.apiKey.startsWith('AIzaSy')) {
+        return cfg.apiKey;
+      }
+    }
+  } catch (e) {}
+  return '';
+}
+
+// Helper function to call Gemini API with robust model fallbacks and exponential backoff for temporary 503/429 errors
 async function generateGeminiContentWithFallback(
   ai: GoogleGenAI,
   contents: any,
   config: any = {},
   timeoutMs = 25000
 ): Promise<string> {
-  // Ordered by priority: primary model is gemini-3.8-flash, followed by gemini-flash-latest and gemini-3.1-flash-lite
+  // Ordered by priority: primary model is gemini-2.5-flash, followed by gemini-2.0-flash, gemini-2.0-flash-lite, gemini-1.5-flash and gemini-1.5-pro
   const attempts = [
     {
-      model: 'gemini-3.8-flash',
+      model: 'gemini-2.5-flash',
       config: {
         thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
         ...config,
       },
     },
     {
-      model: 'gemini-3.8-flash',
+      model: 'gemini-2.5-flash',
       config: {
         ...config,
       },
     },
     {
-      model: 'gemini-flash-latest',
+      model: 'gemini-2.0-flash',
       config: {
         ...config,
       },
     },
     {
-      model: 'gemini-3.1-flash-lite',
+      model: 'gemini-2.0-flash-lite',
+      config: {
+        ...config,
+      },
+    },
+    {
+      model: 'gemini-1.5-flash',
+      config: {
+        ...config,
+      },
+    },
+    {
+      model: 'gemini-1.5-pro',
       config: {
         ...config,
       },
@@ -78,14 +118,34 @@ async function generateGeminiContentWithFallback(
       } catch (err: any) {
         lastError = err;
         const errMsg = String(err?.message || err || '');
+        const isNotFound = errMsg.includes('404') || errMsg.includes('not found') || errMsg.includes('NOT_FOUND');
+        const isThinkingError = errMsg.includes('thinking') || errMsg.includes('ThinkingLevel') || errMsg.includes('INVALID_ARGUMENT');
         const isUnavailable = errMsg.includes('503') || errMsg.includes('UNAVAILABLE') || errMsg.includes('high demand');
         const isRateLimit = errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED');
         const isDailyQuotaExhausted = errMsg.includes('requests_per_model_per_day') || errMsg.includes('free_tier');
 
         console.warn(`[AI Fallback] Model ${attempt.model} attempt ${retry + 1}/${maxRetries} failed:`, errMsg);
 
-        // If daily quota or free-tier ceiling is exhausted for this model, immediately jump to next model without retrying
-        if (isDailyQuotaExhausted) {
+        // If thinking config is not supported on this model, immediately try without it
+        if (isThinkingError && attempt.config?.thinkingConfig) {
+          try {
+            const cleanConfig = { ...attempt.config };
+            delete cleanConfig.thinkingConfig;
+            const retryRes = await ai.models.generateContent({
+              model: attempt.model,
+              contents,
+              config: cleanConfig,
+            });
+            if (retryRes && retryRes.text && retryRes.text.trim()) {
+              return retryRes.text;
+            }
+          } catch (cleanErr) {
+            // continue fallback
+          }
+        }
+
+        // If model not found or daily quota exhausted, immediately jump to next model without retrying
+        if (isNotFound || isDailyQuotaExhausted) {
           break;
         }
 
@@ -122,11 +182,12 @@ app.post('/api/ai/explain', async (req, res) => {
       conversationHistory,
     } = req.body;
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = resolveGeminiApiKey(req);
     if (!apiKey) {
-      return res.status(500).json({
-        error: 'GEMINI_API_KEY environment variable is missing on server.',
-        reply: 'Khóa API Gemini chưa được cấu hình trên máy chủ. Bạn vui lòng kiểm tra GEMINI_API_KEY trong file .env hoặc Settings > Secrets.',
+      return res.status(400).json({
+        error: 'MISSING_API_KEY',
+        needsApiKey: true,
+        reply: 'Khóa API Gemini chưa được cấu hình trên máy chủ. Bạn vui lòng nhập API Key cá nhân trong phần Cài đặt AI.',
       });
     }
 
@@ -245,6 +306,130 @@ Yêu cầu thêm từ học sinh (nếu có): ${userPrompt || 'Giải thích ng�
   }
 });
 
+// Endpoint for Japanese Grammar AI Tutor & Assistant
+app.post('/api/ai/grammar-tutor', async (req, res) => {
+  try {
+    const {
+      grammarTitle,
+      formation,
+      meaning,
+      explanation,
+      examples,
+      mode = 'explain', // 'explain' | 'generate-examples' | 'check-sentence' | 'chat'
+      userPrompt,
+      userSentence,
+      conversationHistory,
+    } = req.body;
+
+    if (!grammarTitle) {
+      return res.status(400).json({ error: 'Tiêu đề ngữ pháp không được để trống' });
+    }
+
+    const apiKey = resolveGeminiApiKey(req);
+    if (!apiKey) {
+      return res.status(400).json({
+        error: 'MISSING_API_KEY',
+        needsApiKey: true,
+        reply: 'Khóa API Gemini chưa được cấu hình. Bạn có thể nhập Gemini API Key miễn phí để tiếp tục.',
+      });
+    }
+
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
+    });
+
+    const systemInstruction = `Bạn là giáo viên dạy tiếng Nhật chuyên nghiệp, thân thiện và am hiểu sâu sắc về ngữ pháp JLPT (N5 - N1).
+Nhiệm vụ của bạn: Giúp học viên hiểu cặn kẽ bản chất cấu trúc ngữ pháp, cách dùng tự nhiên của người bản xứ, sửa lỗi sai và giải đáp thắc mắc.
+Quy định trình bày:
+- Toàn bộ lời giải thích, phân tích BẮT BUỘC VIẾT BẰNG TIẾNG VIỆT rõ ràng, dễ hiểu, sư phạm cao.
+- Các câu ví dụ tiếng Nhật phải viết bằng chữ Nhật chuẩn (Kanji kèm Furigana/Hiragana trong ngoặc đơn hoặc dòng cách đọc) và có bản dịch nghĩa Tiếng Việt sát nghĩa, tự nhiên.
+- Sử dụng Markdown đẹp mắt: in đậm từ khóa, gạch đầu dòng ngắn gọn, không viết dài dòng lê thê.
+- Tuyệt đối không dùng mã LaTeX hay dấu $...$.`;
+
+    let prompt = '';
+    if (mode === 'explain') {
+      prompt = `Hãy giải thích chuyên sâu và dễ nhớ nhất về cấu trúc ngữ pháp sau:
+[NGỮ PHÁP]: ${grammarTitle}
+[CẤU TRÚC / CÁCH KẾT NỐI]: ${formation || 'Không có'}
+[Ý NGHĨA]: ${meaning || 'Không có'}
+[GIẢI THÍCH HIỆN CÓ]: ${explanation || 'Không có'}
+
+YÊU CẦU:
+1. **Bản chất & Sắc thái**: Khi nào người Nhật dùng cấu trúc này? Sắc thái cảm xúc hoặc bối cảnh giao tiếp cụ thể (lịch sự, thân mật, trang trọng...).
+2. **Lưu ý & Lỗi sai thường gặp**: Học sinh Việt Nam hay nhầm lẫn điều gì khi dùng ngữ pháp này? Cách chia thể động từ/tính từ cần chú ý?
+3. **Mẹo ghi nhớ nhanh**: 1 câu ngắn gọn giúp nhớ cấu trúc cả đời.
+4. **2 câu ví dụ tiêu biểu**: Gồm chữ Nhật (kèm cách đọc Hiragana) và dịch nghĩa Tiếng Việt.`;
+    } else if (mode === 'generate-examples') {
+      prompt = `Hãy tạo thêm 4 câu ví dụ giao tiếp thực tế MỚI VÀ TỰ NHIÊN sử dụng cấu trúc ngữ pháp:
+[NGỮ PHÁP]: ${grammarTitle}
+[CẤU TRÚC]: ${formation || ''}
+[Ý NGHĨA]: ${meaning || ''}
+
+YÊU CẦU ĐỊNH DẠNG:
+Trả về 4 câu ví dụ (ưu tiên có cả câu đơn và câu hội thoại ngắn A - B).
+Mỗi ví dụ gồm:
+- **Tiếng Nhật**: Có Kanji tự nhiên
+- **Cách đọc**: Hiragana toàn bộ
+- **Tiếng Việt**: Bản dịch mượt mà
+- **Ghi chú ngắn**: Giải thích từ vựng mới hoặc lưu ý cách chia trong câu.`;
+    } else if (mode === 'check-sentence') {
+      prompt = `Học sinh tự đặt một câu tiếng Nhật để luyện tập cấu trúc:
+[NGỮ PHÁP]: ${grammarTitle} (${formation || ''})
+[CÂU CỦA HỌC SINH]: "${userSentence}"
+
+YÊU CẦU:
+1. **Nhận xét đúng/sai**: Câu này đã chuẩn ngữ pháp và tự nhiên theo cách nói của người Nhật chưa? (Đạt bao nhiêu/10 điểm).
+2. **Sửa lại cho chuẩn (nếu có lỗi)**: Đưa ra câu viết lại chuẩn xác nhất (kèm Hiragana và dịch tiếng Việt).
+3. **Phân tích chi tiết**: Giải thích vì sao cần sửa như vậy, lỗi chia từ hay lỗi trợ từ ở đâu.
+4. **Gợi ý cách diễn đạt hay hơn**: Cách người Nhật bản xứ thường nói trong đời sống.`;
+    } else {
+      // mode === 'chat'
+      prompt = `Học sinh đang học cấu trúc ngữ pháp:
+[NGỮ PHÁP]: ${grammarTitle}
+[CẤU TRÚC]: ${formation || ''}
+[Ý NGHĨA]: ${meaning || ''}
+[CÂU HỎI CỦA HỌC SINH]: ${userPrompt}
+
+Hãy trả lời câu hỏi của học sinh một cách ngắn gọn, súc tích, dễ hiểu bằng Tiếng Việt, kèm ví dụ minh họa bằng tiếng Nhật nếu cần thiết.`;
+    }
+
+    let contents: any[] = [];
+    if (conversationHistory && Array.isArray(conversationHistory) && conversationHistory.length > 0) {
+      contents = conversationHistory.map((item: { role: string; text: string }) => ({
+        role: item.role === 'user' ? 'user' : 'model',
+        parts: [{ text: item.text }],
+      }));
+      contents.push({
+        role: 'user',
+        parts: [{ text: prompt }],
+      });
+    } else {
+      contents = [{ role: 'user', parts: [{ text: prompt }] }];
+    }
+
+    const responseText = await generateGeminiContentWithFallback(
+      ai,
+      contents,
+      {
+        systemInstruction,
+        temperature: 0.4,
+      },
+      25000
+    );
+
+    return res.json({ reply: responseText.trim(), isError: false });
+  } catch (err: any) {
+    console.error('Error in /api/ai/grammar-tutor:', err);
+    return res.status(500).json({
+      error: 'Không thể kết nối với AI',
+      details: err?.message || String(err),
+      reply: '⚠️ Rất tiếc, chưa thể nhận phản hồi từ AI lúc này. Bạn vui lòng thử lại nhé!',
+      isError: true,
+    });
+  }
+});
+
 // Endpoint to generate 1-3 similar practice questions based on a given question
 app.post('/api/ai/generate-similar', async (req, res) => {
   try {
@@ -253,9 +438,13 @@ app.post('/api/ai/generate-similar', async (req, res) => {
       return res.status(400).json({ error: 'Nội dung câu hỏi không được để trống' });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = resolveGeminiApiKey(req);
     if (!apiKey) {
-      return res.status(500).json({ error: 'GEMINI_API_KEY is not configured on server.' });
+      return res.status(400).json({
+        error: 'MISSING_API_KEY',
+        needsApiKey: true,
+        message: 'GEMINI_API_KEY chưa được cấu hình. Vui lòng nhập API Key.',
+      });
     }
 
     const ai = new GoogleGenAI({
@@ -318,9 +507,13 @@ app.post('/api/ai/generate-quiz', async (req, res) => {
       return res.status(400).json({ error: 'Vui lòng nhập chủ đề hoặc yêu cầu tạo đề' });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = resolveGeminiApiKey(req);
     if (!apiKey) {
-      return res.status(500).json({ error: 'GEMINI_API_KEY is not configured on server.' });
+      return res.status(400).json({
+        error: 'MISSING_API_KEY',
+        needsApiKey: true,
+        message: 'GEMINI_API_KEY chưa được cấu hình trên máy chủ. Vui lòng nhập API Key.',
+      });
     }
 
     const ai = new GoogleGenAI({
@@ -416,10 +609,12 @@ app.post('/api/parse-quiz-ai', async (req, res) => {
       return res.status(400).json({ error: 'Nội dung văn bản không được để trống' });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = resolveGeminiApiKey(req);
     if (!apiKey) {
-      return res.status(500).json({
-        error: 'GEMINI_API_KEY environment variable is missing on server.',
+      return res.status(400).json({
+        error: 'MISSING_API_KEY',
+        needsApiKey: true,
+        message: 'GEMINI_API_KEY chưa được cấu hình trên máy chủ. Vui lòng nhập API Key.',
       });
     }
 

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, X, Loader2, CheckCircle2, XCircle, ArrowRight, Lightbulb, RefreshCw, HelpCircle } from 'lucide-react';
+import { Sparkles, X, Loader2, CheckCircle2, XCircle, ArrowRight, Lightbulb, RefreshCw, HelpCircle, Key, AlertTriangle } from 'lucide-react';
 import { Question } from '../types/quiz';
 import { DifficultyBadge } from './DifficultyBadge';
+import { callAiApi } from '../utils/aiClient';
+import { AiApiKeyModal } from './AiApiKeyModal';
 
 interface AiSimilarQuestionsModalProps {
   isOpen: boolean;
@@ -19,6 +21,8 @@ export const AiSimilarQuestionsModal: React.FC<AiSimilarQuestionsModalProps> = (
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsApiKey, setNeedsApiKey] = useState(false);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
 
   // User interactive answering state for generated questions
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
@@ -43,22 +47,18 @@ export const AiSimilarQuestionsModal: React.FC<AiSimilarQuestionsModalProps> = (
     setSubmittedAnswers({});
 
     try {
-      const res = await fetch('/api/ai/generate-similar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const data = await callAiApi({
+        endpoint: '/api/ai/generate-similar',
+        payload: {
           question: originalQuestion.question,
           options: originalQuestion.options,
           correctAnswerText: originalQuestion.options[originalQuestion.correctAnswer] || '',
           explanation: originalQuestion.explanation,
           count: 2,
-        }),
+        },
+        systemPromptFallback: 'Bạn là chuyên gia ra đề thi trắc nghiệm. Tạo các câu hỏi mới cùng dạng bài.',
+        userPromptFallback: `Câu hỏi gốc: ${originalQuestion.question}. Yêu cầu tạo 2 câu tương tự.`,
       });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Lỗi khi tạo câu hỏi tương tự với AI');
-      }
 
       if (data.questions && Array.isArray(data.questions)) {
         const formatted: Question[] = data.questions.map((q: any, idx: number) => ({
@@ -81,7 +81,13 @@ export const AiSimilarQuestionsModal: React.FC<AiSimilarQuestionsModalProps> = (
       }
     } catch (err: any) {
       console.error('Error fetching similar questions:', err);
-      setError(err.message || 'Không thể tạo câu hỏi tương tự');
+      const isKeyErr = err.needsApiKey || String(err?.message || '').includes('GEMINI_API_KEY');
+      setNeedsApiKey(isKeyErr);
+      setError(
+        isKeyErr
+          ? 'Hệ thống AI cần Google Gemini API Key để tiếp tục. Bạn vui lòng bấm nút "Cài đặt API Key" để kích hoạt.'
+          : err.message || 'Không thể tạo câu hỏi tương tự'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -117,13 +123,23 @@ export const AiSimilarQuestionsModal: React.FC<AiSimilarQuestionsModalProps> = (
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setShowApiKeyModal(true)}
+              title="Cài đặt khóa Google Gemini API Key"
+              className="p-2 rounded-xl text-slate-400 hover:text-amber-500 dark:hover:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <Key className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Body */}
@@ -314,6 +330,16 @@ export const AiSimilarQuestionsModal: React.FC<AiSimilarQuestionsModalProps> = (
           </div>
         </div>
       </div>
+
+      {/* Embedded API Key Configuration Modal */}
+      <AiApiKeyModal
+        isOpen={showApiKeyModal}
+        onClose={() => setShowApiKeyModal(false)}
+        onSaved={() => {
+          setNeedsApiKey(false);
+          handleFetchSimilar();
+        }}
+      />
     </div>
   );
 };

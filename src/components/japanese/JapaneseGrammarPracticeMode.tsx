@@ -25,6 +25,8 @@ import {
   parseDialogueExample,
   ParsedDialogue,
 } from '../../utils/japaneseKanjiConverter';
+import { JPD123_GRAMMAR_POINTS, JapaneseGrammarPoint } from '../../data/jpd123Grammar';
+import { JapaneseGrammarAiModal } from './JapaneseGrammarAiModal';
 
 export interface GrammarPracticeExample {
   japanese: string;
@@ -84,6 +86,10 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
     return localStorage.getItem('grammar_auto_speech') === 'true';
   });
 
+  // AI Assistant modal state
+  const [showAiModal, setShowAiModal] = useState(false);
+  const [aiContextSentence, setAiContextSentence] = useState('');
+
   const singleInputRef = useRef<HTMLInputElement>(null);
   const inputARef = useRef<HTMLInputElement>(null);
   const inputBRef = useRef<HTMLInputElement>(null);
@@ -93,6 +99,22 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
   const parsed: ParsedDialogue = currentItem
     ? parseDialogueExample(currentItem.japanese, currentItem.vietnamese)
     : { isDialogue: false };
+
+  const currentGrammarPoint: JapaneseGrammarPoint = React.useMemo(() => {
+    const matched = JPD123_GRAMMAR_POINTS.find(
+      (gp) => gp.title === grammarPointTitle || gp.title === currentItem?.grammarTitle
+    );
+    if (matched) return matched;
+    return {
+      id: 'active-grammar-point',
+      title: grammarPointTitle || currentItem?.grammarTitle || 'Cấu trúc ngữ pháp',
+      lessonTag: currentItem?.lessonTag || 'Ngữ pháp',
+      formation: '',
+      meaning: currentItem?.vietnamese || '',
+      explanation: '',
+      examples: examples.map((e) => ({ japanese: e.japanese, reading: e.reading || '', vietnamese: e.vietnamese })),
+    };
+  }, [grammarPointTitle, currentItem?.grammarTitle, currentItem?.lessonTag, currentItem?.vietnamese, examples]);
 
   // Timer counter
   useEffect(() => {
@@ -371,8 +393,23 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
           </span>
         </div>
 
-        {/* Right Side: Options & Exit */}
+        {/* Right Side: AI, Options & Exit */}
         <div className="flex items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setAiContextSentence(currentItem ? currentItem.japanese : '');
+              setShowAiModal(true);
+              sound.playClick();
+            }}
+            className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-purple-950/80 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-700/70 flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-xs"
+            title="Trợ lý AI giải thích & hỏi đáp ngữ pháp"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+            <span className="hidden sm:inline">Hỏi đáp AI</span>
+            <span className="sm:hidden">AI</span>
+          </button>
+
           <button
             type="button"
             onClick={() => {
@@ -890,6 +927,20 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
                     <Volume2 className="w-4 h-4" />
                   </button>
 
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAiContextSentence(currentItem.japanese);
+                      setShowAiModal(true);
+                      sound.playClick();
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-purple-900/60 hover:bg-purple-600 text-purple-200 hover:text-white border border-purple-600/50 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                    title="Hỏi trợ lý AI giải thích câu này"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-purple-300" />
+                    <span>Hỏi AI</span>
+                  </button>
+
                   {!isCorrect && (
                     <button
                       type="button"
@@ -1003,6 +1054,14 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
       <div className="max-w-4xl mx-auto w-full pt-3 border-t border-slate-800/80 text-center text-xs text-slate-500">
         <span>Gõ phím tiếng Nhật • Hỗ trợ cả Chữ Hán và Hiragana • Hội thoại 2 dòng A & B</span>
       </div>
+
+      {/* Embedded Japanese Grammar AI Modal */}
+      <JapaneseGrammarAiModal
+        grammarPoint={currentGrammarPoint}
+        isOpen={showAiModal}
+        onClose={() => setShowAiModal(false)}
+        initialContextSentence={aiContextSentence}
+      />
     </div>
   );
 };

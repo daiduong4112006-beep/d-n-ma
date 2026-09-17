@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { Sparkles, X, Loader2, BookOpen, CheckCircle2, ArrowRight, Layers, Sliders, Globe } from 'lucide-react';
+import { Sparkles, X, Loader2, BookOpen, CheckCircle2, ArrowRight, Layers, Sliders, Globe, Key } from 'lucide-react';
 import { Quiz, Question } from '../types/quiz';
+import { callAiApi } from '../utils/aiClient';
+import { AiApiKeyModal } from './AiApiKeyModal';
 
 interface AiGenerateQuizModalProps {
   isOpen: boolean;
@@ -21,6 +23,7 @@ export const AiGenerateQuizModal: React.FC<AiGenerateQuizModalProps> = ({
   const [customPrompt, setCustomPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
 
   // Quick suggestions
   const topicPresets = [
@@ -45,23 +48,19 @@ export const AiGenerateQuizModal: React.FC<AiGenerateQuizModalProps> = ({
     setError(null);
 
     try {
-      const res = await fetch('/api/ai/generate-quiz', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const data = await callAiApi({
+        endpoint: '/api/ai/generate-quiz',
+        payload: {
           topic: topic.trim(),
           subject: subject.trim() || 'Tổng hợp',
           count,
           difficulty,
           language,
           customPrompt: customPrompt.trim(),
-        }),
+        },
+        systemPromptFallback: 'Bạn là chuyên gia soạn thảo đề thi trắc nghiệm hàng đầu.',
+        userPromptFallback: `Chủ đề: ${topic}. Số lượng: ${count}. Độ khó: ${difficulty}.`,
       });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Lỗi khi tạo đề thi với AI');
-      }
 
       if (data.questions && data.questions.length > 0) {
         const newQuiz: Quiz = {
@@ -83,7 +82,12 @@ export const AiGenerateQuizModal: React.FC<AiGenerateQuizModalProps> = ({
       }
     } catch (err: any) {
       console.error('Error generating AI quiz:', err);
-      setError(err.message || 'Có lỗi xảy ra khi tạo đề thi. Vui lòng thử lại.');
+      const isKeyErr = err.needsApiKey || String(err?.message || '').includes('GEMINI_API_KEY');
+      setError(
+        isKeyErr
+          ? 'Hệ thống cần Google Gemini API Key để tạo đề. Vui lòng bấm nút 🔑 ở góc trên để nhập khóa miễn phí.'
+          : err.message || 'Có lỗi xảy ra khi tạo đề thi. Vui lòng thử lại.'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -107,14 +111,24 @@ export const AiGenerateQuizModal: React.FC<AiGenerateQuizModalProps> = ({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isLoading}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setShowApiKeyModal(true)}
+              title="Cài đặt khóa Google Gemini API Key"
+              className="p-2 rounded-xl text-slate-400 hover:text-amber-500 dark:hover:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <Key className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isLoading}
+              className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -273,6 +287,15 @@ export const AiGenerateQuizModal: React.FC<AiGenerateQuizModalProps> = ({
           </div>
         </form>
       </div>
+
+      {/* Embedded API Key Configuration Modal */}
+      <AiApiKeyModal
+        isOpen={showApiKeyModal}
+        onClose={() => setShowApiKeyModal(false)}
+        onSaved={() => {
+          setError(null);
+        }}
+      />
     </div>
   );
 };

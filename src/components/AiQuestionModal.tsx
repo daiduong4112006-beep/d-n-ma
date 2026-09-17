@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Question } from '../types/quiz';
-import { Bot, Sparkles, Send, X, RefreshCw, Copy, Check, MessageSquare } from 'lucide-react';
+import { Bot, Sparkles, Send, X, RefreshCw, Copy, Check, MessageSquare, Key } from 'lucide-react';
 import { cleanLatexText } from '../utils/textCleaner';
+import { callAiApi } from '../utils/aiClient';
+import { AiApiKeyModal } from './AiApiKeyModal';
 
 interface AiQuestionModalProps {
   question: Question;
@@ -28,6 +30,7 @@ export const AiQuestionModal: React.FC<AiQuestionModalProps> = ({
 }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeOptionIndex, setActiveOptionIndex] = useState<number | null>(() => {
@@ -83,11 +86,9 @@ export const AiQuestionModal: React.FC<AiQuestionModalProps> = ({
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
-      const res = await fetch('/api/ai/explain', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
+      const data = await callAiApi({
+        endpoint: '/api/ai/explain',
+        payload: {
           questionText: question.question,
           options: question.options,
           correctAnswerText,
@@ -98,17 +99,13 @@ export const AiQuestionModal: React.FC<AiQuestionModalProps> = ({
           selectedOptionText: optionText,
           isOptionCorrect,
           userPrompt,
-        }),
+        },
+        signal: controller.signal,
+        systemPromptFallback: 'Bạn là gia sư AI dạy trắc nghiệm thông minh. Trả lời bằng Tiếng Việt súc tích, dễ hiểu.',
+        userPromptFallback: `Câu hỏi: ${question.question}. Đáp án đúng: ${correctAnswerText}. Yêu cầu: ${userPrompt}`,
       });
       clearTimeout(timeoutId);
 
-      if (controller.signal.aborted) return;
-
-      if (!res.ok) {
-        throw new Error(`Server returned ${res.status}`);
-      }
-
-      const data = await res.json();
       if (controller.signal.aborted) return;
 
       const aiReplyMsg: Message = {
@@ -121,14 +118,16 @@ export const AiQuestionModal: React.FC<AiQuestionModalProps> = ({
     } catch (err: any) {
       clearTimeout(timeoutId);
       if (controller.signal.aborted || err.name === 'AbortError') {
-        // Aborted gracefully due to new request or close
         return;
       }
       console.error('Error fetching AI explanation:', err);
+      const isKeyErr = err.needsApiKey || String(err?.message || '').includes('GEMINI_API_KEY');
       const errorMsg: Message = {
         id: `msg-err-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         sender: 'ai',
-        text: '⚠️ Chưa thể kết nối với server AI lúc này. Bạn vui lòng bấm nút "Phân tích lại" hoặc thử lại sau chốc lát.',
+        text: isKeyErr
+          ? '⚠️ AI chưa thể kết nối do thiếu hoặc quá tải API Key. Bạn vui lòng bấm nút biểu tượng Khóa 🔑 ở góc trên bên phải để nhập Google Gemini API Key miễn phí nhé!'
+          : '⚠️ Chưa thể kết nối với server AI lúc này. Bạn vui lòng bấm nút "Phân tích lại" hoặc thử lại sau chốc lát.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev.filter((m) => m.id !== 'msg-welcome'), errorMsg]);
@@ -195,11 +194,9 @@ export const AiQuestionModal: React.FC<AiQuestionModalProps> = ({
           text: m.text,
         }));
 
-      const res = await fetch('/api/ai/explain', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
+      const data = await callAiApi({
+        endpoint: '/api/ai/explain',
+        payload: {
           questionText: question.question,
           options: question.options,
           correctAnswerText,
@@ -207,15 +204,13 @@ export const AiQuestionModal: React.FC<AiQuestionModalProps> = ({
           note: question.note,
           userPrompt: userText,
           conversationHistory: conversation,
-        }),
+        },
+        signal: controller.signal,
+        systemPromptFallback: 'Bạn là gia sư AI dạy trắc nghiệm thông minh. Trả lời bằng Tiếng Việt ngắn gọn, xúc tích.',
+        userPromptFallback: `Câu hỏi: ${question.question}. Yêu cầu: ${userText}`,
       });
       clearTimeout(timeoutId);
 
-      if (!res.ok) {
-        throw new Error(`Server status ${res.status}`);
-      }
-
-      const data = await res.json();
       const aiReply: Message = {
         id: `msg-ai-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         sender: 'ai',
@@ -227,11 +222,14 @@ export const AiQuestionModal: React.FC<AiQuestionModalProps> = ({
       clearTimeout(timeoutId);
       console.error('Error sending message to AI:', err);
       const isAbort = err.name === 'AbortError';
+      const isKeyErr = err.needsApiKey || String(err?.message || '').includes('GEMINI_API_KEY');
       const errorMsg: Message = {
         id: `msg-err-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         sender: 'ai',
         text: isAbort
           ? '⏳ Phản hồi AI bị quá thời gian chờ (timeout). Vui lòng thử gửi lại tin nhắn.'
+          : isKeyErr
+          ? '⚠️ Thiếu hoặc quá tải API Key. Vui lòng bấm biểu tượng 🔑 ở góc trên để nhập khóa Gemini API miễn phí.'
           : 'Có lỗi xảy ra khi trao đổi với AI. Vui lòng thử lại!',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
@@ -275,6 +273,14 @@ export const AiQuestionModal: React.FC<AiQuestionModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowApiKeyModal(true)}
+              title="Cài đặt khóa Google Gemini API Key"
+              className="p-2 text-slate-400 hover:text-amber-500 dark:hover:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
+            >
+              <Key className="w-4 h-4" />
+            </button>
             <button
               type="button"
               onClick={() => fetchExplanationForOption(activeOptionIndex)}
@@ -496,6 +502,15 @@ export const AiQuestionModal: React.FC<AiQuestionModalProps> = ({
           </button>
         </form>
       </div>
+
+      {/* Embedded API Key Configuration Modal */}
+      <AiApiKeyModal
+        isOpen={showApiKeyModal}
+        onClose={() => setShowApiKeyModal(false)}
+        onSaved={() => {
+          fetchExplanationForOption(activeOptionIndex);
+        }}
+      />
     </div>
   );
 };
