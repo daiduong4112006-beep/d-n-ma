@@ -16,7 +16,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { JapaneseGrammarPoint } from '../../data/jpd123Grammar';
-import { speakJapanese } from '../../utils/soundEffects';
+import { speakJapanese } from '../../utils/japaneseKana';
 import { callAiApi } from '../../utils/aiClient';
 import { AiApiKeyModal } from '../AiApiKeyModal';
 
