@@ -382,6 +382,16 @@ export const JapaneseGrammarAiModal: React.FC<JapaneseGrammarAiModalProps> = ({
                 </div>
               </div>
             )}
+            {/* General error message */}
+            {errorMessage && !needsApiKey && (
+              <div className="p-3.5 rounded-2xl bg-red-950/40 border border-red-500/30 text-red-200 text-xs flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <div className="font-bold text-red-300">Đã xảy ra lỗi</div>
+                  <p className="text-slate-300 mt-0.5">{errorMessage}</p>
+                </div>
+              </div>
+            )}
 
             {/* TAB 1: Phân tích & Sắc thái */}
             {activeTab === 'explain' && (
