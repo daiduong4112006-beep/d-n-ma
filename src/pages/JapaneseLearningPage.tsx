@@ -24,6 +24,8 @@ import {
   canAccessJpd123,
   restoreDefaultJpd123Course,
   DEFAULT_JPD123_COURSE,
+  mergeCourseWithLocalMastery,
+  getCleanDefaultJpdCourse,
 } from '../utils/japaneseStorage';
 import { subscribeJapaneseCourses, syncJapaneseCourseToFirestore } from '../lib/firebase';
 import { JapaneseCourseDetail } from './JapaneseCourseDetail';
@@ -80,17 +82,25 @@ export const JapaneseLearningPage: React.FC<Props> = ({ currentUser, onBackToDas
           // If authorized user/admin, guarantee JPD123 is always available even if accidentally deleted
           const hasJpd = allowed.some((c) => c && (c.id === 'course-jpd123' || c.code?.toLowerCase().replace(/\s+/g, '') === 'jpd123'));
           if (!hasJpd) {
-            allowed = [DEFAULT_JPD123_COURSE, ...allowed];
+            allowed = [getCleanDefaultJpdCourse(), ...allowed];
             if (isAdmin) {
-              syncJapaneseCourseToFirestore(DEFAULT_JPD123_COURSE).catch(() => {});
+              syncJapaneseCourseToFirestore(getCleanDefaultJpdCourse()).catch(() => {});
             }
           }
         }
-        setCourses(allowed);
-        saveJapaneseCourses(allowed, currentUser?.email, true);
+
+        // CRITICAL: Merge cloud curriculum with current user's local personal mastery so that progress is NEVER overwritten!
+        const currentLocal = getJapaneseCourses(currentUser?.email);
+        const merged = allowed.map((c) => {
+          const local = currentLocal.find((l) => l && l.id === c.id);
+          return mergeCourseWithLocalMastery(c, local);
+        });
+
+        setCourses(merged);
+        saveJapaneseCourses(merged, currentUser?.email, true);
         setSelectedCourse((prev) => {
-          if (!prev) return (hasJpdAccess && allowed.length === 1 ? allowed[0] : null);
-          const updated = allowed.find((c) => c.id === prev.id);
+          if (!prev) return (hasJpdAccess && merged.length === 1 ? merged[0] : null);
+          const updated = merged.find((c) => c.id === prev.id);
           return updated || null;
         });
       }

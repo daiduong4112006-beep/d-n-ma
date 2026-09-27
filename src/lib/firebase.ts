@@ -507,6 +507,34 @@ export const syncJapaneseCourseToFirestore = async (course: any): Promise<void> 
   try {
     const courseRef = doc(db, 'japanese_courses', course.id);
     const clean = JSON.parse(JSON.stringify(course));
+
+    // Ensure the shared cloud course NEVER carries personal study progress to other users
+    if (Array.isArray(clean.lessons)) {
+      clean.lessons.forEach((l: any) => {
+        l.timesPracticed = 0;
+        if (Array.isArray(l.cards)) {
+          l.cards.forEach((c: any) => {
+            delete c.mastered;
+          });
+        }
+        if (Array.isArray(l.kanjiCore)) {
+          l.kanjiCore.forEach((k: any) => {
+            delete k.mastered;
+          });
+        }
+      });
+    }
+    if (Array.isArray(clean.kanjiList)) {
+      clean.kanjiList.forEach((k: any) => {
+        delete k.mastered;
+      });
+    }
+    if (Array.isArray(clean.kanjiVocabList)) {
+      clean.kanjiVocabList.forEach((v: any) => {
+        delete v.mastered;
+      });
+    }
+
     await setDoc(courseRef, { ...clean, updatedAt: new Date().toISOString() });
   } catch (err) {
     handleFirestoreError('syncJapaneseCourseToFirestore', err);

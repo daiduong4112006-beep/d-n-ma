@@ -46,7 +46,7 @@ import {
 } from './lib/firebase';
 import { sound } from './utils/audio';
 import { updateStarredWordsFromCloud } from './utils/vocabulary';
-import { saveJapaneseCourses, saveAllowedJpd123Emails, canAccessJpd123, DEFAULT_JPD123_COURSE } from './utils/japaneseStorage';
+import { saveJapaneseCourses, saveAllowedJpd123Emails, canAccessJpd123, DEFAULT_JPD123_COURSE, getCleanDefaultJpdCourse } from './utils/japaneseStorage';
 import { updateStudyProgressFromCloud } from './utils/studyProgressStorage';
 
 // Components
@@ -430,9 +430,10 @@ export default function App() {
         if (canAccessJpd123(email)) {
           const hasJpd = toSave.some((c) => c && (c.id === 'course-jpd123' || c.code?.toLowerCase().replace(/\s+/g, '') === 'jpd123'));
           if (!hasJpd) {
-            toSave = [DEFAULT_JPD123_COURSE, ...toSave];
+            const cleanJpd = getCleanDefaultJpdCourse();
+            toSave = [cleanJpd, ...toSave];
             if (email?.toLowerCase().trim() === 'daiduong4112006@gmail.com') {
-              syncJapaneseCourseToFirestore(DEFAULT_JPD123_COURSE).catch(() => {});
+              syncJapaneseCourseToFirestore(cleanJpd).catch(() => {});
             }
           }
         }

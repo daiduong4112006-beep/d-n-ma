@@ -734,43 +734,23 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
             return (
               <div
                 key={gp.id}
-                className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-900/80 shadow-xs hover:shadow-md transition-all space-y-4 group"
+                className="p-4 sm:p-6 rounded-2xl sm:rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-900/80 shadow-xs hover:shadow-md transition-all space-y-4 group"
               >
                 {/* Header of card */}
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
-                      <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                        {gp.title}
-                      </h3>
-                      {gp.lessonTag && (
-                        <span className="px-2.5 py-0.5 rounded-lg bg-indigo-100 dark:bg-indigo-950/90 text-indigo-700 dark:text-indigo-300 font-extrabold text-[11px] border border-indigo-200/60 dark:border-indigo-800">
-                          {gp.lessonTag}
-                        </span>
-                      )}
-                    </div>
-                    {/* Structured Formula Lines with Badges */}
-                    <div className="space-y-2 pt-1.5">
-                      {parseStructureLines(gp.structure).map((line, lIdx) => (
-                        <div
-                          key={lIdx}
-                          className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 rounded-2xl bg-slate-50/90 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 transition-all hover:bg-white dark:hover:bg-slate-800 shadow-2xs"
-                        >
-                          <span
-                            className={`px-3 py-1 rounded-xl text-xs font-black tracking-wide shrink-0 inline-flex items-center gap-1.5 border shadow-2xs ${line.badgeClass}`}
-                          >
-                            {line.badge}
-                          </span>
-                          <span className="font-mono font-bold text-sm sm:text-base text-slate-900 dark:text-white leading-relaxed select-all">
-                            {line.text}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2 min-w-0">
+                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shrink-0"></span>
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white leading-snug">
+                      {gp.title}
+                    </h3>
+                    {gp.lessonTag && (
+                      <span className="px-2.5 py-0.5 rounded-lg bg-indigo-100 dark:bg-indigo-950/90 text-indigo-700 dark:text-indigo-300 font-extrabold text-[11px] border border-indigo-200/60 dark:border-indigo-800 shrink-0">
+                        {gp.lessonTag}
+                      </span>
+                    )}
                   </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap self-end sm:self-start">
                     <button
                       type="button"
                       onClick={() => handleStartPracticePoint(gp)}
@@ -811,6 +791,25 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
+                </div>
+
+                {/* Structured Formula Lines with Badges - Full Width for Mobile & Desktop */}
+                <div className="space-y-2 pt-1">
+                  {parseStructureLines(gp.structure).map((line, lIdx) => (
+                    <div
+                      key={lIdx}
+                      className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 rounded-2xl bg-slate-50/90 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 transition-all hover:bg-white dark:hover:bg-slate-800 shadow-2xs"
+                    >
+                      <span
+                        className={`px-3 py-1 rounded-xl text-xs font-black tracking-wide shrink-0 inline-flex items-center gap-1.5 border shadow-2xs self-start sm:self-center ${line.badgeClass}`}
+                      >
+                        {line.badge}
+                      </span>
+                      <span className="font-mono font-bold text-xs sm:text-base text-slate-900 dark:text-white leading-relaxed select-all break-words">
+                        {line.text}
+                      </span>
+                    </div>
+                  ))}
                 </div>
 
                 {/* Meaning & Explanation */}

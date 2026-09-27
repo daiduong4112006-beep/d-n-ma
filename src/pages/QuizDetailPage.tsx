@@ -937,15 +937,15 @@ export const QuizDetailPage: React.FC<QuizDetailPageProps> = ({
             return (
               <div
                 key={q.id || idx}
-                className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4 relative group"
+                className="p-4 sm:p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4 relative group"
               >
                 {/* 2-Column Split: Left = Question & Choices | Right = Answer, Explanation & Notes */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                   {/* Left Column: Question & Options */}
                   <div className="space-y-3 lg:pr-6 lg:border-r lg:border-slate-100 dark:lg:border-slate-800">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-2 flex-wrap flex-1">
-                        <span className="font-extrabold text-sm text-slate-900 dark:text-slate-100 leading-snug">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 sm:gap-3">
+                      <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+                        <span className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-slate-100 leading-relaxed break-words">
                           Câu {questionNumber}. <ClickableText text={q.question} isExamMode={false} quizId={currentQuiz.id} quizTitle={currentQuiz.title} />
                         </span>
                         {isStarred && (
@@ -957,7 +957,7 @@ export const QuizDetailPage: React.FC<QuizDetailPageProps> = ({
                       </div>
 
                       {/* Action buttons: AI Explanation, AI Similar, Star & Audio Speaker */}
-                      <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-start flex-wrap">
                         <button
                           type="button"
                           onClick={() => setAiModalQuestion(q)}

@@ -124,7 +124,7 @@ export const SEED_JAPANESE_LESSONS: JapaneseLesson[] = [
         partOfSpeech: 'Danh từ',
         definition: 'Phía bắc',
         example: 'Gió lạnh thổi từ phía bắc.',
-        mastered: true,
+        mastered: false,
       },
       {
         id: 'jp-41-2',
@@ -164,7 +164,7 @@ export const SEED_JAPANESE_LESSONS: JapaneseLesson[] = [
         partOfSpeech: 'Danh từ',
         definition: 'Tàu điện',
         example: 'Lên tàu điện đi làm.',
-        mastered: true,
+        mastered: false,
       },
       {
         id: 'jp-41-6',
@@ -912,6 +912,21 @@ export const DEFAULT_JPD123_COURSE: JapaneseCourse = {
   materials: JPD123_MATERIALS,
 };
 
+// Returns a fresh, 100% unstarted instance of JPD123 where no cards are mastered
+export function getCleanDefaultJpdCourse(): JapaneseCourse {
+  return {
+    ...DEFAULT_JPD123_COURSE,
+    lessons: (DEFAULT_JPD123_COURSE.lessons || []).map((l) => ({
+      ...l,
+      timesPracticed: 0,
+      cards: (l.cards || []).map((c) => ({ ...c, mastered: false })),
+      kanjiCore: (l.kanjiCore || []).map((k) => ({ ...k, mastered: false })),
+    })),
+    kanjiList: (DEFAULT_JPD123_COURSE.kanjiList || []).map((k) => ({ ...k, mastered: false })),
+    kanjiVocabList: (DEFAULT_JPD123_COURSE.kanjiVocabList || []).map((v) => ({ ...v, mastered: false })),
+  };
+}
+
 export function getJapaneseCourses(email?: string | null): JapaneseCourse[] {
   if (typeof window === 'undefined') return [];
   try {
@@ -921,8 +936,8 @@ export function getJapaneseCourses(email?: string | null): JapaneseCourse[] {
 
     if (hasAccess) {
       let raw = localStorage.getItem(userKey);
-      // Migrate from legacy global key if user key does not exist yet
-      if (!raw) {
+      // Migrate from legacy global key if user key does not exist yet (ONLY for Super Admin to prevent data leakage!)
+      if (!raw && isJapaneseAdmin(targetEmail)) {
         const legacyRaw = localStorage.getItem(COURSES_STORAGE_KEY);
         if (legacyRaw) {
           raw = legacyRaw;
@@ -931,7 +946,8 @@ export function getJapaneseCourses(email?: string | null): JapaneseCourse[] {
       }
 
       if (!raw) {
-        const initialList = [DEFAULT_JPD123_COURSE];
+        // Brand new user gets 100% clean instance of JPD123 (never starts with someone else's progress!)
+        const initialList = [getCleanDefaultJpdCourse()];
         localStorage.setItem(userKey, JSON.stringify(initialList));
         return initialList;
       }
@@ -1046,6 +1062,92 @@ export function getJapaneseCourses(email?: string | null): JapaneseCourse[] {
   }
 }
 
+// Helper to clean personal mastery and practice stats when syncing curriculum to Cloud Firestore
+export function cleanCurriculumForCloud(course: JapaneseCourse): JapaneseCourse {
+  return {
+    ...course,
+    lessons: (course.lessons || []).map((l) => ({
+      ...l,
+      timesPracticed: 0,
+      cards: (l.cards || []).map((c) => ({
+        ...c,
+        mastered: false,
+      })),
+      kanjiCore: (l.kanjiCore || []).map((k) => ({
+        ...k,
+        mastered: false,
+      })),
+    })),
+    kanjiList: (course.kanjiList || []).map((k) => ({
+      ...k,
+      mastered: false,
+    })),
+    kanjiVocabList: (course.kanjiVocabList || []).map((v) => ({
+      ...v,
+      mastered: false,
+    })),
+  };
+}
+
+// Helper to merge incoming cloud curriculum with local user's personal learning progress (mastered cards, timesPracticed)
+export function mergeCourseWithLocalMastery(cloudCourse: JapaneseCourse, localCourse?: JapaneseCourse | null): JapaneseCourse {
+  if (!localCourse) return cloudCourse;
+
+  const localCardMastery = new Map<string, boolean>();
+  for (const l of (localCourse.lessons || [])) {
+    for (const c of (l.cards || [])) {
+      if (c.mastered !== undefined) {
+        localCardMastery.set(c.id, c.mastered);
+      }
+    }
+  }
+
+  const localKanjiMastery = new Map<string, boolean>();
+  for (const k of (localCourse.kanjiList || [])) {
+    if (k.mastered !== undefined) {
+      localKanjiMastery.set(k.id, k.mastered);
+    }
+  }
+
+  const localKanjiVocabMastery = new Map<string, boolean>();
+  for (const v of (localCourse.kanjiVocabList || [])) {
+    if (v.mastered !== undefined) {
+      localKanjiVocabMastery.set(v.id, v.mastered);
+    }
+  }
+
+  const localTimesPracticed = new Map<string, number>();
+  for (const l of (localCourse.lessons || [])) {
+    if (l.timesPracticed !== undefined) {
+      localTimesPracticed.set(l.id, l.timesPracticed);
+    }
+  }
+
+  return {
+    ...cloudCourse,
+    lessons: (cloudCourse.lessons || []).map((l) => ({
+      ...l,
+      timesPracticed: localTimesPracticed.get(l.id) ?? l.timesPracticed ?? 0,
+      cards: (l.cards || []).map((c) => ({
+        ...c,
+        mastered: localCardMastery.get(c.id) ?? c.mastered ?? false,
+      })),
+      kanjiCore: (l.kanjiCore || []).map((k) => ({
+        ...k,
+        mastered: localKanjiMastery.get(k.id) ?? k.mastered ?? false,
+      })),
+    })),
+    kanjiList: (cloudCourse.kanjiList || []).map((k) => ({
+      ...k,
+      mastered: localKanjiMastery.get(k.id) ?? k.mastered ?? false,
+    })),
+    kanjiVocabList: (cloudCourse.kanjiVocabList || []).map((v) => ({
+      ...v,
+      mastered: localKanjiVocabMastery.get(v.id) ?? v.mastered ?? false,
+    })),
+  };
+}
+
 export function saveJapaneseCourses(courses: JapaneseCourse[], email?: string | null, skipCloudSync = false): void {
   try {
     const targetEmail = (email !== undefined ? (email || '') : getCurrentUserEmail()).toLowerCase().trim();
@@ -1053,8 +1155,18 @@ export function saveJapaneseCourses(courses: JapaneseCourse[], email?: string | 
     const userKey = getCoursesStorageKey(targetEmail);
 
     let toSave = courses;
+
+    // When incoming from cloud snapshot, merge with local mastery so personal progress is never lost
+    if (skipCloudSync) {
+      const currentLocal = getJapaneseCourses(targetEmail);
+      toSave = courses.map((incomingCourse) => {
+        const local = currentLocal.find((c) => c && c.id === incomingCourse.id);
+        return mergeCourseWithLocalMastery(incomingCourse, local);
+      });
+    }
+
     if (!hasAccess) {
-      toSave = courses.filter(
+      toSave = toSave.filter(
         (c) =>
           c &&
           c.id !== 'course-jpd123' &&
@@ -1066,7 +1178,13 @@ export function saveJapaneseCourses(courses: JapaneseCourse[], email?: string | 
     // Also sync to Cloud Firestore in background if not incoming from cloud
     if (!skipCloudSync) {
       for (const c of toSave) {
-        syncJapaneseCourseToFirestore(c).catch(() => {});
+        if (c.id === 'course-jpd123' || c.code?.toLowerCase().replace(/\s+/g, '') === 'jpd123') {
+          if (isJapaneseAdmin(targetEmail)) {
+            syncJapaneseCourseToFirestore(cleanCurriculumForCloud(c)).catch(() => {});
+          }
+        } else {
+          syncJapaneseCourseToFirestore(c).catch(() => {});
+        }
       }
     }
   } catch (e) {
@@ -1093,23 +1211,21 @@ export function restoreDefaultJpd123Course(email?: string | null): JapaneseCours
     (c) => c && c.id !== 'course-jpd123' && c.code?.toLowerCase().replace(/\s+/g, '') !== 'jpd123'
   );
   const restoredCourse: JapaneseCourse = {
-    ...DEFAULT_JPD123_COURSE,
+    ...getCleanDefaultJpdCourse(),
     updatedAt: new Date().toISOString(),
   };
   const next = [restoredCourse, ...withoutJpd];
   saveJapaneseCourses(next, targetEmail);
-  syncJapaneseCourseToFirestore(restoredCourse).catch(() => {});
+  if (isJapaneseAdmin(targetEmail)) {
+    syncJapaneseCourseToFirestore(cleanCurriculumForCloud(restoredCourse)).catch(() => {});
+  }
   return next;
 }
 
 export function saveJapaneseCourse(course: JapaneseCourse, email?: string | null): JapaneseCourse[] {
   const targetEmail = (email !== undefined ? (email || '') : getCurrentUserEmail()).toLowerCase().trim();
   const isAdmin = isJapaneseAdmin(targetEmail);
-
-  if ((course.id === 'course-jpd123' || course.code?.toLowerCase().replace(/\s+/g, '') === 'jpd123') && !isAdmin) {
-    console.warn('Non-admin user cannot modify JPD123 course');
-    return getJapaneseCourses(targetEmail);
-  }
+  const isJpd123 = course.id === 'course-jpd123' || course.code?.toLowerCase().replace(/\s+/g, '') === 'jpd123';
 
   const current = getJapaneseCourses(targetEmail);
   const idx = current.findIndex((c) => c.id === course.id);
@@ -1133,9 +1249,21 @@ export function saveJapaneseCourse(course: JapaneseCourse, email?: string | null
     ];
   }
 
-  saveJapaneseCourses(updated, targetEmail);
-  // Guarantee Cloud Firestore receives the updated course
-  syncJapaneseCourseToFirestore(formatted).catch(() => {});
+  // Always save to user's personalized local storage (allows students to save their card mastery & progress!)
+  saveJapaneseCourses(updated, targetEmail, true);
+
+  // Cloud sync rules for JPD123:
+  // - Only Admin pushes curriculum changes to Firestore
+  // - When Admin pushes, clean out personal progress so students' study progress is never polluted
+  if (isJpd123) {
+    if (isAdmin) {
+      const cleanCurriculum = cleanCurriculumForCloud(formatted);
+      syncJapaneseCourseToFirestore(cleanCurriculum).catch(() => {});
+    }
+  } else {
+    syncJapaneseCourseToFirestore(formatted).catch(() => {});
+  }
+
   return updated;
 }
 
