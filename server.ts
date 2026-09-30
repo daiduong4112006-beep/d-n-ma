@@ -64,7 +64,7 @@ async function generateGeminiContentWithFallback(
   timeoutMs = 25000
 ): Promise<string> {
   // Ordered by priority:
-  // 1. gemini-2.5-pro (High stability, deep reasoning, dedicated compute, avoids 503 high demand)
+  // 1. gemini-3.1-pro-preview (Google's latest Pro reasoning model, avoids 404 / 503 errors)
   // 2. gemini-2.5-flash (Fast, smart, flagship flash)
   // 3. gemini-2.5-flash-lite (Ultra-fast, lowest resource usage, rarely rate-limited)
   // 4. gemini-3-flash-preview (Next-generation preview)
@@ -72,14 +72,14 @@ async function generateGeminiContentWithFallback(
   // 6. gemini-1.5-pro & gemini-1.5-flash (Reliable legacy fallback)
   const attempts = [
     {
-      model: 'gemini-2.5-pro',
+      model: 'gemini-3.1-pro-preview',
       config: {
         thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
         ...config,
       },
     },
     {
-      model: 'gemini-2.5-pro',
+      model: 'gemini-3.1-pro-preview',
       config: {
         ...config,
       },
