@@ -381,52 +381,20 @@ Quy định trình bày:
 - Sử dụng Markdown đẹp mắt: in đậm từ khóa, gạch đầu dòng ngắn gọn, không viết dài dòng lê thê.
 - Tuyệt đối không dùng mã LaTeX hay dấu $...$.`;
 
-    let prompt = '';
-    if (mode === 'explain') {
-      prompt = `Hãy giải thích chuyên sâu và dễ nhớ nhất về cấu trúc ngữ pháp sau:
+    const questionText = userPrompt || (mode === 'generate-examples' ? 'Hãy cho tôi các câu ví dụ thực tế kèm cách đọc và dịch nghĩa' : 'Hãy giải thích cấu trúc ngữ pháp này');
+    const prompt = `Học sinh đang hỏi về cấu trúc ngữ pháp tiếng Nhật:
 [NGỮ PHÁP]: ${grammarTitle}
-[CẤU TRÚC / CÁCH KẾT NỐI]: ${formation || 'Không có'}
+[CẤU TRÚC / KẾT NỐI]: ${formation || 'Không có'}
 [Ý NGHĨA]: ${meaning || 'Không có'}
-[GIẢI THÍCH HIỆN CÓ]: ${explanation || 'Không có'}
+[CÂU HỎI CỦA HỌC SINH]: ${questionText}
 
-YÊU CẦU:
-1. **Bản chất & Sắc thái**: Khi nào người Nhật dùng cấu trúc này? Sắc thái cảm xúc hoặc bối cảnh giao tiếp cụ thể (lịch sự, thân mật, trang trọng...).
-2. **Lưu ý & Lỗi sai thường gặp**: Học sinh Việt Nam hay nhầm lẫn điều gì khi dùng ngữ pháp này? Cách chia thể động từ/tính từ cần chú ý?
-3. **Mẹo ghi nhớ nhanh**: 1 câu ngắn gọn giúp nhớ cấu trúc cả đời.
-4. **2 câu ví dụ tiêu biểu**: Gồm chữ Nhật (kèm cách đọc Hiragana) và dịch nghĩa Tiếng Việt.`;
-    } else if (mode === 'generate-examples') {
-      prompt = `Hãy tạo thêm 4 câu ví dụ giao tiếp thực tế MỚI VÀ TỰ NHIÊN sử dụng cấu trúc ngữ pháp:
-[NGỮ PHÁP]: ${grammarTitle}
-[CẤU TRÚC]: ${formation || ''}
-[Ý NGHĨA]: ${meaning || ''}
-
-YÊU CẦU ĐỊNH DẠNG:
-Trả về 4 câu ví dụ (ưu tiên có cả câu đơn và câu hội thoại ngắn A - B).
-Mỗi ví dụ gồm:
-- **Tiếng Nhật**: Có Kanji tự nhiên
-- **Cách đọc**: Hiragana toàn bộ
-- **Tiếng Việt**: Bản dịch mượt mà
-- **Ghi chú ngắn**: Giải thích từ vựng mới hoặc lưu ý cách chia trong câu.`;
-    } else if (mode === 'check-sentence') {
-      prompt = `Học sinh tự đặt một câu tiếng Nhật để luyện tập cấu trúc:
-[NGỮ PHÁP]: ${grammarTitle} (${formation || ''})
-[CÂU CỦA HỌC SINH]: "${userSentence}"
-
-YÊU CẦU:
-1. **Nhận xét đúng/sai**: Câu này đã chuẩn ngữ pháp và tự nhiên theo cách nói của người Nhật chưa? (Đạt bao nhiêu/10 điểm).
-2. **Sửa lại cho chuẩn (nếu có lỗi)**: Đưa ra câu viết lại chuẩn xác nhất (kèm Hiragana và dịch tiếng Việt).
-3. **Phân tích chi tiết**: Giải thích vì sao cần sửa như vậy, lỗi chia từ hay lỗi trợ từ ở đâu.
-4. **Gợi ý cách diễn đạt hay hơn**: Cách người Nhật bản xứ thường nói trong đời sống.`;
-    } else {
-      // mode === 'chat'
-      prompt = `Học sinh đang học cấu trúc ngữ pháp:
-[NGỮ PHÁP]: ${grammarTitle}
-[CẤU TRÚC]: ${formation || ''}
-[Ý NGHĨA]: ${meaning || ''}
-[CÂU HỎI CỦA HỌC SINH]: ${userPrompt}
-
-Hãy trả lời câu hỏi của học sinh một cách ngắn gọn, súc tích, dễ hiểu bằng Tiếng Việt, kèm ví dụ minh họa bằng tiếng Nhật nếu cần thiết.`;
-    }
+YÊU CẦU TRẢ LỜI:
+- Trả lời trực tiếp, rõ ràng, sư phạm cao bằng Tiếng Việt.
+- Bất cứ câu ví dụ tiếng Nhật nào đưa ra đều phải có:
+  + Chữ Nhật chuẩn (Kanji tự nhiên)
+  + Cách đọc Hiragana
+  + Bản dịch nghĩa Tiếng Việt sát nghĩa và tự nhiên.
+- Dùng Markdown đẹp mắt, in đậm từ khóa quan trọng, gạch đầu dòng gọn gàng.`;
 
     let contents: any[] = [];
     if (conversationHistory && Array.isArray(conversationHistory) && conversationHistory.length > 0) {
