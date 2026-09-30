@@ -45,9 +45,9 @@ async function callDirectGeminiRest(
   apiKey: string,
   systemPrompt: string,
   userPrompt: string,
-  model = 'gemini-3.1-pro-preview'
+  model = 'gemini-2.5-flash'
 ): Promise<string> {
-  const models = [model, 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-1.5-flash'];
+  const models = [model, 'gemini-2.5-flash-lite', 'gemini-1.5-flash', 'gemini-3.1-pro-preview'];
   let lastErr: any = null;
 
   for (const m of models) {

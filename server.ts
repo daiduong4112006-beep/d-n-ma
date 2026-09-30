@@ -63,27 +63,14 @@ async function generateGeminiContentWithFallback(
   config: any = {},
   timeoutMs = 25000
 ): Promise<string> {
-  // Ordered by priority:
-  // 1. gemini-3.1-pro-preview (Google's latest Pro reasoning model, avoids 404 / 503 errors)
-  // 2. gemini-2.5-flash (Fast, smart, flagship flash)
-  // 3. gemini-2.5-flash-lite (Ultra-fast, lowest resource usage, rarely rate-limited)
+  // Ordered by priority for high-speed free tier reliability:
+  // 1. gemini-2.5-flash (Fast, smart, 1500 RPD free tier quota, flawless response)
+  // 2. gemini-2.5-flash-lite (Ultra-fast, lowest resource usage, rarely rate-limited)
+  // 3. gemini-flash-latest (Alias for newest flash)
   // 4. gemini-3-flash-preview (Next-generation preview)
-  // 5. gemini-flash-latest (Alias)
-  // 6. gemini-1.5-pro & gemini-1.5-flash (Reliable legacy fallback)
+  // 5. gemini-1.5-flash (Reliable legacy fallback)
+  // 6. gemini-3.1-pro-preview (Paid / Pro tier fallback)
   const attempts = [
-    {
-      model: 'gemini-3.1-pro-preview',
-      config: {
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-        ...config,
-      },
-    },
-    {
-      model: 'gemini-3.1-pro-preview',
-      config: {
-        ...config,
-      },
-    },
     {
       model: 'gemini-2.5-flash',
       config: {
@@ -97,25 +84,25 @@ async function generateGeminiContentWithFallback(
       },
     },
     {
-      model: 'gemini-3-flash-preview',
-      config: {
-        ...config,
-      },
-    },
-    {
       model: 'gemini-flash-latest',
       config: {
         ...config,
       },
     },
     {
-      model: 'gemini-1.5-pro',
+      model: 'gemini-3-flash-preview',
       config: {
         ...config,
       },
     },
     {
       model: 'gemini-1.5-flash',
+      config: {
+        ...config,
+      },
+    },
+    {
+      model: 'gemini-3.1-pro-preview',
       config: {
         ...config,
       },
@@ -153,6 +140,7 @@ async function generateGeminiContentWithFallback(
         const isUnavailable = errMsg.includes('503') || errMsg.includes('UNAVAILABLE') || errMsg.includes('high demand');
         const isRateLimit = errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED');
         const isDailyQuotaExhausted = errMsg.includes('requests_per_model_per_day') || errMsg.includes('free_tier');
+        const isZeroQuota = errMsg.includes('limit: 0') || errMsg.includes('FreeTier');
 
         console.warn(`[AI Fallback] Model ${attempt.model} attempt ${retry + 1}/${maxRetries} failed:`, errMsg);
 
@@ -178,8 +166,8 @@ async function generateGeminiContentWithFallback(
           }
         }
 
-        // If model not found or daily quota exhausted, do not retry this model, jump to next model
-        if (isNotFound || isDailyQuotaExhausted) {
+        // If model not found, daily quota exhausted, or zero quota, do not retry this model, jump to next model
+        if (isNotFound || isDailyQuotaExhausted || isZeroQuota) {
           break;
         }
 
