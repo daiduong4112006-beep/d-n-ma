@@ -63,24 +63,41 @@ async function generateGeminiContentWithFallback(
   config: any = {},
   timeoutMs = 25000
 ): Promise<string> {
-  // Exact fallback models from the working old project
+  // Ordered by priority:
+  // 1. gemini-2.5-pro (High stability, deep reasoning, dedicated compute, avoids 503 high demand)
+  // 2. gemini-2.5-flash (Fast, smart, flagship flash)
+  // 3. gemini-2.5-flash-lite (Ultra-fast, lowest resource usage, rarely rate-limited)
+  // 4. gemini-3-flash-preview (Next-generation preview)
+  // 5. gemini-flash-latest (Alias)
+  // 6. gemini-1.5-pro & gemini-1.5-flash (Reliable legacy fallback)
   const attempts = [
     {
-      model: 'gemini-3.6-flash',
+      model: 'gemini-2.5-pro',
       config: {
         thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
         ...config,
       },
     },
     {
-      model: 'gemini-3.1-flash-lite',
+      model: 'gemini-2.5-pro',
       config: {
-        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
         ...config,
       },
     },
     {
-      model: 'gemini-3.6-flash',
+      model: 'gemini-2.5-flash',
+      config: {
+        ...config,
+      },
+    },
+    {
+      model: 'gemini-2.5-flash-lite',
+      config: {
+        ...config,
+      },
+    },
+    {
+      model: 'gemini-3-flash-preview',
       config: {
         ...config,
       },
@@ -91,30 +108,91 @@ async function generateGeminiContentWithFallback(
         ...config,
       },
     },
+    {
+      model: 'gemini-1.5-pro',
+      config: {
+        ...config,
+      },
+    },
+    {
+      model: 'gemini-1.5-flash',
+      config: {
+        ...config,
+      },
+    },
   ];
 
   let lastError: any = null;
 
-  for (const attempt of attempts) {
-    try {
-      const responsePromise = ai.models.generateContent({
-        model: attempt.model,
-        contents,
-        config: attempt.config,
-      });
+  for (let i = 0; i < attempts.length; i++) {
+    const attempt = attempts[i];
+    const maxRetries = 2;
 
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms on model ${attempt.model}`)), timeoutMs);
-      });
+    for (let retry = 0; retry < maxRetries; retry++) {
+      try {
+        const responsePromise = ai.models.generateContent({
+          model: attempt.model,
+          contents,
+          config: attempt.config,
+        });
 
-      const response = await Promise.race([responsePromise, timeoutPromise]);
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms on model ${attempt.model}`)), timeoutMs);
+        });
 
-      if (response && response.text && response.text.trim()) {
-        return response.text;
+        const response = await Promise.race([responsePromise, timeoutPromise]);
+
+        if (response && response.text && response.text.trim()) {
+          return response.text;
+        }
+      } catch (err: any) {
+        lastError = err;
+        const errMsg = String(err?.message || err || '');
+        const isNotFound = errMsg.includes('404') || errMsg.includes('not found') || errMsg.includes('NOT_FOUND');
+        const isThinkingError = errMsg.includes('thinking') || errMsg.includes('ThinkingLevel') || errMsg.includes('INVALID_ARGUMENT');
+        const isUnavailable = errMsg.includes('503') || errMsg.includes('UNAVAILABLE') || errMsg.includes('high demand');
+        const isRateLimit = errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED');
+        const isDailyQuotaExhausted = errMsg.includes('requests_per_model_per_day') || errMsg.includes('free_tier');
+
+        console.warn(`[AI Fallback] Model ${attempt.model} attempt ${retry + 1}/${maxRetries} failed:`, errMsg);
+
+        // If thinking config is not supported on this model, immediately try without it
+        if (isThinkingError && attempt.config?.thinkingConfig) {
+          try {
+            const cleanConfig = { ...attempt.config };
+            delete cleanConfig.thinkingConfig;
+            const retryPromise = ai.models.generateContent({
+              model: attempt.model,
+              contents,
+              config: cleanConfig,
+            });
+            const retryRes = await Promise.race([
+              retryPromise,
+              new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms on model ${attempt.model} (no-think)`)), timeoutMs)),
+            ]);
+            if (retryRes && retryRes.text && retryRes.text.trim()) {
+              return retryRes.text;
+            }
+          } catch (cleanErr) {
+            // continue fallback
+          }
+        }
+
+        // If model not found or daily quota exhausted, do not retry this model, jump to next model
+        if (isNotFound || isDailyQuotaExhausted) {
+          break;
+        }
+
+        // If it's a 503 spike in demand or temporary 429 RPM rate limit, wait briefly before retrying
+        if ((isUnavailable || isRateLimit) && retry < maxRetries - 1) {
+          const delay = (retry + 1) * 1200;
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        }
+
+        // Break retry loop to move to the next model fallback
+        break;
       }
-    } catch (err: any) {
-      lastError = err;
-      console.warn(`[AI Fallback] Model ${attempt.model} attempt failed:`, err?.message || err);
     }
   }
 
@@ -377,10 +455,18 @@ Hãy trả lời câu hỏi của học sinh một cách ngắn gọn, súc tíc
     return res.json({ reply: responseText.trim(), isError: false });
   } catch (err: any) {
     console.error('Error in /api/ai/grammar-tutor:', err);
+    const errStr = String(err?.message || err || '');
+    const isQuota = errStr.includes('429') || errStr.includes('RESOURCE_EXHAUSTED');
+    const isHighDemand = errStr.includes('503') || errStr.includes('UNAVAILABLE') || errStr.includes('high demand');
+    const replyMsg = isQuota
+      ? '⚠️ AI tạm thời vượt quá lượt gọi trong phút này (Rate Limit). Bạn vui lòng bấm thử lại sau 10-15 giây nhé!'
+      : isHighDemand
+      ? '⚠️ Hệ thống AI Google đang quá tải tạm thời (503). Bạn vui lòng bấm thử lại sau vài giây nhé!'
+      : '⚠️ Rất tiếc, chưa thể nhận phản hồi từ AI lúc này. Bạn vui lòng thử lại nhé!';
     return res.status(500).json({
       error: 'Không thể kết nối với AI',
       details: err?.message || String(err),
-      reply: '⚠️ Rất tiếc, chưa thể nhận phản hồi từ AI lúc này. Bạn vui lòng thử lại nhé!',
+      reply: replyMsg,
       isError: true,
     });
   }
