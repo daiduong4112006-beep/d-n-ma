@@ -539,15 +539,38 @@ export const deleteJapaneseCourseFromFirestore = async (courseId: string, email?
 };
 
 export const subscribeJapaneseCourses = (
-  email: string | undefined | null,
-  onUpdate: (courses: any[]) => void,
-  onError?: (err: Error) => void
+  emailOrOnUpdate: string | undefined | null | ((courses: any[]) => void),
+  maybeOnUpdate?: ((courses: any[]) => void) | ((err: Error) => void),
+  maybeOnError?: (err: Error) => void
 ): (() => void) => {
   if (!isFirestoreAvailable()) {
-    if (onError) onError(new Error('Firestore unavailable'));
+    if (typeof maybeOnUpdate === 'function' && typeof emailOrOnUpdate === 'string') {
+      if (maybeOnError) maybeOnError(new Error('Firestore unavailable'));
+    } else if (typeof maybeOnUpdate === 'function') {
+      (maybeOnUpdate as any)(new Error('Firestore unavailable'));
+    }
     return () => {};
   }
-  const cleanEmail = (email || auth.currentUser?.email || '').trim().toLowerCase();
+
+  let email = '';
+  let onUpdate: (courses: any[]) => void = () => {};
+  let onError: ((err: Error) => void) | undefined = undefined;
+
+  if (typeof emailOrOnUpdate === 'function') {
+    onUpdate = emailOrOnUpdate;
+    email = auth.currentUser?.email || '';
+    if (typeof maybeOnUpdate === 'function') {
+      onError = maybeOnUpdate as (err: Error) => void;
+    }
+  } else {
+    email = typeof emailOrOnUpdate === 'string' ? emailOrOnUpdate : (auth.currentUser?.email || '');
+    if (typeof maybeOnUpdate === 'function') {
+      onUpdate = maybeOnUpdate;
+    }
+    onError = maybeOnError;
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
   if (!cleanEmail) {
     onUpdate([]);
     return () => {};

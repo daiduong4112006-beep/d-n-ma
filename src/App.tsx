@@ -253,10 +253,16 @@ export default function App() {
 
   // Synchronize Browser Back / Forward buttons (popstate event)
   useEffect(() => {
+    const normalizeRoute = (rawHash: string) => {
+      const decoded = decodeURIComponent(rawHash.replace(/^#/, '')).trim();
+      const [rawRoute, queryString] = decoded.split('?');
+      const route = rawRoute ? rawRoute.replace(/\s+/g, '-') : '';
+      return { route, queryString };
+    };
+
     const handlePopState = (event: PopStateEvent) => {
       const state = event.state;
-      const hash = window.location.hash.replace(/^#/, '') || 'dashboard';
-      const [route, queryString] = hash.split('?');
+      const { route, queryString } = normalizeRoute(window.location.hash || 'dashboard');
       const params = new URLSearchParams(queryString || '');
       const paramId = params.get('id');
 
@@ -266,7 +272,7 @@ export default function App() {
       const targetQuizToEditId = state?.quizToEditId || (route === 'edit-quiz' ? paramId : null);
       const targetReviewFilter = state?.reviewFilter || 'all';
 
-      setActiveTab(targetTab);
+      setActiveTab(targetTab || 'dashboard');
 
       if (targetQuizDetailId) {
         const found = quizzes.find((q) => q.id === targetQuizDetailId) || getQuizzes().find((q) => q.id === targetQuizDetailId);
@@ -298,9 +304,11 @@ export default function App() {
 
   // Handle Initial Load Hash URL
   useEffect(() => {
-    const hash = window.location.hash.replace(/^#/, '');
-    if (hash) {
-      const [route, queryString] = hash.split('?');
+    const raw = window.location.hash.replace(/^#/, '');
+    if (raw) {
+      const decoded = decodeURIComponent(raw).trim();
+      const [rawRoute, queryString] = decoded.split('?');
+      const route = rawRoute ? rawRoute.replace(/\s+/g, '-') : '';
       const params = new URLSearchParams(queryString || '');
       const paramId = params.get('id');
       if (route) {
@@ -323,7 +331,7 @@ export default function App() {
             timestamp: Date.now(),
           },
           '',
-          window.location.hash
+          `#${route || 'dashboard'}${queryString ? `?${queryString}` : ''}`
         );
       } catch {}
     } else {
@@ -424,22 +432,24 @@ export default function App() {
     }
 
     // Real-time sync for Japanese Courses across PC and Phone (regardless of active tab)
-    unSubCourses = subscribeJapaneseCourses((cloudCourses) => {
-      if (Array.isArray(cloudCourses)) {
-        let toSave = cloudCourses;
-        if (canAccessJpd123(email)) {
-          const hasJpd = toSave.some((c) => c && (c.id === 'course-jpd123' || c.code?.toLowerCase().replace(/\s+/g, '') === 'jpd123'));
-          if (!hasJpd) {
-            const cleanJpd = getCleanDefaultJpdCourse();
-            toSave = [cleanJpd, ...toSave];
-            if (email?.toLowerCase().trim() === 'daiduong4112006@gmail.com') {
-              syncJapaneseCourseToFirestore(cleanJpd).catch(() => {});
+    if (email) {
+      unSubCourses = subscribeJapaneseCourses(email, (cloudCourses) => {
+        if (Array.isArray(cloudCourses)) {
+          let toSave = cloudCourses;
+          if (canAccessJpd123(email)) {
+            const hasJpd = toSave.some((c) => c && (c.id === 'course-jpd123' || c.code?.toLowerCase().replace(/\s+/g, '') === 'jpd123'));
+            if (!hasJpd) {
+              const currentLocal = getJapaneseCourses(email);
+              const localJpd = currentLocal.find((c) => c && (c.id === 'course-jpd123' || c.code?.toLowerCase().replace(/\s+/g, '') === 'jpd123'));
+              const initialJpd = localJpd || getCleanDefaultJpdCourse();
+              toSave = [initialJpd, ...toSave];
+              syncJapaneseCourseToFirestore(initialJpd, email).catch(() => {});
             }
           }
+          saveJapaneseCourses(toSave, email, true);
         }
-        saveJapaneseCourses(toSave, email, true);
-      }
-    });
+      });
+    }
 
     // Real-time sync for JPD123 access list across all devices
     unSubJpd123Access = subscribeJpd123AccessList((emails) => {
@@ -706,7 +716,7 @@ export default function App() {
       {/* Main Workspace Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
           {/* Main List: My Quizzes */}
-          {(activeTab === 'dashboard' || activeTab === 'my-quizzes') && (
+          {(activeTab === 'dashboard' || activeTab === 'my-quizzes' || !['dashboard', 'my-quizzes', 'quiz-detail', 'create-quiz', 'edit-quiz', 'quiz-mode', 'quiz-result', 'review-mode', 'practice-mistakes', 'statistics', 'import-export', 'saved-vocabulary', 'japanese', 'settings'].includes(activeTab)) && (
             <Dashboard
               quizzes={quizzes}
               onStartQuizWithOptions={handleStartQuizWithOptions}
@@ -755,39 +765,52 @@ export default function App() {
           )}
 
           {/* Full-Screen Quiz Details Page */}
-          {activeTab === 'quiz-detail' && selectedQuizDetail && (
-            <QuizDetailPage
-              quiz={selectedQuizDetail}
-              currentUser={currentUser}
-              onOpenAuthModal={() => setIsAuthModalOpen(true)}
-              onUpdateQuiz={(updatedQuiz) => {
-                const list = saveQuiz(updatedQuiz);
-                setQuizzes(list);
-                setSelectedQuizDetail(updatedQuiz);
-                setWrongQuestions(getWrongQuestionsList());
-                setStats(getGlobalStatistics());
-              }}
-              onBack={() => {
-                navigateTo('dashboard', { quizDetail: null });
-              }}
-              onStartPractice={(quizId, options, customQuestionsList) => {
-                if (customQuestionsList) {
-                  navigateTo('quiz-mode', { activeQuiz: customQuestionsList, studyOptions: options });
-                } else {
-                  handleStartQuizWithOptions(quizId, options);
-                }
-              }}
-              onEditQuiz={(id) => {
-                const target = quizzes.find((q) => q.id === id);
-                if (target) {
-                  navigateTo('edit-quiz', { quizToEdit: target });
-                }
-              }}
-              onDeleteQuiz={(id) => {
-                handleDeleteQuiz(id);
-                navigateTo('dashboard', { quizDetail: null });
-              }}
-            />
+          {activeTab === 'quiz-detail' && (
+            selectedQuizDetail ? (
+              <QuizDetailPage
+                quiz={selectedQuizDetail}
+                currentUser={currentUser}
+                onOpenAuthModal={() => setIsAuthModalOpen(true)}
+                onUpdateQuiz={(updatedQuiz) => {
+                  const list = saveQuiz(updatedQuiz);
+                  setQuizzes(list);
+                  setSelectedQuizDetail(updatedQuiz);
+                  setWrongQuestions(getWrongQuestionsList());
+                  setStats(getGlobalStatistics());
+                }}
+                onBack={() => {
+                  navigateTo('dashboard', { quizDetail: null });
+                }}
+                onStartPractice={(quizId, options, customQuestionsList) => {
+                  if (customQuestionsList) {
+                    navigateTo('quiz-mode', { activeQuiz: customQuestionsList, studyOptions: options });
+                  } else {
+                    handleStartQuizWithOptions(quizId, options);
+                  }
+                }}
+                onEditQuiz={(id) => {
+                  const target = quizzes.find((q) => q.id === id);
+                  if (target) {
+                    navigateTo('edit-quiz', { quizToEdit: target });
+                  }
+                }}
+                onDeleteQuiz={(id) => {
+                  handleDeleteQuiz(id);
+                  navigateTo('dashboard', { quizDetail: null });
+                }}
+              />
+            ) : (
+              <div className="py-20 text-center space-y-4">
+                <p className="text-sm text-slate-500 dark:text-slate-400">Không tìm thấy thông tin bộ đề hoặc đang tải...</p>
+                <button
+                  type="button"
+                  onClick={() => navigateTo('dashboard')}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold"
+                >
+                  Quay lại trang chủ
+                </button>
+              </div>
+            )
           )}
 
           {/* Create or Edit Quiz */}
@@ -823,48 +846,87 @@ export default function App() {
           )}
 
           {/* Quiz Mode Runner */}
-          {activeTab === 'quiz-mode' && activeQuiz && (
-            <QuizPage
-              quiz={activeQuiz}
-              studyOptions={activeStudyOptions}
-              onQuizCompleted={handleQuizCompleted}
-              onExit={() => {
-                if (selectedQuizDetail) {
-                  navigateTo('quiz-detail', { quizDetail: selectedQuizDetail });
-                } else {
-                  navigateTo('dashboard');
-                }
-              }}
-            />
+          {activeTab === 'quiz-mode' && (
+            activeQuiz ? (
+              <QuizPage
+                quiz={activeQuiz}
+                studyOptions={activeStudyOptions}
+                onQuizCompleted={handleQuizCompleted}
+                onExit={() => {
+                  if (selectedQuizDetail) {
+                    navigateTo('quiz-detail', { quizDetail: selectedQuizDetail });
+                  } else {
+                    navigateTo('dashboard');
+                  }
+                }}
+              />
+            ) : (
+              <div className="py-20 text-center space-y-4">
+                <p className="text-sm text-slate-500 dark:text-slate-400">Không tìm thấy bài luyện tập hoặc đã hoàn thành.</p>
+                <button
+                  type="button"
+                  onClick={() => navigateTo('dashboard')}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold"
+                >
+                  Quay lại trang chủ
+                </button>
+              </div>
+            )
           )}
 
           {/* Quiz Result Screen */}
-          {activeTab === 'quiz-result' && currentAttempt && (
-            <QuizResult
-              attempt={currentAttempt}
-              onReviewAll={() => {
-                navigateTo('review-mode', { reviewFilter: 'all' });
-              }}
-              onReviewWrong={() => {
-                navigateTo('review-mode', { reviewFilter: 'wrong' });
-              }}
-              onRetry={() => {
-                if (currentAttempt) {
-                  handleStartQuizWithOptions(currentAttempt.quizId);
-                }
-              }}
-              onDashboard={() => navigateTo('dashboard', { quizDetail: null })}
-            />
+          {activeTab === 'quiz-result' && (
+            currentAttempt ? (
+              <QuizResult
+                attempt={currentAttempt}
+                onReviewAll={() => {
+                  navigateTo('review-mode', { reviewFilter: 'all' });
+                }}
+                onReviewWrong={() => {
+                  navigateTo('review-mode', { reviewFilter: 'wrong' });
+                }}
+                onRetry={() => {
+                  if (currentAttempt) {
+                    handleStartQuizWithOptions(currentAttempt.quizId);
+                  }
+                }}
+                onDashboard={() => navigateTo('dashboard', { quizDetail: null })}
+              />
+            ) : (
+              <div className="py-20 text-center space-y-4">
+                <p className="text-sm text-slate-500 dark:text-slate-400">Chưa có kết quả bài thi.</p>
+                <button
+                  type="button"
+                  onClick={() => navigateTo('dashboard')}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold"
+                >
+                  Quay lại trang chủ
+                </button>
+              </div>
+            )
           )}
 
           {/* Answer Review Page */}
-          {activeTab === 'review-mode' && currentAttempt && (
-            <ReviewPage
-              attempt={currentAttempt}
-              initialFilter={reviewFilter}
-              onBackToDashboard={() => navigateTo('dashboard', { quizDetail: null })}
-              onRetry={() => handleStartQuizWithOptions(currentAttempt.quizId)}
-            />
+          {activeTab === 'review-mode' && (
+            currentAttempt ? (
+              <ReviewPage
+                attempt={currentAttempt}
+                initialFilter={reviewFilter}
+                onBackToDashboard={() => navigateTo('dashboard', { quizDetail: null })}
+                onRetry={() => handleStartQuizWithOptions(currentAttempt.quizId)}
+              />
+            ) : (
+              <div className="py-20 text-center space-y-4">
+                <p className="text-sm text-slate-500 dark:text-slate-400">Chưa có kết quả để xem lại.</p>
+                <button
+                  type="button"
+                  onClick={() => navigateTo('dashboard')}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold"
+                >
+                  Quay lại trang chủ
+                </button>
+              </div>
+            )
           )}
 
           {/* Practice Mistakes Mode */}
