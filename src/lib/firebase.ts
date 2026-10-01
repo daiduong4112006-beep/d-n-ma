@@ -500,51 +500,38 @@ export const wipeAllServerCollections = async (): Promise<void> => {
 };
 
 // ---------------------------------------------------------------------------
-// Cloud Firestore Real-time Sync for Japanese Courses across devices & browsers
+// Cloud Firestore Real-time Sync for Japanese Courses across devices per User
 // ---------------------------------------------------------------------------
-export const syncJapaneseCourseToFirestore = async (course: any): Promise<void> => {
+export const syncJapaneseCourseToFirestore = async (course: any, email?: string): Promise<void> => {
   if (!isFirestoreAvailable() || !course?.id) return;
   try {
-    const courseRef = doc(db, 'japanese_courses', course.id);
+    const cleanEmail = (email || auth.currentUser?.email || '').trim().toLowerCase();
+    if (!cleanEmail) return;
+
+    // Isolate by user email so each user has their own independent cloud documents
+    const docId = `${cleanEmail}_${course.id}`;
+    const courseRef = doc(db, 'user_japanese_courses', docId);
     const clean = JSON.parse(JSON.stringify(course));
 
-    // Ensure the shared cloud course NEVER carries personal study progress to other users
-    if (Array.isArray(clean.lessons)) {
-      clean.lessons.forEach((l: any) => {
-        l.timesPracticed = 0;
-        if (Array.isArray(l.cards)) {
-          l.cards.forEach((c: any) => {
-            delete c.mastered;
-          });
-        }
-        if (Array.isArray(l.kanjiCore)) {
-          l.kanjiCore.forEach((k: any) => {
-            delete k.mastered;
-          });
-        }
-      });
-    }
-    if (Array.isArray(clean.kanjiList)) {
-      clean.kanjiList.forEach((k: any) => {
-        delete k.mastered;
-      });
-    }
-    if (Array.isArray(clean.kanjiVocabList)) {
-      clean.kanjiVocabList.forEach((v: any) => {
-        delete v.mastered;
-      });
-    }
-
-    await setDoc(courseRef, { ...clean, updatedAt: new Date().toISOString() });
+    await setDoc(courseRef, {
+      email: cleanEmail,
+      courseId: course.id,
+      course: clean,
+      updatedAt: new Date().toISOString(),
+    });
   } catch (err) {
     handleFirestoreError('syncJapaneseCourseToFirestore', err);
   }
 };
 
-export const deleteJapaneseCourseFromFirestore = async (courseId: string): Promise<void> => {
+export const deleteJapaneseCourseFromFirestore = async (courseId: string, email?: string): Promise<void> => {
   if (!isFirestoreAvailable() || !courseId) return;
   try {
-    const courseRef = doc(db, 'japanese_courses', courseId);
+    const cleanEmail = (email || auth.currentUser?.email || '').trim().toLowerCase();
+    if (!cleanEmail) return;
+
+    const docId = `${cleanEmail}_${courseId}`;
+    const courseRef = doc(db, 'user_japanese_courses', docId);
     await deleteDoc(courseRef);
   } catch (err) {
     handleFirestoreError('deleteJapaneseCourseFromFirestore', err);
@@ -552,6 +539,7 @@ export const deleteJapaneseCourseFromFirestore = async (courseId: string): Promi
 };
 
 export const subscribeJapaneseCourses = (
+  email: string | undefined | null,
   onUpdate: (courses: any[]) => void,
   onError?: (err: Error) => void
 ): (() => void) => {
@@ -559,15 +547,23 @@ export const subscribeJapaneseCourses = (
     if (onError) onError(new Error('Firestore unavailable'));
     return () => {};
   }
+  const cleanEmail = (email || auth.currentUser?.email || '').trim().toLowerCase();
+  if (!cleanEmail) {
+    onUpdate([]);
+    return () => {};
+  }
+
   try {
-    const q = collection(db, 'japanese_courses');
+    const q = query(collection(db, 'user_japanese_courses'), where('email', '==', cleanEmail));
     return onSnapshot(
       q,
       (snapshot) => {
-        const courses: any[] = snapshot.docs.map((d) => ({
-          ...d.data(),
-          id: d.id,
-        }));
+        const courses: any[] = snapshot.docs
+          .map((d) => {
+            const data = d.data();
+            return data?.course || null;
+          })
+          .filter(Boolean);
         onUpdate(courses);
       },
       (err) => {

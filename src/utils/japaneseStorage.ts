@@ -1156,15 +1156,6 @@ export function saveJapaneseCourses(courses: JapaneseCourse[], email?: string | 
 
     let toSave = courses;
 
-    // When incoming from cloud snapshot, merge with local mastery so personal progress is never lost
-    if (skipCloudSync) {
-      const currentLocal = getJapaneseCourses(targetEmail);
-      toSave = courses.map((incomingCourse) => {
-        const local = currentLocal.find((c) => c && c.id === incomingCourse.id);
-        return mergeCourseWithLocalMastery(incomingCourse, local);
-      });
-    }
-
     if (!hasAccess) {
       toSave = toSave.filter(
         (c) =>
@@ -1175,16 +1166,10 @@ export function saveJapaneseCourses(courses: JapaneseCourse[], email?: string | 
     }
     localStorage.setItem(userKey, JSON.stringify(toSave));
 
-    // Also sync to Cloud Firestore in background if not incoming from cloud
-    if (!skipCloudSync) {
+    // Also sync to Cloud Firestore in background for this specific user
+    if (!skipCloudSync && targetEmail) {
       for (const c of toSave) {
-        if (c.id === 'course-jpd123' || c.code?.toLowerCase().replace(/\s+/g, '') === 'jpd123') {
-          if (isJapaneseAdmin(targetEmail)) {
-            syncJapaneseCourseToFirestore(cleanCurriculumForCloud(c)).catch(() => {});
-          }
-        } else {
-          syncJapaneseCourseToFirestore(c).catch(() => {});
-        }
+        syncJapaneseCourseToFirestore(c, targetEmail).catch(() => {});
       }
     }
   } catch (e) {
@@ -1215,17 +1200,15 @@ export function restoreDefaultJpd123Course(email?: string | null): JapaneseCours
     updatedAt: new Date().toISOString(),
   };
   const next = [restoredCourse, ...withoutJpd];
-  saveJapaneseCourses(next, targetEmail);
-  if (isJapaneseAdmin(targetEmail)) {
-    syncJapaneseCourseToFirestore(cleanCurriculumForCloud(restoredCourse)).catch(() => {});
+  saveJapaneseCourses(next, targetEmail, true);
+  if (targetEmail) {
+    syncJapaneseCourseToFirestore(restoredCourse, targetEmail).catch(() => {});
   }
   return next;
 }
 
 export function saveJapaneseCourse(course: JapaneseCourse, email?: string | null): JapaneseCourse[] {
   const targetEmail = (email !== undefined ? (email || '') : getCurrentUserEmail()).toLowerCase().trim();
-  const isAdmin = isJapaneseAdmin(targetEmail);
-  const isJpd123 = course.id === 'course-jpd123' || course.code?.toLowerCase().replace(/\s+/g, '') === 'jpd123';
 
   const current = getJapaneseCourses(targetEmail);
   const idx = current.findIndex((c) => c.id === course.id);
@@ -1249,19 +1232,12 @@ export function saveJapaneseCourse(course: JapaneseCourse, email?: string | null
     ];
   }
 
-  // Always save to user's personalized local storage (allows students to save their card mastery & progress!)
+  // Always save to user's personalized local storage (allows students and admin to save their card mastery & progress!)
   saveJapaneseCourses(updated, targetEmail, true);
 
-  // Cloud sync rules for JPD123:
-  // - Only Admin pushes curriculum changes to Firestore
-  // - When Admin pushes, clean out personal progress so students' study progress is never polluted
-  if (isJpd123) {
-    if (isAdmin) {
-      const cleanCurriculum = cleanCurriculumForCloud(formatted);
-      syncJapaneseCourseToFirestore(cleanCurriculum).catch(() => {});
-    }
-  } else {
-    syncJapaneseCourseToFirestore(formatted).catch(() => {});
+  // Sync to this user's personal cloud document in Firestore (preserves personal mastery across devices for this account)
+  if (targetEmail) {
+    syncJapaneseCourseToFirestore(formatted, targetEmail).catch(() => {});
   }
 
   return updated;
@@ -1271,8 +1247,10 @@ export function deleteJapaneseCourse(courseId: string, email?: string | null): J
   const targetEmail = (email !== undefined ? (email || '') : getCurrentUserEmail()).toLowerCase().trim();
   const current = getJapaneseCourses(targetEmail);
   const updated = current.filter((c) => c.id !== courseId);
-  saveJapaneseCourses(updated, targetEmail);
-  deleteJapaneseCourseFromFirestore(courseId).catch(() => {});
+  saveJapaneseCourses(updated, targetEmail, true);
+  if (targetEmail) {
+    deleteJapaneseCourseFromFirestore(courseId, targetEmail).catch(() => {});
+  }
   return updated;
 }
 

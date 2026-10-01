@@ -23,8 +23,6 @@ import {
   saveJapaneseCourses,
   canAccessJpd123,
   restoreDefaultJpd123Course,
-  DEFAULT_JPD123_COURSE,
-  mergeCourseWithLocalMastery,
   getCleanDefaultJpdCourse,
 } from '../utils/japaneseStorage';
 import { subscribeJapaneseCourses, syncJapaneseCourseToFirestore } from '../lib/firebase';
@@ -69,38 +67,33 @@ export const JapaneseLearningPage: React.FC<Props> = ({ currentUser, onBackToDas
       }
     }
 
-    // Subscribe to Firestore for real-time synchronization between phones, tablets, and computers
-    const unSub = subscribeJapaneseCourses((cloudCourses) => {
+    // Subscribe to Firestore for real-time synchronization between phones, tablets, and computers FOR THIS USER
+    const unSub = subscribeJapaneseCourses(currentUser?.email, (cloudCourses) => {
       if (Array.isArray(cloudCourses)) {
-        // Filter out JPD123 for users without access
         let allowed = cloudCourses;
         if (!hasJpdAccess) {
           allowed = cloudCourses.filter(
             (c) => c && c.id !== 'course-jpd123' && c.code?.toLowerCase().replace(/\s+/g, '') !== 'jpd123'
           );
         } else {
-          // If authorized user/admin, guarantee JPD123 is always available even if accidentally deleted
+          // If authorized user/admin, guarantee JPD123 is always available even if not yet on cloud
           const hasJpd = allowed.some((c) => c && (c.id === 'course-jpd123' || c.code?.toLowerCase().replace(/\s+/g, '') === 'jpd123'));
           if (!hasJpd) {
-            allowed = [getCleanDefaultJpdCourse(), ...allowed];
-            if (isAdmin) {
-              syncJapaneseCourseToFirestore(getCleanDefaultJpdCourse()).catch(() => {});
+            const currentLocal = getJapaneseCourses(currentUser?.email);
+            const localJpd = currentLocal.find((c) => c && (c.id === 'course-jpd123' || c.code?.toLowerCase().replace(/\s+/g, '') === 'jpd123'));
+            const initialJpd = localJpd || getCleanDefaultJpdCourse();
+            allowed = [initialJpd, ...allowed];
+            if (currentUser?.email) {
+              syncJapaneseCourseToFirestore(initialJpd, currentUser?.email).catch(() => {});
             }
           }
         }
 
-        // CRITICAL: Merge cloud curriculum with current user's local personal mastery so that progress is NEVER overwritten!
-        const currentLocal = getJapaneseCourses(currentUser?.email);
-        const merged = allowed.map((c) => {
-          const local = currentLocal.find((l) => l && l.id === c.id);
-          return mergeCourseWithLocalMastery(c, local);
-        });
-
-        setCourses(merged);
-        saveJapaneseCourses(merged, currentUser?.email, true);
+        setCourses(allowed);
+        saveJapaneseCourses(allowed, currentUser?.email, true);
         setSelectedCourse((prev) => {
-          if (!prev) return (hasJpdAccess && merged.length === 1 ? merged[0] : null);
-          const updated = merged.find((c) => c.id === prev.id);
+          if (!prev) return (hasJpdAccess && allowed.length === 1 ? allowed[0] : null);
+          const updated = allowed.find((c) => c.id === prev.id);
           return updated || null;
         });
       }
