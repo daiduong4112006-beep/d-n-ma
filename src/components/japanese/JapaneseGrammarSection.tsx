@@ -565,6 +565,37 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
     });
   };
 
+  const handleStartPracticeBatch = () => {
+    const targetPoints = selectedLessonFilter === 'ALL'
+      ? grammarPoints
+      : grammarPoints.filter((g) => g.lessonTag === selectedLessonFilter);
+
+    const allExamples: { japanese: string; reading?: string; vietnamese: string; grammarTitle?: string; lessonTag?: string }[] = [];
+    for (const gp of targetPoints) {
+      if (gp.examples) {
+        for (const ex of gp.examples) {
+          allExamples.push({
+            ...ex,
+            grammarTitle: gp.title,
+            lessonTag: gp.lessonTag,
+          });
+        }
+      }
+    }
+
+    if (allExamples.length === 0) {
+      alert('Không có câu ví dụ nào để luyện tập.');
+      return;
+    }
+
+    sound.playClick();
+    setPracticeSession({
+      title: selectedLessonFilter === 'ALL' ? 'Luyện tập: Tất cả ngữ pháp' : `Luyện tập: Ngữ pháp ${selectedLessonFilter}`,
+      grammarPointTitle: selectedLessonFilter === 'ALL' ? 'Tất cả ngữ pháp' : selectedLessonFilter,
+      examples: allExamples,
+    });
+  };
+
   // AI Grammar Assistant state
   const [aiGrammarPoint, setAiGrammarPoint] = useState<JapaneseGrammarPoint | null>(null);
 
@@ -682,6 +713,16 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
               </button>
             );
           })}
+
+          <button
+            type="button"
+            onClick={handleStartPracticeBatch}
+            className="sm:ml-auto px-3.5 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-indigo-600 dark:hover:bg-indigo-600 text-white text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95"
+            title={`Luyện gõ các câu ví dụ ngữ pháp (${selectedLessonFilter === 'ALL' ? 'Tất cả' : selectedLessonFilter})`}
+          >
+            <Keyboard className="w-3.5 h-3.5 text-indigo-400 group-hover:text-white" />
+            <span>Luyện gõ {selectedLessonFilter === 'ALL' ? 'tất cả' : selectedLessonFilter}</span>
+          </button>
         </div>
 
         {/* Search bar */}

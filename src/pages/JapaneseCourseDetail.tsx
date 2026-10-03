@@ -38,8 +38,7 @@ interface Props {
   onUpdateCourse: (updated: JapaneseCourse) => void;
 }
 
-type CourseTab = 'vocabulary' | 'kanji' | 'grammar' | 'materials';
-type ActiveSubView = 'tabs' | 'lesson-detail' | 'lesson-editor' | 'typing' | 'flashcard' | 'multichoice' | 'kanji-flashcard' | 'kanji-study';
+type ActiveSubView = 'tabs' | 'lesson-detail' | 'lesson-editor' | 'typing' | 'typing-example' | 'flashcard' | 'multichoice' | 'kanji-flashcard' | 'kanji-study';
 
 export const JapaneseCourseDetail: React.FC<Props> = ({
   course,
@@ -233,6 +232,18 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
       <JapaneseTypingMode
         lesson={selectedLesson}
         initialFilter={typingFilter}
+        initialDirection="vi-to-jp"
+        onExit={() => setActiveSubView('lesson-detail')}
+        onCardMastered={handleSetCardMastery}
+      />
+    );
+  }
+
+  if (activeSubView === 'typing-example' && selectedLesson) {
+    return (
+      <JapaneseTypingMode
+        lesson={selectedLesson}
+        isExampleMode={true}
         initialDirection="vi-to-jp"
         onExit={() => setActiveSubView('lesson-detail')}
         onCardMastered={handleSetCardMastery}

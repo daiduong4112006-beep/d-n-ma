@@ -292,7 +292,40 @@ export function extractJapaneseVariants(raw: string | undefined): string[] {
 }
 
 /**
- * Checks if user answer matches target Japanese card
+ * Converts Katakana to Hiragana (Unicode U+30A1 - U+30F6 -> U+3041 - U+3096)
+ */
+export function katakanaToHiragana(str: string): string {
+  if (!str) return '';
+  return str.replace(/[\u30a1-\u30f6]/g, (ch) =>
+    String.fromCharCode(ch.charCodeAt(0) - 0x60)
+  );
+}
+
+/**
+ * Converts Hiragana to Katakana (Unicode U+3041 - U+3096 -> U+30A1 - U+30F6)
+ */
+export function hiraganaToKatakana(str: string): string {
+  if (!str) return '';
+  return str.replace(/[\u3041-\u3096]/g, (ch) =>
+    String.fromCharCode(ch.charCodeAt(0) + 0x60)
+  );
+}
+
+/**
+ * Normalizes text to canonical Hiragana for flexible Katakana <-> Hiragana matching
+ */
+export function toCanonicalKana(str: string): string {
+  if (!str) return '';
+  return katakanaToHiragana(normalizeJapaneseText(str));
+}
+
+/**
+ * Checks if user answer matches target Japanese card.
+ * Flexibly accepts:
+ * - Direct Kanji / Kana match
+ * - Hiragana typed when target is Katakana or Kanji
+ * - Katakana typed when target is Hiragana or Kanji
+ * - Romaji converted automatically
  */
 export function checkJapaneseAnswer(
   userRawInput: string,
@@ -301,9 +334,10 @@ export function checkJapaneseAnswer(
   const u = normalizeJapaneseText(userRawInput);
   if (!u) return false;
 
-  // Romaji-to-Kana converted user variants
+  const userCanonical = toCanonicalKana(userRawInput);
   const userConvertedHiragana = normalizeJapaneseText(convertRomajiToKana(userRawInput, 'hiragana'));
   const userConvertedKatakana = normalizeJapaneseText(convertRomajiToKana(userRawInput, 'katakana'));
+  const userRomajiCanonical = toCanonicalKana(userConvertedHiragana);
 
   // Collect all valid target variants from card reading, term, and romaji
   const targetVariants = [
@@ -316,16 +350,31 @@ export function checkJapaneseAnswer(
     const normVariant = normalizeJapaneseText(variant);
     if (!normVariant) continue;
 
-    // Direct match with user input
+    // 1. Direct match with user input
     if (u === normVariant) {
       return true;
     }
 
-    // Match with user converted kana (Hiragana or Katakana)
-    if (userConvertedHiragana && userConvertedHiragana === normVariant) {
+    // 2. Canonical Kana match (converts Katakana <-> Hiragana interchangeably)
+    const targetCanonical = toCanonicalKana(variant);
+    if (targetCanonical && userCanonical === targetCanonical) {
+      return true;
+    }
+
+    // 3. Match with user converted kana (Hiragana or Katakana)
+    if (userConvertedHiragana && (userConvertedHiragana === normVariant || userRomajiCanonical === targetCanonical)) {
       return true;
     }
     if (userConvertedKatakana && userConvertedKatakana === normVariant) {
+      return true;
+    }
+
+    // 4. Match with long vowel mark (ー) stripped
+    if (
+      userCanonical.replace(/ー/g, '') &&
+      targetCanonical.replace(/ー/g, '') &&
+      userCanonical.replace(/ー/g, '') === targetCanonical.replace(/ー/g, '')
+    ) {
       return true;
     }
   }

@@ -20,7 +20,7 @@ interface JapaneseLessonDetailProps {
   lesson: JapaneseLesson;
   courseCode?: string;
   onBack: () => void;
-  onStartMode: (mode: 'typing' | 'flashcard' | 'multichoice', filter?: 'original' | 'mastered' | 'all') => void;
+  onStartMode: (mode: 'typing' | 'typing-example' | 'flashcard' | 'multichoice', filter?: 'original' | 'mastered' | 'all') => void;
   onEditLesson: () => void;
   onDeleteLesson?: () => void;
   onToggleMastery: (cardId: string, currentMastered: boolean) => void;
@@ -107,7 +107,7 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
         </div>
 
         {/* Action Buttons matching screenshot */}
-        <div className="grid grid-cols-3 sm:flex items-center gap-2 sm:gap-2.5 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 shrink-0">
           {/* Flashcard Button */}
           <button
             type="button"
@@ -119,7 +119,7 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
             <span>Flashcard</span>
           </button>
 
-          {/* Gõ Button */}
+          {/* Gõ Từ vựng Button */}
           <button
             type="button"
             onClick={() => onStartMode('typing', vocabFilterTab)}
@@ -140,6 +140,32 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
             <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-white/20 text-white">
               {vocabFilterTab === 'original' ? unmasteredCount : vocabFilterTab === 'mastered' ? vocabMasteredCount : totalVocab}
             </span>
+          </button>
+
+          {/* Gõ Ví dụ Button */}
+          <button
+            type="button"
+            onClick={() => onStartMode('typing-example')}
+            disabled={lesson.cards.filter((c) => c.example && c.example.trim().length > 0).length === 0}
+            className={`px-3 sm:px-5 py-2.5 rounded-full font-bold text-xs shadow-xs flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer active:scale-95 transition-all ${
+              lesson.cards.some((c) => c.example && c.example.trim().length > 0)
+                ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-60'
+            }`}
+            title={
+              lesson.cards.filter((c) => c.example && c.example.trim().length > 0).length > 0
+                ? `Luyện gõ ${lesson.cards.filter((c) => c.example && c.example.trim().length > 0).length} câu ví dụ từ vựng tiếng Nhật của bài học này`
+                : 'Bài học này chưa có câu ví dụ để luyện gõ'
+            }
+          >
+            <Edit3 className="w-4 h-4 shrink-0" />
+            <span className="hidden sm:inline">Gõ ví dụ</span>
+            <span className="sm:hidden">Ví dụ</span>
+            {lesson.cards.filter((c) => c.example && c.example.trim().length > 0).length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-white/20 text-white">
+                {lesson.cards.filter((c) => c.example && c.example.trim().length > 0).length}
+              </span>
+            )}
           </button>
 
           {/* Multichoice Button */}

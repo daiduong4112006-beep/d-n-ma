@@ -21,6 +21,7 @@ import {
   checkJapaneseAnswer,
   checkVietnameseAnswer,
 } from '../../utils/japaneseKana';
+import { checkGrammarSentenceAnswer } from '../../utils/japaneseKanjiConverter';
 import { sound } from '../../utils/audio';
 import { getTypingProgress, saveTypingProgress, clearTypingProgress } from '../../utils/studyProgressStorage';
 import { shuffleArray } from '../../utils/shuffle';
@@ -32,6 +33,7 @@ interface JapaneseTypingModeProps {
   lesson: JapaneseLesson;
   initialFilter?: 'original' | 'mastered' | 'all';
   isKanjiSection?: boolean;
+  isExampleMode?: boolean;
   initialDirection?: TypingDirection;
   onExit: () => void;
   onCardMastered?: (cardId: string, mastered: boolean) => void;
@@ -41,17 +43,24 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
   lesson,
   initialFilter = 'original',
   isKanjiSection = false,
+  isExampleMode = false,
   initialDirection,
   onExit,
   onCardMastered,
 }) => {
-  // Source cards representing full list from outer view
-  const [cardsSource, setCardsSource] = useState<JapaneseVocabCard[]>(lesson.cards);
+  // Source cards representing full list from outer view (filtered to cards with example in example mode)
+  const rawCards = isExampleMode
+    ? lesson.cards.filter((c) => c.example && c.example.trim().length > 0)
+    : lesson.cards;
+  const [cardsSource, setCardsSource] = useState<JapaneseVocabCard[]>(rawCards);
 
   // Sync if lesson.cards prop changes
   useEffect(() => {
-    setCardsSource(lesson.cards);
-  }, [lesson.cards]);
+    const list = isExampleMode
+      ? lesson.cards.filter((c) => c.example && c.example.trim().length > 0)
+      : lesson.cards;
+    setCardsSource(list);
+  }, [lesson.cards, isExampleMode]);
 
   // Compute counts from cardsSource (outer list data)
   const unmasteredCount = cardsSource.filter((c) => !c.mastered).length;
@@ -87,7 +96,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
         : initialFilter === 'mastered' && masteredCount === 0 && unmasteredCount > 0
         ? 'original'
         : initialFilter || 'original';
-    const baseList = getCardsByTab(tab, lesson.cards);
+    const baseList = getCardsByTab(tab, rawCards);
     const saved = localStorage.getItem('typing_shuffle_enabled');
     const shouldShuffle = saved !== null ? saved === 'true' : true;
     return shouldShuffle ? shuffleArray(baseList) : [...baseList];
@@ -112,6 +121,9 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     return localStorage.getItem('typing_auto_speech') === 'true';
   });
   const [direction, setDirection] = useState<TypingDirection>(() => {
+    if (isExampleMode) {
+      return 'vi-to-jp';
+    }
     if (initialDirection) {
       return initialDirection;
     }
@@ -127,7 +139,9 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
   const timerRef = useRef<number | null>(null);
 
   const currentCard = cards[currentIndex];
-  const storageId = `lesson_${lesson.id}_${filterTab}`;
+  const storageId = isExampleMode
+    ? `lesson_example_${lesson.id}_${filterTab}`
+    : `lesson_${lesson.id}_${filterTab}`;
 
   // Switch category tab ('original' | 'mastered' | 'all')
   const handleChangeFilterTab = (newTab: 'original' | 'mastered' | 'all') => {
@@ -300,7 +314,9 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
 
   const handlePlayHintAudio = () => {
     if (!currentCard) return;
-    const targetText = currentCard.reading || currentCard.term;
+    const targetText = isExampleMode
+      ? currentCard.example || currentCard.reading || currentCard.term
+      : currentCard.reading || currentCard.term;
     speakJapanese(targetText);
     setShowAudioHintFeedback(true);
     sound.playClick();
@@ -311,10 +327,13 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
 
   // Auto speech for Japanese word when moving to card in jp-to-vi mode
   useEffect(() => {
-    if (autoSpeechEnabled && currentCard && direction === 'jp-to-vi' && !isCompleted) {
-      speakJapanese(currentCard.reading || currentCard.term);
+    if (autoSpeechEnabled && currentCard && (direction === 'jp-to-vi' || isExampleMode) && !isCompleted) {
+      const targetText = isExampleMode
+        ? currentCard.example || currentCard.reading || currentCard.term
+        : currentCard.reading || currentCard.term;
+      speakJapanese(targetText);
     }
-  }, [currentIndex, autoSpeechEnabled, direction, isCompleted, currentCard]);
+  }, [currentIndex, autoSpeechEnabled, direction, isCompleted, currentCard, isExampleMode]);
 
   // Handle typing with Romaji -> Kana conversion if IME mode is enabled (in vi-to-jp mode)
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -331,7 +350,9 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     if (!currentCard || !inputVal.trim()) return;
 
     let matched = false;
-    if (direction === 'kanji-to-reading' || direction === 'vi-to-jp') {
+    if (isExampleMode) {
+      matched = checkGrammarSentenceAnswer(inputVal, currentCard.example || '', true);
+    } else if (direction === 'kanji-to-reading' || direction === 'vi-to-jp') {
       matched = checkJapaneseAnswer(inputVal, currentCard);
     } else {
       matched = checkVietnameseAnswer(inputVal, currentCard.definition);
@@ -340,11 +361,15 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     setIsAnswerChecked(true);
     setIsCorrect(matched);
 
+    const speechText = isExampleMode
+      ? currentCard.example || currentCard.reading || currentCard.term
+      : currentCard.reading || currentCard.term;
+
     if (matched) {
       sound.playCorrect();
       setScore((s) => s + 1);
       if (autoSpeechEnabled) {
-        speakJapanese(currentCard.reading || currentCard.term);
+        speakJapanese(speechText);
       }
 
       // Advance automatically after a short delay
@@ -354,7 +379,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     } else {
       sound.playWrong();
       if (autoSpeechEnabled) {
-        speakJapanese(currentCard.reading || currentCard.term);
+        speakJapanese(speechText);
       }
       setWrongCardIds((prev) => new Set(prev).add(currentCard.id));
     }
@@ -463,21 +488,29 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
       <div className="max-w-4xl mx-auto w-full flex items-center justify-between py-3 border-b border-slate-800/80">
         {/* Left Side: Mode & Count */}
         <div className="flex flex-col">
-          <button
-            type="button"
-            onClick={() => toggleDirection()}
-            className="flex items-center gap-1.5 text-left group cursor-pointer"
-            title="Nhấn để đảo thuật ngữ và nghĩa"
-          >
-            <span className="text-[11px] font-black uppercase text-cyan-400 tracking-wider">
-              {direction === 'kanji-to-reading'
-                ? 'HÁN TỰ → CÁCH ĐỌC NHẬT'
-                : direction === 'vi-to-jp'
-                ? 'VIỆT → NHẬT'
-                : 'NHẬT → VIỆT'}
-            </span>
-            <ArrowLeftRight className="w-3.5 h-3.5 text-cyan-400 group-hover:rotate-180 transition-transform" />
-          </button>
+          {isExampleMode ? (
+            <div className="flex items-center gap-1.5 text-left">
+              <span className="text-[11px] font-black uppercase text-emerald-400 tracking-wider">
+                GÕ CÂU VÍ DỤ TIẾNG NHẬT
+              </span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => toggleDirection()}
+              className="flex items-center gap-1.5 text-left group cursor-pointer"
+              title="Nhấn để đảo thuật ngữ và nghĩa"
+            >
+              <span className="text-[11px] font-black uppercase text-cyan-400 tracking-wider">
+                {direction === 'kanji-to-reading'
+                  ? 'HÁN TỰ → CÁCH ĐỌC NHẬT'
+                  : direction === 'vi-to-jp'
+                  ? 'VIỆT → NHẬT'
+                  : 'NHẬT → VIỆT'}
+              </span>
+              <ArrowLeftRight className="w-3.5 h-3.5 text-cyan-400 group-hover:rotate-180 transition-transform" />
+            </button>
+          )}
           <span className="text-xl sm:text-2xl font-black text-white leading-tight">
             {cards.length > 0 ? currentIndex + 1 : 0}/{cards.length}
           </span>
@@ -1024,16 +1057,18 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
           <div className="text-center space-y-3">
             <div className="flex items-center justify-center gap-2">
               <span className="text-[11px] font-bold text-slate-400 tracking-[0.25em] uppercase">
-                {direction === 'kanji-to-reading'
+                {isExampleMode
+                  ? 'ĐỀ BÀI: LUYỆN GÕ CÂU VÍ DỤ'
+                  : direction === 'kanji-to-reading'
                   ? 'ĐỀ BÀI: CHỮ HÁN (KANJI)'
                   : direction === 'vi-to-jp'
                   ? 'ĐỀ BÀI: NGHĨA TIẾNG VIỆT'
                   : 'THUẬT NGỮ TIẾNG NHẬT'}
               </span>
-              {(direction === 'jp-to-vi' || direction === 'kanji-to-reading') && (
+              {(direction === 'jp-to-vi' || direction === 'kanji-to-reading' || isExampleMode) && (
                 <button
                   type="button"
-                  onClick={() => speakJapanese(currentCard.reading || currentCard.term)}
+                  onClick={() => speakJapanese(isExampleMode ? (currentCard.example || currentCard.reading || currentCard.term) : (currentCard.reading || currentCard.term))}
                   className="p-1 rounded-full text-slate-400 hover:text-cyan-400 hover:bg-slate-800 transition-colors cursor-pointer"
                   title="Nghe phát âm"
                 >
@@ -1042,7 +1077,25 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
               )}
             </div>
 
-            {direction === 'kanji-to-reading' ? (
+            {isExampleMode ? (
+              <div className="space-y-3">
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold border border-indigo-500/30 flex-wrap justify-center">
+                  <span>Từ vựng:</span>
+                  <span className="text-white font-black text-sm">{currentCard.term}</span>
+                  {currentCard.reading && currentCard.reading !== currentCard.term && (
+                    <span className="text-indigo-200">({currentCard.reading})</span>
+                  )}
+                  <span className="text-slate-400">•</span>
+                  <span className="text-amber-300">{currentCard.definition}</span>
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-snug">
+                  Gõ câu ví dụ tiếng Nhật của từ này
+                </h2>
+                <p className="text-xs text-slate-400">
+                  (Hệ thống chấp nhận gõ cả Hiragana, Katakana, Kanji và Romaji)
+                </p>
+              </div>
+            ) : direction === 'kanji-to-reading' ? (
               <div className="space-y-2">
                 <h2 className="text-5xl sm:text-6xl md:text-7xl font-black font-serif text-white tracking-tight leading-tight select-none">
                   {currentCard.term}
@@ -1073,7 +1126,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
               </div>
             )}
 
-            {direction !== 'kanji-to-reading' && currentCard.example && (
+            {!isExampleMode && direction !== 'kanji-to-reading' && currentCard.example && (
               <p className="text-sm sm:text-base text-slate-300 font-medium">
                 {currentCard.example}
               </p>
@@ -1157,7 +1210,11 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
                   onKeyDown={handleKeyDown}
                   readOnly={isAnswerChecked && isCorrect === true}
                   placeholder={
-                    direction === 'kanji-to-reading'
+                    isExampleMode
+                      ? imeMode === 'off'
+                        ? 'Gõ câu ví dụ tiếng Nhật...'
+                        : 'Gõ ví dụ (ひらがな | カタカナ)...'
+                      : direction === 'kanji-to-reading'
                       ? imeMode === 'off'
                         ? 'Gõ cách đọc tiếng Nhật (vd: ひらがな)...'
                         : 'Gõ tiếng Nhật (vd: ひらがな)...'
@@ -1192,9 +1249,9 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
                 <div className="flex items-center gap-2">
                   <Volume2 className="w-4 h-4 text-indigo-400 animate-pulse shrink-0" />
                   <span>
-                    🔊 Đang phát âm gợi ý! {(direction === 'vi-to-jp' || direction === 'kanji-to-reading') && (
+                    🔊 Đang phát âm gợi ý! {(direction === 'vi-to-jp' || direction === 'kanji-to-reading' || isExampleMode) && (
                       <span className="text-amber-300 font-bold ml-1">
-                        Từ này bắt đầu bằng &quot;{(currentCard.reading || currentCard.term).replace(/^[~～〜⁓〰\s(（]+/, '').charAt(0)}...&quot;
+                        Bắt đầu bằng &quot;{((isExampleMode ? currentCard.example : currentCard.reading) || currentCard.term).replace(/^[~～〜⁓〰\s(（]+/, '').charAt(0)}...&quot;
                       </span>
                     )}
                   </span>
@@ -1230,7 +1287,18 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
                     </span>
                     <div className="text-xs text-slate-200 mt-0.5 flex items-center gap-2 flex-wrap">
                       <span>Đáp án đúng:</span>
-                      {direction === 'kanji-to-reading' ? (
+                      {isExampleMode ? (
+                        <>
+                          <b className="text-white text-base">
+                            {currentCard.example}
+                          </b>
+                          {currentCard.term && (
+                            <span className="text-amber-400 font-bold ml-1">
+                              ({currentCard.term})
+                            </span>
+                          )}
+                        </>
+                      ) : direction === 'kanji-to-reading' ? (
                         <>
                           <b className="text-white text-base">
                             {currentCard.reading || currentCard.term}

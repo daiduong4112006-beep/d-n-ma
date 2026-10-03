@@ -1,4 +1,4 @@
-import { convertRomajiToKana } from './japaneseKana';
+import { convertRomajiToKana, katakanaToHiragana } from './japaneseKana';
 
 /**
  * Comprehensive dictionary of Japanese Kanji words and compounds mapped to Hiragana readings.
@@ -351,10 +351,13 @@ export function normalizeGrammarText(str: string): string {
   // 1. Convert Kanji to Hiragana
   let s = convertKanjiToHiragana(str);
 
-  // 2. Remove tildes and wave dashes
+  // 2. Convert Katakana to Hiragana so both Katakana and Hiragana match seamlessly!
+  s = katakanaToHiragana(s);
+
+  // 3. Remove tildes and wave dashes
   s = s.replace(/[~～〜⁓〰^]/g, '');
 
-  // 3. Remove punctuation, dialogue tags, and whitespaces
+  // 4. Remove punctuation, dialogue tags, and whitespaces
   s = s.replace(/^[AB][：:]\s*/i, '');
   s = s.replace(/[\s\-_—–.,/／()（）[\]{}<>《》「」『』・、。!?:;"'‘’“”]/g, '');
 
@@ -377,10 +380,11 @@ export function stripPoliteEndings(str: string): string {
 /**
  * Checks if user answer matches target Japanese sentence.
  * Supports:
- * - Typing in Kanji (matches directly)
- * - Typing in Hiragana (matches via Kanji-to-Hiragana converter)
+ * - Typing in Kanji (matches directly or via dictionary)
+ * - Typing in Hiragana or Katakana interchangeably
  * - Typing in Romaji (matches via convertRomajiToKana)
- * - Optional polite endings like "です", "だ", or omitting them (e.g. にぎやかなまち vs にぎやかなまちです)
+ * - Optional polite endings like "です", "だ", or omitting them
+ * - Flexible long vowels (ー)
  */
 export function checkGrammarSentenceAnswer(
   userInput: string,
@@ -417,6 +421,14 @@ export function checkGrammarSentenceAnswer(
     return true;
   }
 
+  // Also check with long vowel mark (ー) ignored
+  if (
+    userDirect.replace(/ー/g, '') === targetNorm.replace(/ー/g, '') ||
+    userHira.replace(/ー/g, '') === targetNorm.replace(/ー/g, '')
+  ) {
+    return true;
+  }
+
   // Check with flexible endings (e.g. omitting です, だ, ね, よ)
   if (allowOmitDesu) {
     const targetStripped = normalizeGrammarText(stripPoliteEndings(targetSentence));
@@ -429,7 +441,9 @@ export function checkGrammarSentenceAnswer(
       userDirect === targetStripped ||
       userHira === targetStripped ||
       userDirectStripped === targetStripped ||
-      userHiraStripped === targetStripped
+      userHiraStripped === targetStripped ||
+      userDirectStripped.replace(/ー/g, '') === targetStripped.replace(/ー/g, '') ||
+      userHiraStripped.replace(/ー/g, '') === targetStripped.replace(/ー/g, '')
     ) {
       return true;
     }
