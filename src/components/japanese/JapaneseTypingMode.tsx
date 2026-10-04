@@ -139,6 +139,9 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
   const timerRef = useRef<number | null>(null);
 
   const currentCard = cards[currentIndex];
+  const isCurrentKata = currentCard
+    ? /[\u30A0-\u30FF]/.test(currentCard.term) && !/[\u4E00-\u9FAF]/.test(currentCard.term)
+    : false;
   const storageId = isExampleMode
     ? `lesson_example_${lesson.id}_${filterTab}`
     : `lesson_${lesson.id}_${filterTab}`;
@@ -1113,11 +1116,17 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
             ) : (
               <div className="space-y-1">
                 <h2 className="text-4xl sm:text-5xl md:text-6xl font-black text-white tracking-tight leading-tight">
-                  {currentCard.reading || currentCard.term}
+                  {isCurrentKata ? currentCard.term : (currentCard.reading || currentCard.term)}
                 </h2>
                 <div className="flex items-center justify-center gap-2 text-sm sm:text-base text-slate-300 font-medium">
-                  {currentCard.term && currentCard.reading && currentCard.term !== currentCard.reading && (
-                    <span className="text-amber-400 font-bold">{currentCard.term}</span>
+                  {isCurrentKata ? (
+                    currentCard.reading && currentCard.reading !== currentCard.term && (
+                      <span className="text-indigo-300 font-bold">{currentCard.reading}</span>
+                    )
+                  ) : (
+                    currentCard.term && currentCard.reading && currentCard.term !== currentCard.reading && (
+                      <span className="text-amber-400 font-bold">{currentCard.term}</span>
+                    )
                   )}
                   {currentCard.romaji && (
                     <span className="text-slate-400 font-mono">[{currentCard.romaji}]</span>
@@ -1313,10 +1322,16 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
                       ) : direction === 'vi-to-jp' ? (
                         <>
                           <b className="text-white text-base">
-                            {currentCard.reading || currentCard.term}
+                            {isCurrentKata ? currentCard.term : (currentCard.reading || currentCard.term)}
                           </b>
-                          {currentCard.term && currentCard.reading && currentCard.term !== currentCard.reading && (
-                            <span className="text-amber-400 font-bold">({currentCard.term})</span>
+                          {isCurrentKata ? (
+                            currentCard.reading && currentCard.reading !== currentCard.term && (
+                              <span className="text-indigo-300 font-bold">({currentCard.reading})</span>
+                            )
+                          ) : (
+                            currentCard.term && currentCard.reading && currentCard.term !== currentCard.reading && (
+                              <span className="text-amber-400 font-bold">({currentCard.term})</span>
+                            )
                           )}
                           {currentCard.romaji && (
                             <span className="text-slate-400 font-mono">[{currentCard.romaji}]</span>

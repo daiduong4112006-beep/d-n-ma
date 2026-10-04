@@ -16,7 +16,7 @@ import {
   Minimize2,
 } from 'lucide-react';
 import { JapaneseLesson, JapaneseVocabCard, JapaneseKanjiCard } from '../../types/japanese';
-import { speakJapanese } from '../../utils/japaneseKana';
+import { speakJapanese, katakanaToHiragana } from '../../utils/japaneseKana';
 import { sound } from '../../utils/audio';
 import { getFlashcardProgress, saveFlashcardProgress, clearFlashcardProgress } from '../../utils/studyProgressStorage';
 import { shuffleArray } from '../../utils/shuffle';
@@ -590,7 +590,7 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
 
                     if (isKatakanaTerm) {
                       mainWord = termText;
-                      subWord = '';
+                      subWord = (readingText && readingText !== termText) ? readingText : katakanaToHiragana(termText);
                     }
                     const romajiText = currentItem.romaji ? currentItem.romaji.trim() : '';
 
@@ -634,10 +634,15 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
                       </p>
                     )}
                     <div className="pt-4 border-t border-slate-800 flex items-center justify-center gap-3 text-sm text-slate-400">
-                      {currentItem.reading && currentItem.reading !== currentItem.term && (
-                        <span className="text-indigo-400 font-bold text-base">{currentItem.reading}</span>
-                      )}
                       <span className="font-black text-white text-xl sm:text-2xl">{currentItem.term}</span>
+                      {(() => {
+                        const hira = (currentItem.reading && currentItem.reading !== currentItem.term)
+                          ? currentItem.reading
+                          : katakanaToHiragana(currentItem.term);
+                        return hira && hira !== currentItem.term ? (
+                          <span className="text-indigo-400 font-bold text-base">({hira})</span>
+                        ) : null;
+                      })()}
                     </div>
                   </div>
                 )
@@ -656,14 +661,19 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {currentItem.reading && (
-                      <p className="text-xl sm:text-2xl font-bold text-indigo-300">
-                        {currentItem.reading}
-                      </p>
-                    )}
                     <h2 className="text-5xl sm:text-6xl md:text-7xl font-black text-cyan-400">
                       {currentItem.term}
                     </h2>
+                    {(() => {
+                      const hira = (currentItem.reading && currentItem.reading !== currentItem.term)
+                        ? currentItem.reading
+                        : katakanaToHiragana(currentItem.term);
+                      return hira && hira !== currentItem.term ? (
+                        <p className="text-xl sm:text-2xl font-bold text-indigo-300">
+                          {hira}
+                        </p>
+                      ) : null;
+                    })()}
                   </div>
                 )
               )

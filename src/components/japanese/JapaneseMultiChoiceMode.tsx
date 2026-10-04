@@ -15,7 +15,7 @@ import {
   ArrowLeftRight,
 } from 'lucide-react';
 import { JapaneseLesson, JapaneseVocabCard } from '../../types/japanese';
-import { speakJapanese } from '../../utils/japaneseKana';
+import { speakJapanese, katakanaToHiragana } from '../../utils/japaneseKana';
 import { sound } from '../../utils/audio';
 import { getMultiChoiceProgress, saveMultiChoiceProgress, clearMultiChoiceProgress } from '../../utils/studyProgressStorage';
 import { shuffleArray } from '../../utils/shuffle';
@@ -78,7 +78,10 @@ export const JapaneseMultiChoiceMode: React.FC<JapaneseMultiChoiceModeProps> = (
         /[\u30A0-\u30FF]/.test(c.term) && !/[\u4E00-\u9FAF]/.test(c.term);
 
       const formatChoiceText = (c: JapaneseVocabCard) => {
-        if (isKataCard(c)) return c.term;
+        if (isKataCard(c)) {
+          const hira = c.reading && c.reading !== c.term ? c.reading : katakanaToHiragana(c.term);
+          return hira && hira !== c.term ? `${c.term} (${hira})` : c.term;
+        }
         return c.reading && c.reading !== c.term ? `${c.reading} (${c.term})` : (c.reading || c.term);
       };
 
@@ -100,11 +103,15 @@ export const JapaneseMultiChoiceMode: React.FC<JapaneseMultiChoiceModeProps> = (
       } else {
         // Thuật ngữ -> Nghĩa (Nhật -> Việt)
         const isTargetKata = isKataCard(targetCard);
+        const targetHira = targetCard.reading && targetCard.reading !== targetCard.term
+          ? targetCard.reading
+          : (isTargetKata ? katakanaToHiragana(targetCard.term) : '');
+
         const mainWord = isTargetKata
           ? targetCard.term
           : (targetCard.reading && targetCard.reading !== targetCard.term ? targetCard.reading : targetCard.term);
         const subKanji = isTargetKata
-          ? ''
+          ? targetHira
           : (targetCard.reading && targetCard.reading !== targetCard.term ? targetCard.term : '');
         const romaji = targetCard.romaji ? `[${targetCard.romaji}]` : '';
 

@@ -13,7 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { JapaneseLesson, JapaneseVocabCard } from '../types/japanese';
-import { speakJapanese } from '../utils/japaneseKana';
+import { speakJapanese, katakanaToHiragana } from '../utils/japaneseKana';
 import { sound } from '../utils/audio';
 
 interface JapaneseLessonDetailProps {
@@ -322,18 +322,19 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
               const readingText = card.reading?.trim() || '';
               const termText = card.term.trim();
 
-              // Rule: きた (reading) là từ chính to ở trên, 北 (term) từ phụ to ở dưới kèm phiên âm.
-              // Với từ Katakana (ví dụ: セール, チケット, メロン, ビル...): chữ Katakana là từ chuẩn và PHẢI LÀ CHỦ ĐẠO (to ở trên), không ép hiển thị Hiragana.
+              // Rule chung: Với chữ Hán (Kanji), reading (ví dụ: きた) to ở trên, term (北) ở dưới.
+              // ĐẶC BIỆT với từ Katakana (ví dụ: セール, チケット, メロン, ビル...):
+              // Đảo lại: Katakana to ở trên làm chủ đạo, chữ kia (Hiragana: せーる, ちけっと) đảo xuống dưới cạnh romaji.
               const isKatakanaTerm = /[\u30A0-\u30FF]/.test(termText) && !/[\u4E00-\u9FAF]/.test(termText);
               let mainWord = readingText && readingText !== termText ? readingText : termText;
               let subWord = readingText && readingText !== termText ? termText : '';
 
               if (isKatakanaTerm) {
-                mainWord = termText;
-                subWord = '';
+                mainWord = termText; // Katakana to ở trên
+                subWord = (readingText && readingText !== termText) ? readingText : katakanaToHiragana(termText); // Hiragana đảo xuống dưới
               }
               const romajiText = card.romaji ? card.romaji.trim() : '';
-              const toSpeak = readingText || termText;
+              const toSpeak = termText || readingText;
 
               return (
                 <div key={card.id}>

@@ -22,6 +22,7 @@ import {
   deleteJapaneseCourseFromFirestore,
   saveJpd123AccessListToFirestore,
 } from '../lib/firebase';
+import { katakanaToHiragana } from './japaneseKana';
 
 const STORAGE_KEY = 'mcq_japanese_lessons_v2';
 const COURSES_STORAGE_KEY = 'mcq_japanese_courses_v1';
@@ -199,7 +200,7 @@ export const SEED_JAPANESE_LESSONS: JapaneseLesson[] = [
       {
         id: 'jp-41-9',
         term: 'バス',
-        reading: 'バス',
+        reading: 'ばす',
         romaji: 'basu',
         partOfSpeech: 'Danh từ',
         definition: 'Xe buýt',
@@ -703,7 +704,7 @@ export const SEED_JAPANESE_LESSONS: JapaneseLesson[] = [
       {
         id: 'jp-62-2',
         term: 'パン',
-        reading: 'パン',
+        reading: 'ぱん',
         romaji: 'pan',
         partOfSpeech: 'Danh từ',
         definition: 'Bánh mì',
@@ -733,7 +734,7 @@ export const SEED_JAPANESE_LESSONS: JapaneseLesson[] = [
       {
         id: 'jp-62-5',
         term: 'カラオケ',
-        reading: 'カラオケ',
+        reading: 'からおけ',
         romaji: 'karaoke',
         partOfSpeech: 'Danh từ',
         definition: 'Hát Karaoke',
@@ -765,7 +766,7 @@ export const SEED_JAPANESE_LESSONS: JapaneseLesson[] = [
       {
         id: 'jp-63-2',
         term: 'ラーメン',
-        reading: 'ラーメン',
+        reading: 'らーめん',
         romaji: 'raamen',
         partOfSpeech: 'Danh từ',
         definition: 'Mì Ramen',
@@ -1020,13 +1021,13 @@ export function getJapaneseCourses(email?: string | null): JapaneseCourse[] {
             }
           }
         }
-        // Normalize Katakana readings for any cards in stored lessons
+        // Ensure Katakana cards in stored lessons have their phonetic Hiragana reading preserved
         if (Array.isArray(jpdCourse.lessons)) {
           for (const lesson of jpdCourse.lessons) {
             for (const card of lesson.cards || []) {
               const isKata = /[\u30A0-\u30FF]/.test(card.term) && !/[\u4E00-\u9FAF]/.test(card.term);
-              if (isKata && card.reading !== card.term) {
-                card.reading = card.term;
+              if (isKata && (!card.reading || card.reading === card.term)) {
+                card.reading = katakanaToHiragana(card.term);
                 changed = true;
               }
             }
