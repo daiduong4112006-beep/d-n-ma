@@ -43,7 +43,7 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
   const unmasteredCount = totalVocab - vocabMasteredCount;
 
   const filteredVocab = lesson.cards.filter((card) => {
-    // 1. Tab filter (Mục gốc vs Đã nhớ vs Tất cả)
+    // 1. Tab filter (Chưa nhớ vs Đã nhớ vs Tất cả)
     if (vocabFilterTab === 'original' && card.mastered) return false;
     if (vocabFilterTab === 'mastered' && !card.mastered) return false;
 
@@ -126,7 +126,7 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
             className="px-3 sm:px-5 py-2.5 rounded-full bg-slate-950 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-750 text-white font-bold text-xs shadow-xs flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer active:scale-95 transition-all"
             title={`Luyện gõ từ vựng tiếng Nhật theo: ${
               vocabFilterTab === 'original'
-                ? 'Mục gốc'
+                ? 'Chưa nhớ'
                 : vocabFilterTab === 'mastered'
                 ? 'Đã nhớ'
                 : 'Tất cả'
@@ -134,7 +134,7 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
           >
             <Keyboard className="w-4 h-4 text-white shrink-0" />
             <span className="hidden sm:inline">
-              Gõ {vocabFilterTab === 'original' ? '• Mục gốc' : vocabFilterTab === 'mastered' ? '• Đã nhớ' : '• Tất cả'}
+              Gõ {vocabFilterTab === 'original' ? '• Chưa nhớ' : vocabFilterTab === 'mastered' ? '• Đã nhớ' : '• Tất cả'}
             </span>
             <span className="sm:hidden">Luyện gõ</span>
             <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-white/20 text-white">
@@ -181,9 +181,9 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
         </div>
       </div>
 
-      {/* Sub-bar: Filter Tabs (Mục gốc / Đã nhớ / Tất cả) & Search & Edit tools */}
+      {/* Sub-bar: Filter Tabs (Chưa nhớ / Đã nhớ / Tất cả) & Search & Edit tools */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-        {/* Category Tabs: Mục gốc vs Đã nhớ */}
+        {/* Category Tabs: Chưa nhớ vs Đã nhớ */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
           <button
             type="button"
@@ -197,7 +197,7 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
                 : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800'
             }`}
           >
-            <span>Mục gốc</span>
+            <span>Chưa nhớ</span>
             <span
               className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
                 vocabFilterTab === 'original'
@@ -309,7 +309,7 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
           <div className="p-12 text-center text-slate-400 dark:text-slate-500 text-sm font-medium space-y-2">
             <p>
               {vocabFilterTab === 'mastered'
-                ? 'Chưa có từ vựng nào trong mục "Đã nhớ". Hãy bấm "Ghi nhớ" từ mục gốc hoặc Flashcard để lưu vào đây!'
+                ? 'Chưa có từ vựng nào trong mục "Đã nhớ". Hãy bấm "Ghi nhớ" từ mục "Chưa nhớ" hoặc Flashcard để lưu vào đây!'
                 : vocabFilterTab === 'original'
                 ? 'Tuyệt vời! Bạn đã ghi nhớ toàn bộ từ vựng trong bài học này.'
                 : 'Không tìm thấy từ vựng phù hợp'}
@@ -364,7 +364,7 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
                             ? 'border border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-emerald-50/60 dark:bg-emerald-950/30'
                             : 'bg-[#ea580c] hover:bg-orange-600 text-white shadow-xs'
                         }`}
-                        title={isMastered ? 'Bấm để chuyển về Mục gốc' : 'Bấm để đánh dấu đã nhớ'}
+                        title={isMastered ? 'Bấm để chuyển về Chưa nhớ' : 'Bấm để đánh dấu đã nhớ'}
                       >
                         {isMastered ? (
                           <>
@@ -484,7 +484,7 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
                             ? 'border border-emerald-500 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
                             : 'bg-[#ea580c] hover:bg-orange-600 text-white shadow-sm shadow-orange-600/30'
                         }`}
-                        title={isMastered ? 'Bấm để chuyển về Mục gốc' : 'Bấm để đánh dấu đã nhớ'}
+                        title={isMastered ? 'Bấm để chuyển về Chưa nhớ' : 'Bấm để đánh dấu đã nhớ'}
                       >
                         {isMastered ? (
                           <>

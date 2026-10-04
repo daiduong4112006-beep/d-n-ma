@@ -554,7 +554,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
         </div>
       </div>
 
-      {/* Category Tabs: Mục gốc • Đã nhớ • Tất cả (Đồng bộ dữ liệu từ danh sách ngoài) */}
+      {/* Category Tabs: Chưa nhớ • Đã nhớ • Tất cả (Đồng bộ dữ liệu từ danh sách ngoài) */}
       <div className="max-w-4xl mx-auto w-full pt-3 pb-1 flex items-center justify-between flex-wrap gap-2.5">
         <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-slate-900/90 border border-slate-800">
           <button
@@ -566,7 +566,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
-            <span>Mục gốc</span>
+            <span>Chưa nhớ</span>
             <span
               className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
                 filterTab === 'original'
@@ -634,7 +634,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
             }`}
             title={
               currentCard.mastered
-                ? 'Từ này đang ở mục "Đã nhớ". Bấm để đưa về "Mục gốc" (đồng bộ danh sách ngoài)'
+                ? 'Từ này đang ở mục "Đã nhớ". Bấm để đưa về "Chưa nhớ" (đồng bộ danh sách ngoài)'
                 : 'Bấm để đánh dấu "Đã nhớ" (đồng bộ danh sách ngoài)'
             }
           >
@@ -643,7 +643,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
                 currentCard.mastered ? 'text-emerald-400' : 'text-slate-500'
               }`}
             />
-            <span>{currentCard.mastered ? 'Đã nhớ (✓)' : 'Mục gốc'}</span>
+            <span>{currentCard.mastered ? 'Đã nhớ (✓)' : 'Chưa nhớ'}</span>
           </button>
         )}
       </div>
@@ -672,7 +672,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
             </div>
 
             <div className="space-y-4 overflow-y-auto flex-1 pr-1.5 custom-scrollbar">
-              {/* Chọn mục luyện gõ: Mục gốc / Đã nhớ / Tất cả */}
+              {/* Chọn mục luyện gõ: Chưa nhớ / Đã nhớ / Tất cả */}
               <div className="space-y-2">
                 <label className="text-[11px] font-black uppercase text-slate-400 tracking-wider">
                   Dữ liệu từ danh sách ngoài
@@ -690,7 +690,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    Mục gốc ({unmasteredCount})
+                    Chưa nhớ ({unmasteredCount})
                   </button>
                   <button
                     type="button"
@@ -1002,12 +1002,12 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
               {filterTab === 'mastered'
                 ? 'Chưa có từ nào trong "Đã nhớ"'
                 : filterTab === 'original'
-                ? 'Đã nhớ toàn bộ "Mục gốc"!'
+                ? 'Đã nhớ toàn bộ từ "Chưa nhớ"!'
                 : 'Bài học chưa có từ vựng'}
             </h3>
             <p className="text-xs text-slate-400 leading-relaxed max-w-sm mx-auto">
               {filterTab === 'mastered'
-                ? 'Bạn chưa đánh dấu từ nào là "Đã nhớ". Hãy chọn "Mục gốc" hoặc "Tất cả" để bắt đầu luyện gõ.'
+                ? 'Bạn chưa đánh dấu từ nào là "Đã nhớ". Hãy chọn "Chưa nhớ" hoặc "Tất cả" để bắt đầu luyện gõ.'
                 : filterTab === 'original'
                 ? 'Tất cả các từ trong bài học đã được ghi nhớ. Bạn có thể chọn ôn lại ở mục "Đã nhớ" hoặc "Tất cả".'
                 : 'Học phần này hiện chưa có thẻ từ vựng nào.'}
@@ -1021,7 +1021,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
                 onClick={() => handleChangeFilterTab('original')}
                 className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs cursor-pointer shadow-md shadow-indigo-600/30 active:scale-95 transition-all"
               >
-                Gõ Mục gốc ({unmasteredCount} từ)
+                Gõ Chưa nhớ ({unmasteredCount} từ)
               </button>
             )}
             {totalCount > 0 && filterTab !== 'all' && (
