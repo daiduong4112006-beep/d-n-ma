@@ -242,11 +242,10 @@ export const JapaneseLearningPage: React.FC<Props> = ({ currentUser, onBackToDas
               Khóa Học Tiếng Nhật
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed">
-              Mỗi khóa học tổng hợp gồm 4 khu vực chính:{' '}
+              Mỗi khóa học tổng hợp gồm 3 khu vực chính:{' '}
               <strong className="text-orange-400">1. Từ vựng</strong> (các bài học kèm Flashcard, Gõ, Trắc nghiệm),{' '}
-              <strong className="text-rose-400">2. Chữ Hán</strong> (Kanji & âm Hán Việt),{' '}
-              <strong className="text-indigo-400">3. Ngữ pháp</strong> (cấu trúc & nhét file tài liệu), và{' '}
-              <strong className="text-emerald-400">4. Tài liệu học tập</strong> (upload file giáo trình, PDF, slide).
+              <strong className="text-rose-400">2. Chữ Hán</strong> (Kanji & âm Hán Việt), và{' '}
+              <strong className="text-indigo-400">3. Ngữ pháp</strong> (cấu trúc ngữ pháp & ví dụ song ngữ).
             </p>
           </div>
 
@@ -396,30 +395,24 @@ export const JapaneseLearningPage: React.FC<Props> = ({ currentUser, onBackToDas
                   {c.description || 'Khóa học tiếng Nhật tổng hợp'}
                 </p>
 
-                {/* 4 Modules Status Pills */}
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
-                  <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60">
-                    <BookOpen className="w-3.5 h-3.5 text-sky-500" />
-                    <span className="font-bold text-slate-700 dark:text-slate-300">
+                {/* 3 Modules Status Pills */}
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+                  <div className="flex items-center gap-1.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                    <BookOpen className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                    <span className="font-bold text-slate-700 dark:text-slate-300 truncate">
                       {c.lessons?.length || 0} bài từ vựng
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60">
-                    <span className="text-xs font-serif font-black text-rose-500">🈲</span>
-                    <span className="font-bold text-slate-700 dark:text-slate-300">
+                  <div className="flex items-center gap-1.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                    <span className="text-xs font-serif font-black text-rose-500 shrink-0">🈲</span>
+                    <span className="font-bold text-slate-700 dark:text-slate-300 truncate">
                       {c.kanjiList?.length || 0} chữ Hán
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60">
-                    <FileText className="w-3.5 h-3.5 text-indigo-500" />
-                    <span className="font-bold text-slate-700 dark:text-slate-300">
+                  <div className="flex items-center gap-1.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                    <FileText className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                    <span className="font-bold text-slate-700 dark:text-slate-300 truncate">
                       {c.grammarPoints?.length || 0} ngữ pháp
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60">
-                    <FolderOpen className="w-3.5 h-3.5 text-emerald-500" />
-                    <span className="font-bold text-slate-700 dark:text-slate-300">
-                      {c.materials?.length || 0} tài liệu
                     </span>
                   </div>
                 </div>

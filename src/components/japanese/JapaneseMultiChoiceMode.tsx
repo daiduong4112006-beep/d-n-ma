@@ -74,18 +74,22 @@ export const JapaneseMultiChoiceMode: React.FC<JapaneseMultiChoiceModeProps> = (
       let correctAnswerText = '';
       let distractors: string[] = [];
 
+      const isKataCard = (c: JapaneseVocabCard) =>
+        /[\u30A0-\u30FF]/.test(c.term) && !/[\u4E00-\u9FAF]/.test(c.term);
+
+      const formatChoiceText = (c: JapaneseVocabCard) => {
+        if (isKataCard(c)) return c.term;
+        return c.reading && c.reading !== c.term ? `${c.reading} (${c.term})` : (c.reading || c.term);
+      };
+
       if (direction === 'vi-to-jp') {
         // Nghĩa -> Thuật ngữ (Việt -> Nhật)
         questionText = targetCard.definition;
-        correctAnswerText = targetCard.reading && targetCard.reading !== targetCard.term
-          ? `${targetCard.reading} (${targetCard.term})`
-          : (targetCard.reading || targetCard.term);
+        correctAnswerText = formatChoiceText(targetCard);
 
         const otherCards = cards.filter((c) => c.id !== targetCard.id);
         const shuffledOthers = shuffleArray(otherCards);
-        distractors = shuffledOthers.slice(0, 3).map((c) =>
-          c.reading && c.reading !== c.term ? `${c.reading} (${c.term})` : (c.reading || c.term)
-        );
+        distractors = shuffledOthers.slice(0, 3).map(formatChoiceText);
 
         const fallbackDistractors = ['学生 (がくせい)', '先生 (せんせい)', '学校 (がっこう)', '本 (ほん)'];
         while (distractors.length < 3) {
@@ -95,12 +99,13 @@ export const JapaneseMultiChoiceMode: React.FC<JapaneseMultiChoiceModeProps> = (
         }
       } else {
         // Thuật ngữ -> Nghĩa (Nhật -> Việt)
-        const mainWord = targetCard.reading && targetCard.reading !== targetCard.term
-          ? targetCard.reading
-          : targetCard.term;
-        const subKanji = targetCard.reading && targetCard.reading !== targetCard.term
+        const isTargetKata = isKataCard(targetCard);
+        const mainWord = isTargetKata
           ? targetCard.term
-          : '';
+          : (targetCard.reading && targetCard.reading !== targetCard.term ? targetCard.reading : targetCard.term);
+        const subKanji = isTargetKata
+          ? ''
+          : (targetCard.reading && targetCard.reading !== targetCard.term ? targetCard.term : '');
         const romaji = targetCard.romaji ? `[${targetCard.romaji}]` : '';
 
         questionText = mainWord;

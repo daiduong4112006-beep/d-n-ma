@@ -322,9 +322,16 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
               const readingText = card.reading?.trim() || '';
               const termText = card.term.trim();
 
-              // Rule: きた (reading) là từ chính to ở trên, 北 (term) từ phụ to ở dưới kèm phiên âm
-              const mainWord = readingText && readingText !== termText ? readingText : termText;
-              const subWord = readingText && readingText !== termText ? termText : '';
+              // Rule: きた (reading) là từ chính to ở trên, 北 (term) từ phụ to ở dưới kèm phiên âm.
+              // Với từ Katakana (ví dụ: セール, チケット, メロン, ビル...): chữ Katakana là từ chuẩn và PHẢI LÀ CHỦ ĐẠO (to ở trên), không ép hiển thị Hiragana.
+              const isKatakanaTerm = /[\u30A0-\u30FF]/.test(termText) && !/[\u4E00-\u9FAF]/.test(termText);
+              let mainWord = readingText && readingText !== termText ? readingText : termText;
+              let subWord = readingText && readingText !== termText ? termText : '';
+
+              if (isKatakanaTerm) {
+                mainWord = termText;
+                subWord = '';
+              }
               const romajiText = card.romaji ? card.romaji.trim() : '';
               const toSpeak = readingText || termText;
 

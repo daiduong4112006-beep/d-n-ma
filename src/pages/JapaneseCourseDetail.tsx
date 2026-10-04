@@ -4,7 +4,6 @@ import {
   BookOpen,
   Layers,
   FileText,
-  FolderOpen,
   Plus,
   Play,
   Edit3,
@@ -23,7 +22,6 @@ import {
 } from '../types/japanese';
 import { JapaneseKanjiSection } from '../components/japanese/JapaneseKanjiSection';
 import { JapaneseGrammarSection } from '../components/japanese/JapaneseGrammarSection';
-import { JapaneseMaterialsSection } from '../components/japanese/JapaneseMaterialsSection';
 import { JapaneseLessonDetail } from './JapaneseLessonDetail';
 import { JapaneseLessonEditor } from './JapaneseLessonEditor';
 import { JapaneseFlashcardMode } from '../components/japanese/JapaneseFlashcardMode';
@@ -38,6 +36,7 @@ interface Props {
   onUpdateCourse: (updated: JapaneseCourse) => void;
 }
 
+type CourseTab = 'vocabulary' | 'kanji' | 'grammar';
 type ActiveSubView = 'tabs' | 'lesson-detail' | 'lesson-editor' | 'typing' | 'typing-example' | 'flashcard' | 'multichoice' | 'kanji-flashcard' | 'kanji-study';
 
 export const JapaneseCourseDetail: React.FC<Props> = ({
@@ -201,17 +200,6 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
   // 3. Grammar Handlers
   const handleUpdateGrammar = (updatedGrammar: JapaneseGrammarPoint[]) => {
     onUpdateCourse({ ...course, grammarPoints: updatedGrammar });
-  };
-
-  // 4. Materials Handlers
-  const handleUpdateMaterials = (updatedMaterials: JapaneseMaterial[], deletedId?: string) => {
-    const deletedMaterialIds = Array.isArray(course.deletedMaterialIds)
-      ? [...course.deletedMaterialIds]
-      : [];
-    if (deletedId && !deletedMaterialIds.includes(deletedId)) {
-      deletedMaterialIds.push(deletedId);
-    }
-    onUpdateCourse({ ...course, materials: updatedMaterials, deletedMaterialIds });
   };
 
   // Subview renders (Practicing lessons)
@@ -411,7 +399,7 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
               {course.title || 'Tiếng Nhật JPD 123'}
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-              {course.description || 'Thư mục tài liệu tổng hợp bao gồm Từ vựng, Chữ Hán, Ngữ pháp và Tài liệu học tập.'}
+              {course.description || 'Khóa học tiếng Nhật tổng hợp bao gồm Từ vựng, Chữ Hán và Ngữ pháp.'}
             </p>
           </div>
 
@@ -435,17 +423,11 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
               </span>
               <span className="text-[10px] font-bold text-slate-300 uppercase">Ngữ pháp</span>
             </div>
-            <div className="px-3.5 py-2 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/10 text-center">
-              <span className="text-lg font-black block text-emerald-400">
-                {course.materials?.length || 0}
-              </span>
-              <span className="text-[10px] font-bold text-slate-300 uppercase">Tài liệu</span>
-            </div>
           </div>
         </div>
       </div>
 
-      {/* 4 MAIN TABS NAVIGATION (Từ vựng, Chữ Hán, Ngữ pháp, Tài liệu học tập) */}
+      {/* 3 MAIN TABS NAVIGATION (Từ vựng, Chữ Hán, Ngữ pháp) */}
       <div className="p-1.5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-2 overflow-x-auto">
         {/* Tab 1: Từ vựng */}
         <button
@@ -496,23 +478,6 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
         >
           <FileText className="w-4 h-4" />
           <span>Ngữ pháp ({course.grammarPoints?.length || 0})</span>
-        </button>
-
-        {/* Tab 4: Tài liệu học tập */}
-        <button
-          type="button"
-          onClick={() => {
-            setActiveTab('materials');
-            sound.playClick();
-          }}
-          className={`flex-1 min-w-[150px] py-3 px-4 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
-            activeTab === 'materials'
-              ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800'
-          }`}
-        >
-          <FolderOpen className="w-4 h-4" />
-          <span>Tài liệu ({course.materials?.length || 0})</span>
         </button>
       </div>
 
@@ -724,14 +689,6 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
         <JapaneseGrammarSection
           grammarPoints={course.grammarPoints || []}
           onUpdateGrammarPoints={handleUpdateGrammar}
-        />
-      )}
-
-      {/* TAB 4: TÀI LIỆU HỌC TẬP (LEARNING MATERIALS & UPLOADED FILES) */}
-      {activeTab === 'materials' && (
-        <JapaneseMaterialsSection
-          materials={course.materials || []}
-          onUpdateMaterials={handleUpdateMaterials}
         />
       )}
 

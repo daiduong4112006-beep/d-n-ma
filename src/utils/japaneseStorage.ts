@@ -199,7 +199,7 @@ export const SEED_JAPANESE_LESSONS: JapaneseLesson[] = [
       {
         id: 'jp-41-9',
         term: 'バス',
-        reading: 'ばす',
+        reading: 'バス',
         romaji: 'basu',
         partOfSpeech: 'Danh từ',
         definition: 'Xe buýt',
@@ -703,7 +703,7 @@ export const SEED_JAPANESE_LESSONS: JapaneseLesson[] = [
       {
         id: 'jp-62-2',
         term: 'パン',
-        reading: 'ぱん',
+        reading: 'パン',
         romaji: 'pan',
         partOfSpeech: 'Danh từ',
         definition: 'Bánh mì',
@@ -733,7 +733,7 @@ export const SEED_JAPANESE_LESSONS: JapaneseLesson[] = [
       {
         id: 'jp-62-5',
         term: 'カラオケ',
-        reading: 'からおけ',
+        reading: 'カラオケ',
         romaji: 'karaoke',
         partOfSpeech: 'Danh từ',
         definition: 'Hát Karaoke',
@@ -765,7 +765,7 @@ export const SEED_JAPANESE_LESSONS: JapaneseLesson[] = [
       {
         id: 'jp-63-2',
         term: 'ラーメン',
-        reading: 'らーめん',
+        reading: 'ラーメン',
         romaji: 'raamen',
         partOfSpeech: 'Danh từ',
         definition: 'Mì Ramen',
@@ -901,7 +901,7 @@ export const DEFAULT_JPD123_COURSE: JapaneseCourse = {
   id: 'course-jpd123',
   code: 'JPD 123',
   title: 'Tiếng Nhật JPD 123 (Bài 4 - 7)',
-  description: 'Khóa học tiếng Nhật JPD123 toàn diện - Tổng hợp Từ vựng, Chữ Hán, Ngữ pháp Bài 4-7 và Tài liệu học tập',
+  description: 'Khóa học tiếng Nhật JPD123 toàn diện - Tổng hợp Từ vựng, Chữ Hán và Ngữ pháp Bài 4-7',
   level: 'N5',
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
@@ -1017,6 +1017,18 @@ export function getJapaneseCourses(email?: string | null): JapaneseCourse[] {
             );
             if (jpdCourse.materials.length !== beforeCount) {
               changed = true;
+            }
+          }
+        }
+        // Normalize Katakana readings for any cards in stored lessons
+        if (Array.isArray(jpdCourse.lessons)) {
+          for (const lesson of jpdCourse.lessons) {
+            for (const card of lesson.cards || []) {
+              const isKata = /[\u30A0-\u30FF]/.test(card.term) && !/[\u4E00-\u9FAF]/.test(card.term);
+              if (isKata && card.reading !== card.term) {
+                card.reading = card.term;
+                changed = true;
+              }
             }
           }
         }

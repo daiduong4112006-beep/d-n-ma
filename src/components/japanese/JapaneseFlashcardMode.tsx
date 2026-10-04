@@ -584,8 +584,14 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
                   (() => {
                     const readingText = currentItem.reading?.trim() || '';
                     const termText = currentItem.term?.trim() || '';
-                    const mainWord = readingText && readingText !== termText ? readingText : termText;
-                    const subWord = readingText && readingText !== termText ? termText : '';
+                    const isKatakanaTerm = /[\u30A0-\u30FF]/.test(termText) && !/[\u4E00-\u9FAF]/.test(termText);
+                    let mainWord = readingText && readingText !== termText ? readingText : termText;
+                    let subWord = readingText && readingText !== termText ? termText : '';
+
+                    if (isKatakanaTerm) {
+                      mainWord = termText;
+                      subWord = '';
+                    }
                     const romajiText = currentItem.romaji ? currentItem.romaji.trim() : '';
 
                     return (
@@ -628,7 +634,9 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
                       </p>
                     )}
                     <div className="pt-4 border-t border-slate-800 flex items-center justify-center gap-3 text-sm text-slate-400">
-                      {currentItem.reading && <span className="text-indigo-400 font-bold text-base">{currentItem.reading}</span>}
+                      {currentItem.reading && currentItem.reading !== currentItem.term && (
+                        <span className="text-indigo-400 font-bold text-base">{currentItem.reading}</span>
+                      )}
                       <span className="font-black text-white text-xl sm:text-2xl">{currentItem.term}</span>
                     </div>
                   </div>
