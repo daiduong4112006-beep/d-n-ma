@@ -26,6 +26,7 @@ import { sound } from '../../utils/audio';
 import { getTypingProgress, saveTypingProgress, clearTypingProgress } from '../../utils/studyProgressStorage';
 import { shuffleArray } from '../../utils/shuffle';
 import { realtimeSync } from '../../utils/realtimeSync';
+import { computeJapaneseDiff } from '../../utils/japaneseDiff';
 
 export type TypingDirection = 'kanji-to-reading' | 'vi-to-jp' | 'jp-to-vi';
 
@@ -407,10 +408,10 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
   const handleRetrySame = () => {
     setIsAnswerChecked(false);
     setIsCorrect(null);
-    setInputVal('');
+    // PRESERVE user input: do NOT clear inputVal!
     setTimeout(() => {
       inputRef.current?.focus();
-    }, 20);
+    }, 30);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -1278,101 +1279,170 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
             {/* Feedback when checked */}
             {isAnswerChecked && (
               <div
-                className={`p-4 rounded-3xl border flex flex-col sm:flex-row items-center justify-between gap-3 text-sm animate-in fade-in zoom-in-95 duration-150 ${
+                className={`p-4 rounded-3xl border flex flex-col gap-3 text-sm animate-in fade-in zoom-in-95 duration-150 ${
                   isCorrect
                     ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300'
                     : 'bg-rose-950/60 border-rose-500/50 text-rose-300'
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  {isCorrect ? (
-                    <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />
-                  ) : (
-                    <AlertCircle className="w-6 h-6 text-rose-400 shrink-0" />
-                  )}
-                  <div className="text-left">
-                    <span className="font-black text-base block">
-                      {isCorrect ? 'Chính xác! 🎉' : 'Chưa chính xác!'}
-                    </span>
-                    <div className="text-xs text-slate-200 mt-0.5 flex items-center gap-2 flex-wrap">
-                      <span>Đáp án đúng:</span>
-                      {isExampleMode ? (
-                        <>
-                          <b className="text-white text-base">
-                            {currentCard.example}
-                          </b>
-                          {currentCard.term && (
-                            <span className="text-amber-400 font-bold ml-1">
-                              ({currentCard.term})
-                            </span>
-                          )}
-                        </>
-                      ) : direction === 'kanji-to-reading' ? (
-                        <>
-                          <b className="text-white text-base">
-                            {currentCard.reading || currentCard.term}
-                          </b>
-                          {currentCard.romaji && (
-                            <span className="text-slate-400 font-mono">[{currentCard.romaji}]</span>
-                          )}
-                          {currentCard.term && (
-                            <span className="text-amber-400 font-bold">({currentCard.term})</span>
-                          )}
-                        </>
-                      ) : direction === 'vi-to-jp' ? (
-                        <>
-                          <b className="text-white text-base">
-                            {isCurrentKata ? currentCard.term : (currentCard.reading || currentCard.term)}
-                          </b>
-                          {isCurrentKata ? (
-                            currentCard.reading && currentCard.reading !== currentCard.term && (
-                              <span className="text-indigo-300 font-bold">({currentCard.reading})</span>
-                            )
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-start sm:items-center gap-3">
+                    {isCorrect ? (
+                      <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0 mt-0.5 sm:mt-0" />
+                    ) : (
+                      <AlertCircle className="w-6 h-6 text-rose-400 shrink-0 mt-0.5 sm:mt-0" />
+                    )}
+                    <div className="text-left">
+                      <span className="font-black text-base block">
+                        {isCorrect ? 'Chính xác! 🎉' : 'Chưa chính xác! Hãy xem vị trí bị sai:'}
+                      </span>
+                      {isCorrect && (
+                        <div className="text-xs text-slate-200 mt-0.5 flex items-center gap-2 flex-wrap">
+                          <span>Đáp án đúng:</span>
+                          {isExampleMode ? (
+                            <>
+                              <b className="text-white text-base">
+                                {currentCard.example}
+                              </b>
+                              {currentCard.term && (
+                                <span className="text-amber-400 font-bold ml-1">
+                                  ({currentCard.term})
+                                </span>
+                              )}
+                            </>
+                          ) : direction === 'kanji-to-reading' ? (
+                            <>
+                              <b className="text-white text-base">
+                                {currentCard.reading || currentCard.term}
+                              </b>
+                              {currentCard.romaji && (
+                                <span className="text-slate-400 font-mono">[{currentCard.romaji}]</span>
+                              )}
+                              {currentCard.term && (
+                                <span className="text-amber-400 font-bold">({currentCard.term})</span>
+                              )}
+                            </>
+                          ) : direction === 'vi-to-jp' ? (
+                            <>
+                              <b className="text-white text-base">
+                                {isCurrentKata ? currentCard.term : (currentCard.reading || currentCard.term)}
+                              </b>
+                              {isCurrentKata ? (
+                                currentCard.reading && currentCard.reading !== currentCard.term && (
+                                  <span className="text-indigo-300 font-bold">({currentCard.reading})</span>
+                                )
+                              ) : (
+                                currentCard.term && currentCard.reading && currentCard.term !== currentCard.reading && (
+                                  <span className="text-amber-400 font-bold">({currentCard.term})</span>
+                                )
+                              )}
+                              {currentCard.romaji && (
+                                <span className="text-slate-400 font-mono">[{currentCard.romaji}]</span>
+                              )}
+                            </>
                           ) : (
-                            currentCard.term && currentCard.reading && currentCard.term !== currentCard.reading && (
-                              <span className="text-amber-400 font-bold">({currentCard.term})</span>
-                            )
+                            <b className="text-white text-base">{currentCard.definition}</b>
                           )}
-                          {currentCard.romaji && (
-                            <span className="text-slate-400 font-mono">[{currentCard.romaji}]</span>
-                          )}
-                        </>
-                      ) : (
-                        <b className="text-white text-base">{currentCard.definition}</b>
+                        </div>
                       )}
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => speakJapanese(currentCard.reading || currentCard.term)}
-                    className="p-2 rounded-xl bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white transition-colors cursor-pointer"
-                    title="Phát âm từ này"
-                  >
-                    <Volume2 className="w-4 h-4" />
-                  </button>
-
-                  {!isCorrect && (
+                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
                     <button
                       type="button"
-                      onClick={handleRetrySame}
-                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 cursor-pointer"
+                      onClick={() => speakJapanese(currentCard.reading || currentCard.term)}
+                      className="p-2 rounded-xl bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                      title="Phát âm từ này"
                     >
-                      Gõ lại
+                      <Volume2 className="w-4 h-4" />
                     </button>
-                  )}
 
-                  <button
-                    type="button"
-                    onClick={handleNextCard}
-                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white flex items-center gap-1 cursor-pointer shadow-md"
-                  >
-                    <span>Tiếp (Enter)</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
+                    {!isCorrect && (
+                      <button
+                        type="button"
+                        onClick={handleRetrySame}
+                        className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-indigo-600 text-xs font-bold text-white border border-slate-700 hover:border-indigo-500 transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
+                        title="Giữ nguyên chữ đã gõ và sửa lại vị trí sai"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Sửa lại</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleNextCard}
+                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white flex items-center gap-1 cursor-pointer shadow-md"
+                    >
+                      <span>Tiếp (Enter)</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
+
+                {/* Detailed Error Diff View */}
+                {!isCorrect && (
+                  <div className="pt-2 border-t border-rose-900/50 text-left">
+                    {(() => {
+                      const targetTextForDiff = isExampleMode
+                        ? (currentCard.example || '')
+                        : direction === 'kanji-to-reading'
+                        ? (currentCard.reading || currentCard.term || '')
+                        : direction === 'vi-to-jp'
+                        ? (isCurrentKata ? currentCard.term : (currentCard.reading || currentCard.term || ''))
+                        : (currentCard.definition || '');
+
+                      const diff = computeJapaneseDiff(inputVal, targetTextForDiff);
+                      return (
+                        <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2">
+                          {diff.firstErrorHint && (
+                            <div className="text-amber-300 font-bold bg-amber-950/40 px-2.5 py-1.5 rounded-xl border border-amber-800/40 flex items-center gap-1.5 text-xs">
+                              <span>💡 Điểm sai:</span>
+                              <span>{diff.firstErrorHint}</span>
+                            </div>
+                          )}
+                          <div className="space-y-1.5 text-xs font-mono">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-slate-400 text-[11px] font-bold select-none">Bạn đã gõ:</span>
+                              <div className="inline-flex flex-wrap items-center bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-800">
+                                {diff.userParts.map((p, idx) => (
+                                  <span
+                                    key={idx}
+                                    className={
+                                      p.type === 'wrong'
+                                        ? 'bg-rose-600 text-white font-black px-1 rounded shadow-xs line-through decoration-rose-200'
+                                        : 'text-emerald-300 font-bold'
+                                    }
+                                  >
+                                    {p.text}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-slate-400 text-[11px] font-bold select-none">Đáp án chuẩn:</span>
+                              <div className="inline-flex flex-wrap items-center bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-800">
+                                {diff.targetParts.map((p, idx) => (
+                                  <span
+                                    key={idx}
+                                    className={
+                                      p.type === 'missing'
+                                        ? 'bg-amber-400 text-slate-950 font-black px-1 rounded shadow-xs'
+                                        : 'text-slate-200 font-bold'
+                                    }
+                                  >
+                                    {p.text}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
             )}
 

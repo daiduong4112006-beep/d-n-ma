@@ -27,6 +27,7 @@ import {
 } from '../../utils/japaneseKanjiConverter';
 import { JPD123_GRAMMAR_POINTS, JapaneseGrammarPoint } from '../../data/jpd123Grammar';
 import { JapaneseGrammarAiModal } from './JapaneseGrammarAiModal';
+import { computeJapaneseDiff, DiffPart } from '../../utils/japaneseDiff';
 
 export interface GrammarPracticeExample {
   japanese: string;
@@ -255,23 +256,24 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
   };
 
   const handleRetrySame = () => {
+    const failedA = !correctA;
+    const failedB = !correctB;
     setIsAnswerChecked(false);
     setIsCorrect(null);
     setCorrectA(null);
     setCorrectB(null);
-    if (parsed.isDialogue) {
-      if (!correctA) setInputA('');
-      if (!correctB) setInputB('');
-      setTimeout(() => {
-        if (!correctA) inputARef.current?.focus();
-        else inputBRef.current?.focus();
-      }, 30);
-    } else {
-      setSingleInput('');
-      setTimeout(() => {
+    // PRESERVE user input: do NOT clear singleInput, inputA, or inputB!
+    setTimeout(() => {
+      if (parsed.isDialogue) {
+        if (failedA && inputARef.current) {
+          inputARef.current.focus();
+        } else if (failedB && inputBRef.current) {
+          inputBRef.current.focus();
+        }
+      } else {
         singleInputRef.current?.focus();
-      }, 30);
-    }
+      }
+    }, 40);
   };
 
   // Keyboard navigation
@@ -883,83 +885,246 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
             {/* Answer Checked Feedback Box */}
             {isAnswerChecked && (
               <div
-                className={`p-4 rounded-3xl border flex flex-col sm:flex-row items-center justify-between gap-3 text-sm animate-in fade-in zoom-in-95 duration-150 ${
+                className={`p-4 rounded-3xl border flex flex-col gap-3 text-sm animate-in fade-in zoom-in-95 duration-150 ${
                   isCorrect
                     ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300'
                     : 'bg-rose-950/60 border-rose-500/50 text-rose-300'
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  {isCorrect ? (
-                    <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />
-                  ) : (
-                    <AlertCircle className="w-6 h-6 text-rose-400 shrink-0" />
-                  )}
-                  <div className="text-left space-y-1">
-                    <span className="font-black text-base block">
-                      {isCorrect ? 'Chính xác! 🎉' : 'Chưa chính xác!'}
-                    </span>
-                    <div className="text-xs text-slate-200">
-                      <span className="font-bold text-slate-400 mr-2">Đáp án chuẩn:</span>
-                      {parsed.isDialogue ? (
-                        <div className="space-y-0.5 mt-1 font-mono text-xs sm:text-sm">
-                          <div className="text-indigo-300 font-bold">
-                            A: {parsed.partA?.japanese}
-                          </div>
-                          <div className="text-emerald-300 font-bold">
-                            B: {parsed.partB?.japanese}
-                          </div>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-start sm:items-center gap-3">
+                    {isCorrect ? (
+                      <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0 mt-0.5 sm:mt-0" />
+                    ) : (
+                      <AlertCircle className="w-6 h-6 text-rose-400 shrink-0 mt-0.5 sm:mt-0" />
+                    )}
+                    <div className="text-left space-y-1">
+                      <span className="font-black text-base block">
+                        {isCorrect ? 'Chính xác! 🎉' : 'Chưa chính xác! Hãy xem vị trí bị sai:'}
+                      </span>
+                      {isCorrect && (
+                        <div className="text-xs text-slate-200">
+                          <span className="font-bold text-slate-400 mr-2">Đáp án:</span>
+                          <b className="text-white text-base">{currentItem.japanese}</b>
                         </div>
-                      ) : (
-                        <b className="text-white text-base">{currentItem.japanese}</b>
                       )}
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => speakJapanese(currentItem.japanese)}
-                    className="p-2 rounded-xl bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white transition-colors cursor-pointer"
-                    title="Phát âm câu này"
-                  >
-                    <Volume2 className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAiContextSentence(currentItem.japanese);
-                      setShowAiModal(true);
-                      sound.playClick();
-                    }}
-                    className="px-3 py-1.5 rounded-xl bg-purple-900/60 hover:bg-purple-600 text-purple-200 hover:text-white border border-purple-600/50 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
-                    title="Hỏi trợ lý AI giải thích câu này"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-purple-300" />
-                    <span>Hỏi AI</span>
-                  </button>
-
-                  {!isCorrect && (
+                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
                     <button
                       type="button"
-                      onClick={handleRetrySame}
-                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 cursor-pointer"
+                      onClick={() => speakJapanese(currentItem.japanese)}
+                      className="p-2 rounded-xl bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                      title="Phát âm câu này"
                     >
-                      Gõ lại
+                      <Volume2 className="w-4 h-4" />
                     </button>
-                  )}
 
-                  <button
-                    type="button"
-                    onClick={handleNext}
-                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white flex items-center gap-1 cursor-pointer shadow-md"
-                  >
-                    <span>Tiếp (Enter)</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAiContextSentence(currentItem.japanese);
+                        setShowAiModal(true);
+                        sound.playClick();
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-purple-900/60 hover:bg-purple-600 text-purple-200 hover:text-white border border-purple-600/50 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                      title="Hỏi trợ lý AI giải thích câu này"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-purple-300" />
+                      <span>Hỏi AI</span>
+                    </button>
+
+                    {!isCorrect && (
+                      <button
+                        type="button"
+                        onClick={handleRetrySame}
+                        className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-indigo-600 text-xs font-bold text-white border border-slate-700 hover:border-indigo-500 transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
+                        title="Giữ nguyên chữ đã gõ và sửa lại vị trí sai"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Sửa lại</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleNext}
+                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white flex items-center gap-1 cursor-pointer shadow-md"
+                    >
+                      <span>Tiếp (Enter)</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
+
+                {/* Detailed Error Diff Highlighting when wrong */}
+                {!isCorrect && (
+                  <div className="pt-2 border-t border-rose-900/50 text-left">
+                    {parsed.isDialogue ? (
+                      <div className="space-y-2.5">
+                        {!correctA && parsed.partA?.japanese && (
+                          <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-1.5">
+                            <div className="text-[11px] font-black uppercase text-indigo-400 tracking-wider">
+                              Câu A (Hỏi):
+                            </div>
+                            {(() => {
+                              const diffA = computeJapaneseDiff(inputA, parsed.partA?.japanese || '');
+                              return (
+                                <div className="space-y-1.5 text-xs font-mono">
+                                  {diffA.firstErrorHint && (
+                                    <div className="text-amber-300 font-bold bg-amber-950/40 px-2 py-1 rounded-lg border border-amber-800/40">
+                                      💡 {diffA.firstErrorHint}
+                                    </div>
+                                  )}
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    <span className="text-slate-400 text-[11px] font-bold select-none">Bạn gõ:</span>
+                                    <div className="inline-flex flex-wrap items-center bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
+                                      {diffA.userParts.map((p, idx) => (
+                                        <span
+                                          key={idx}
+                                          className={
+                                            p.type === 'wrong'
+                                              ? 'bg-rose-600 text-white font-black px-1 rounded shadow-xs line-through decoration-rose-200'
+                                              : 'text-emerald-300'
+                                          }
+                                        >
+                                          {p.text}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    <span className="text-slate-400 text-[11px] font-bold select-none">Đáp án:</span>
+                                    <div className="inline-flex flex-wrap items-center bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
+                                      {diffA.targetParts.map((p, idx) => (
+                                        <span
+                                          key={idx}
+                                          className={
+                                            p.type === 'missing'
+                                              ? 'bg-amber-400 text-slate-950 font-black px-1 rounded shadow-xs'
+                                              : 'text-slate-200'
+                                          }
+                                        >
+                                          {p.text}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
+
+                        {!correctB && parsed.partB?.japanese && (
+                          <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-1.5">
+                            <div className="text-[11px] font-black uppercase text-emerald-400 tracking-wider">
+                              Câu B (Đáp):
+                            </div>
+                            {(() => {
+                              const diffB = computeJapaneseDiff(inputB, parsed.partB?.japanese || '');
+                              return (
+                                <div className="space-y-1.5 text-xs font-mono">
+                                  {diffB.firstErrorHint && (
+                                    <div className="text-amber-300 font-bold bg-amber-950/40 px-2 py-1 rounded-lg border border-amber-800/40">
+                                      💡 {diffB.firstErrorHint}
+                                    </div>
+                                  )}
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    <span className="text-slate-400 text-[11px] font-bold select-none">Bạn gõ:</span>
+                                    <div className="inline-flex flex-wrap items-center bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
+                                      {diffB.userParts.map((p, idx) => (
+                                        <span
+                                          key={idx}
+                                          className={
+                                            p.type === 'wrong'
+                                              ? 'bg-rose-600 text-white font-black px-1 rounded shadow-xs line-through decoration-rose-200'
+                                              : 'text-emerald-300'
+                                          }
+                                        >
+                                          {p.text}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    <span className="text-slate-400 text-[11px] font-bold select-none">Đáp án:</span>
+                                    <div className="inline-flex flex-wrap items-center bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
+                                      {diffB.targetParts.map((p, idx) => (
+                                        <span
+                                          key={idx}
+                                          className={
+                                            p.type === 'missing'
+                                              ? 'bg-amber-400 text-slate-950 font-black px-1 rounded shadow-xs'
+                                              : 'text-slate-200'
+                                          }
+                                        >
+                                          {p.text}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      /* Single sentence error diff */
+                      <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2">
+                        {(() => {
+                          const diff = computeJapaneseDiff(singleInput, currentItem.japanese);
+                          return (
+                            <div className="space-y-1.5 text-xs font-mono">
+                              {diff.firstErrorHint && (
+                                <div className="text-amber-300 font-bold bg-amber-950/40 px-2.5 py-1.5 rounded-xl border border-amber-800/40 flex items-center gap-1.5">
+                                  <span>💡 Điểm sai:</span>
+                                  <span>{diff.firstErrorHint}</span>
+                                </div>
+                              )}
+                              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                <span className="text-slate-400 text-[11px] font-bold select-none">Bạn đã gõ:</span>
+                                <div className="inline-flex flex-wrap items-center bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-800">
+                                  {diff.userParts.map((p, idx) => (
+                                    <span
+                                      key={idx}
+                                      className={
+                                        p.type === 'wrong'
+                                          ? 'bg-rose-600 text-white font-black px-1 rounded shadow-xs line-through decoration-rose-200'
+                                          : 'text-emerald-300 font-bold'
+                                      }
+                                    >
+                                      {p.text}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                <span className="text-slate-400 text-[11px] font-bold select-none">Đáp án chuẩn:</span>
+                                <div className="inline-flex flex-wrap items-center bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-800">
+                                  {diff.targetParts.map((p, idx) => (
+                                    <span
+                                      key={idx}
+                                      className={
+                                        p.type === 'missing'
+                                          ? 'bg-amber-400 text-slate-950 font-black px-1 rounded shadow-xs'
+                                          : 'text-slate-200 font-bold'
+                                      }
+                                    >
+                                      {p.text}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
