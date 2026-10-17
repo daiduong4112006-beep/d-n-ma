@@ -974,19 +974,28 @@ export function getJapaneseCourses(email?: string | null): JapaneseCourse[] {
             const existingIdx = jpdCourse.grammarPoints.findIndex((g: JapaneseGrammarPoint) => g.id === defGp.id);
             if (existingIdx !== -1) {
               const existing = jpdCourse.grammarPoints[existingIdx];
-              if (
+              const needsExampleSync = !existing.examples || existing.examples.length < defGp.examples.length;
+              const needsStructureSync =
                 (defGp.id === 'g-b4-1' && !existing.structure.includes('Trả lời')) ||
                 (defGp.id === 'g-b4-2' && !existing.structure.includes('Danh từ')) ||
                 (defGp.id === 'g-b5-4' && !existing.structure.includes('Trả lời')) ||
-                (defGp.id === 'g-b6-2' && !existing.structure.includes('Đồng ý'))
-              ) {
+                (defGp.id === 'g-b6-2' && !existing.structure.includes('Đồng ý'));
+
+              if (needsExampleSync || needsStructureSync) {
                 jpdCourse.grammarPoints[existingIdx] = {
                   ...existing,
                   structure: defGp.structure,
                   title: defGp.title,
+                  explanation: defGp.explanation,
+                  meaning: defGp.meaning,
+                  examples: defGp.examples,
+                  updatedAt: defGp.updatedAt,
                 };
                 changed = true;
               }
+            } else {
+              jpdCourse.grammarPoints.push(defGp);
+              changed = true;
             }
           }
         }
