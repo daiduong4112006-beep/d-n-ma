@@ -58,6 +58,7 @@ export interface JapaneseGrammarPoint {
   explanation?: string;   // Chi tiết giải thích
   examples?: { japanese: string; reading?: string; vietnamese: string }[];
   attachedFiles?: AttachedFile[]; // Nhét file tài liệu vào ngữ pháp
+  isCustom?: boolean;            // Đánh dấu người dùng đã chỉnh sửa thủ công
   createdAt: string;
   updatedAt: string;
 }
@@ -82,6 +83,7 @@ export interface JapaneseCourse {
   level?: 'N5' | 'N4' | 'N3' | 'N2' | 'N1' | 'Cơ bản' | 'Khác';
   createdAt: string;
   updatedAt: string;
+  grammarVersion?: string;             // Phiên bản dữ liệu ngữ pháp mặc định
   lessons: JapaneseLesson[];          // 1. Từ vựng (12 bài học 4.1 - 7.3)
   kanjiList: JapaneseKanjiCard[];     // 2. Chữ Hán (Kanji Core)
   kanjiVocabList?: JapaneseVocabCard[]; // 2. Từ vựng Chữ Hán (Kanji Compound Vocab)

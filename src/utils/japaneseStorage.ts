@@ -898,6 +898,8 @@ export function updateJapaneseCardMastery(lessonId: string, cardId: string, mast
 // Japanese Courses Management (e.g. JPD123)
 // ---------------------------------------------------------------------------
 
+export const JPD123_GRAMMAR_VERSION = '20261018_v2_vocab_audit';
+
 export const DEFAULT_JPD123_COURSE: JapaneseCourse = {
   id: 'course-jpd123',
   code: 'JPD 123',
@@ -906,6 +908,7 @@ export const DEFAULT_JPD123_COURSE: JapaneseCourse = {
   level: 'N5',
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
+  grammarVersion: JPD123_GRAMMAR_VERSION,
   lessons: JPD123_VOCAB_LESSONS,
   kanjiList: ALL_KANJI_CORE_LIST,
   kanjiVocabList: ALL_KANJI_VOCAB_LIST,
@@ -917,6 +920,7 @@ export const DEFAULT_JPD123_COURSE: JapaneseCourse = {
 export function getCleanDefaultJpdCourse(): JapaneseCourse {
   return {
     ...DEFAULT_JPD123_COURSE,
+    grammarVersion: JPD123_GRAMMAR_VERSION,
     lessons: (DEFAULT_JPD123_COURSE.lessons || []).map((l) => ({
       ...l,
       timesPracticed: 0,
@@ -938,38 +942,36 @@ export function ensureJpdCourseUpToDate(course: JapaneseCourse): { course: Japan
 
   if (!updated.grammarPoints || updated.grammarPoints.length <= 1) {
     updated.grammarPoints = JPD123_GRAMMAR_POINTS;
+    updated.grammarVersion = JPD123_GRAMMAR_VERSION;
     changed = true;
   } else {
     const nextGrammar = [...updated.grammarPoints];
+    const isVersionOutdated = updated.grammarVersion !== JPD123_GRAMMAR_VERSION;
+
     for (const defGp of JPD123_GRAMMAR_POINTS) {
       const existingIdx = nextGrammar.findIndex((g: JapaneseGrammarPoint) => g.id === defGp.id);
       if (existingIdx !== -1) {
         const existing = nextGrammar[existingIdx];
-        const needsExampleSync = !existing.examples || existing.examples.length < defGp.examples.length;
-        const needsStructureSync =
-          (defGp.id === 'g-b4-1' && !existing.structure.includes('Trả lời')) ||
-          (defGp.id === 'g-b4-2' && !existing.structure.includes('Danh từ')) ||
-          (defGp.id === 'g-b5-4' && !existing.structure.includes('Trả lời')) ||
-          (defGp.id === 'g-b6-2' && !existing.structure.includes('Đồng ý'));
-
-        if (needsExampleSync || needsStructureSync) {
+        // If course grammar version is outdated and the user has NOT custom-edited this point:
+        // Safely sync to the audited clean vocabulary version while preserving any attached files
+        if (isVersionOutdated && !existing.isCustom) {
           nextGrammar[existingIdx] = {
-            ...existing,
-            structure: defGp.structure,
-            title: defGp.title,
-            explanation: defGp.explanation,
-            meaning: defGp.meaning,
-            examples: defGp.examples,
-            updatedAt: defGp.updatedAt,
+            ...defGp,
+            attachedFiles: existing.attachedFiles || defGp.attachedFiles,
           };
           changed = true;
         }
       } else {
+        // Missing grammar point -> add it
         nextGrammar.push(defGp);
         changed = true;
       }
     }
     updated.grammarPoints = nextGrammar;
+    if (isVersionOutdated) {
+      updated.grammarVersion = JPD123_GRAMMAR_VERSION;
+      changed = true;
+    }
   }
 
   const hasOldKanjiLessons =

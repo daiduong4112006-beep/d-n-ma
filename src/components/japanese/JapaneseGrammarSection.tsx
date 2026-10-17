@@ -445,6 +445,7 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
           ? {
               ...gp,
               attachedFiles: [...(gp.attachedFiles || []), ...newFiles],
+              isCustom: true,
               updatedAt: new Date().toISOString(),
             }
           : gp
@@ -483,6 +484,7 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
               lessonTag: formData.lessonTag.trim() || undefined,
               examples: cleanExamples,
               attachedFiles: formData.attachedFiles,
+              isCustom: true,
               updatedAt: new Date().toISOString(),
             }
           : gp
@@ -498,6 +500,7 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
         lessonTag: formData.lessonTag.trim() || undefined,
         examples: cleanExamples,
         attachedFiles: formData.attachedFiles,
+        isCustom: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
