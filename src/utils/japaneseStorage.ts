@@ -1005,12 +1005,35 @@ export function ensureJpdCourseUpToDate(course: JapaneseCourse): { course: Japan
   }
 
   if (Array.isArray(updated.lessons)) {
+    // Lookup map for standard lesson cards to enrich example and exampleMeaning
+    const defaultCardsMap = new Map<string, JapaneseVocabCard>();
+    for (const l of JPD123_VOCAB_LESSONS) {
+      for (const c of l.cards || []) {
+        defaultCardsMap.set(c.id, c);
+        if (!defaultCardsMap.has(c.term)) {
+          defaultCardsMap.set(c.term, c);
+        }
+      }
+    }
+
     for (const lesson of updated.lessons) {
       for (const card of lesson.cards || []) {
         const isKata = /[\u30A0-\u30FF]/.test(card.term) && !/[\u4E00-\u9FAF]/.test(card.term);
         if (isKata && (!card.reading || card.reading === card.term)) {
           card.reading = katakanaToHiragana(card.term);
           changed = true;
+        }
+
+        const defCard = defaultCardsMap.get(card.id) || defaultCardsMap.get(card.term);
+        if (defCard) {
+          if (defCard.example && (!card.example || card.example !== defCard.example)) {
+            card.example = defCard.example;
+            changed = true;
+          }
+          if (defCard.exampleMeaning && (!card.exampleMeaning || card.exampleMeaning !== defCard.exampleMeaning)) {
+            card.exampleMeaning = defCard.exampleMeaning;
+            changed = true;
+          }
         }
       }
     }

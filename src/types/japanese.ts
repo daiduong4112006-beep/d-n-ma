@@ -4,7 +4,8 @@ export interface JapaneseVocabCard {
   reading?: string;       // Hiragana / Katakana reading (e.g. でんしゃ)
   romaji?: string;        // Romaji (e.g. densha)
   definition: string;    // Vietnamese meaning (e.g. Tàu điện)
-  example?: string;       // Example sentence / context (e.g. Lên tàu điện.)
+  example?: string;       // Example sentence / context in Japanese (e.g. 電車で会社へ行きます。)
+  exampleMeaning?: string; // Vietnamese meaning of the example sentence (e.g. Đi đến công ty bằng tàu điện.)
   partOfSpeech?: string;  // e.g. Danh từ, Động từ, Tính từ
   imageUrl?: string;      // Optional image
   mastered?: boolean;

@@ -324,12 +324,169 @@ const SORTED_KANJI_KEYS = Object.keys(KANJI_TO_HIRAGANA_DICT).sort(
 );
 
 /**
- * Converts all known Kanji words/compounds in a sentence to Hiragana.
- * Leaves Hiragana, Katakana, Romaji, and numbers intact.
+ * Comprehensive dictionary of Japanese number and counter compounds (Arabic digits + Kanji) mapped to Hiragana.
+ * Ensures typing "10分", "10ふん", "10ぷん", or "じゅっぷん" / "じっぷん" all match seamlessly!
+ */
+export const NUMBER_COUNTERS_TO_HIRAGANA: Record<string, string> = {
+  // Khoảng thời gian: Phút (分, ぷん, ふん)
+  '10分': 'じゅっぷん', '10ぷん': 'じゅっぷん', '10ふん': 'じゅっぷん', '十分': 'じゅっぷん',
+  '20分': 'にじゅっぷん', '20ぷん': 'にじゅっぷん', '20ふん': 'にじゅっぷん', '二十分': 'にじゅっぷん',
+  '30分': 'さんじゅっぷん', '30ぷん': 'さんじゅっぷん', '30ふん': 'さんじゅっぷん', '三十分': 'さんじゅっぷん',
+  '40分': 'よんじゅっぷん', '40ぷん': 'よんじゅっぷん', '40ふん': 'よんじゅっぷん', '四十分': 'よんじゅっぷん',
+  '50分': 'ごじゅっぷん', '50ぷん': 'ごじゅっぷん', '50ふん': 'ごじゅっぷん', '五十分': 'ごじゅっぷん',
+  '15分': 'じゅうごふん', '15ぷん': 'じゅうごふん', '15ふん': 'じゅうごふん', '十五分': 'じゅうごふん',
+  '25分': 'にじゅうごふん', '25ぷん': 'にじゅうごふん', '25ふん': 'にじゅうごふん', '二十五分': 'にじゅうごふん',
+  '35分': 'さんじゅうごふん', '35ぷん': 'さんじゅうごふん', '35ふん': 'さんじゅうごふん',
+  '45分': 'よんじゅうごふん', '45ぷん': 'よんじゅうごふん', '45ふん': 'よんじゅうごふん',
+  '55分': 'ごじゅうごふん', '55ぷん': 'ごじゅうごふん', '55ふん': 'ごじゅうごふん',
+  '1分': 'いっぷん', '1ぷん': 'いっぷん', '1ふん': 'いっぷん', '一分': 'いっぷん',
+  '2分': 'にふん', '2ぷん': 'にふん', '2ふん': 'にふん', '二分': 'にふん',
+  '3分': 'さんぷん', '3ぷん': 'さんぷん', '3ふん': 'さんぷん', '三分': 'さんぷん',
+  '4分': 'よんぷん', '4ぷん': 'よんぷん', '4ふん': 'よんぷん', '四分': 'よんぷん',
+  '5分': 'ごふん', '5ぷん': 'ごふん', '5ふん': 'ごふん', '五分': 'ごふん',
+  '6分': 'ろっぷん', '6ぷん': 'ろっぷん', '6ふん': 'ろっぷん', '六分': 'ろっぷん',
+  '7分': 'ななふん', '7ぷん': 'ななふん', '7ふん': 'ななふん', '七分': 'ななふん',
+  '8分': 'はっぷん', '8ぷん': 'はっぷん', '8ふん': 'はっぷん', '八分': 'はっぷん',
+  '9分': 'きゅうふん', '9ぷん': 'きゅうふん', '9ふん': 'きゅうふん', '九分': 'きゅうふん',
+
+  // Khoảng thời gian: Tiếng / Giờ đồng hồ (時間, じかん)
+  '1時間半': 'いちじかんはん', '1じかんはん': 'いちじかんはん', '一時間半': 'いちじかんはん',
+  '2時間半': 'にじかんはん', '2じかんはん': 'にじかんはん', '二時間半': 'にじかんはん',
+  '3時間半': 'さんじかんはん', '3じかんはん': 'さんじかんはん', '三時間半': 'さんじかんはん',
+  '4時間半': 'よじかんはん', '4じかんはん': 'よじかんはん', '四時間半': 'よじかんはん',
+  '5時間半': 'ごじかんはん', '5じかんはん': 'ごじかんはん', '五時間半': 'ごじかんはん',
+  '1時間': 'いちじかん', '1じかん': 'いちじかん', '一時間': 'いちじかん',
+  '2時間': 'にじかん', '2じかん': 'にじかん', '二時間': 'にじかん',
+  '3時間': 'さんじかん', '3じかん': 'さんじかん', '三時間': 'さんじかん',
+  '4時間': 'よじかん', '4じかん': 'よじかん', '四時間': 'よじかん',
+  '5時間': 'ごじかん', '5じかん': 'ごじかん', '五時間': 'ごじかん',
+  '6時間': 'ろくじかん', '6じかん': 'ろくじかん', '六時間': 'ろくじかん',
+  '7時間': 'しちじかん', '7じかん': 'しちじかん', '七時間': 'しちじかん',
+  '8時間': 'はちじかん', '8じかん': 'はちじかん', '八時間': 'はちじかん',
+  '9時間': 'くじかん', '9じかん': 'くじかん', '九時間': 'くじかん',
+  '10時間': 'じゅうじかん', '10じかん': 'じゅうじかん', '十時間': 'じゅうじかん',
+
+  // Giờ thời khắc (時, じ)
+  '1時半': 'いちじはん', '1じはん': 'いちじはん', '一時半': 'いちじはん',
+  '2時半': 'にじはん', '2じはん': 'にじはん', '二時半': 'にじはん',
+  '3時半': 'さんじはん', '3じはん': 'さんじはん', '三時半': 'さんじはん',
+  '4時半': 'よじはん', '4じはん': 'よじはん', '四時半': 'よじはん',
+  '5時半': 'ごじはん', '5じはん': 'ごじはん', '五時半': 'ごじはん',
+  '6時半': 'ろくじはん', '6じはん': 'ろくじはん', '六時半': 'ろくじはん',
+  '7時半': 'しちじはん', '7じはん': 'しちじはん', '七時半': 'しちじはん',
+  '8時半': 'はちじはん', '8じはん': 'はちじはん', '八時半': 'はちじはん',
+  '9時半': 'くじはん', '9じはん': 'くじはん', '九時半': 'くじはん',
+  '10時半': 'じゅうじはん', '10じはん': 'じゅうじはん', '十時半': 'じゅうじはん',
+  '11時半': 'じゅういちじはん', '11じはん': 'じゅういちじはん', '十一時半': 'じゅういちじはん',
+  '12時半': 'じゅうにじはん', '12じはん': 'じゅうにじはん', '十二時半': 'じゅうにじはん',
+  '1時': 'いちじ', '1じ': 'いちじ', '一時': 'いちじ',
+  '2時': 'にじ', '2じ': 'にじ', '二時': 'にじ',
+  '3時': 'さんじ', '3じ': 'さんじ', '三時': 'さんじ',
+  '4時': 'よじ', '4じ': 'よじ', '四時': 'よじ',
+  '5時': 'ごじ', '5じ': 'ごじ', '五時': 'ごじ',
+  '6時': 'ろくじ', '6じ': 'ろくじ', '六時': 'ろくじ',
+  '7時': 'しちじ', '7じ': 'しちじ', '七時': 'しちじ',
+  '8時': 'はちじ', '8じ': 'はちじ', '八時': 'はちじ',
+  '9時': 'くじ', '9じ': 'くじ', '九時': 'くじ',
+  '10時': 'じゅうじ', '10じ': 'じゅうじ', '十時': 'じゅうじ',
+  '11時': 'じゅういちじ', '11じ': 'じゅういちじ', '十一時': 'じゅういちじ',
+  '12時': 'じゅうにじ', '12じ': 'じゅうにじ', '十二時': 'じゅうにじ',
+
+  // Đếm ngày trong tháng (日, にち, か)
+  '1日': 'ついたち', '一日': 'ついたち',
+  '2日': 'ふつか', '二日': 'ふつか',
+  '3日': 'みっか', '三日': 'みっか',
+  '4日': 'よっか', '四日': 'よっか',
+  '5日': 'いつか', '五日': 'いつか',
+  '6日': 'むいか', '六日': 'むいか',
+  '7日': 'なのか', '七日': 'なのか',
+  '8日': 'ようか', '八日': 'ようか',
+  '9日': 'ここのか', '九日': 'ここのか',
+  '10日': 'とおか', '十日': 'とおか',
+  '14日': 'じゅうよっか', '十四日': 'じゅうよっか',
+  '20日': 'はつか', '二十日': 'はつか',
+  '24日': 'にじゅうよっか', '二十四日': 'にじゅうよっか',
+
+  // Tháng (月, がつ)
+  '1月': 'いちがつ', '2月': 'にがつ', '3月': 'さんがつ', '4月': 'しがつ',
+  '5月': 'ごがつ', '6月': 'ろくがつ', '7月': 'しちがつ', '8月': 'はちがつ',
+  '9月': 'くがつ', '10月': 'じゅうがつ', '11月': 'じゅういちがつ', '12月': 'じゅうにがつ',
+
+  // Đếm đồ vật (つ)
+  '1つ': 'ひとつ', '一つ': 'ひとつ',
+  '2つ': 'ふたつ', '二つ': 'ふたつ',
+  '3つ': 'みっつ', '三つ': 'みっつ',
+  '4つ': 'よっつ', '四つ': 'よっつ',
+  '5つ': 'いつつ', '五つ': 'いつつ',
+  '6つ': 'むっつ', '六つ': 'むっつ',
+  '7つ': 'ななつ', '七つ': 'ななつ',
+  '8つ': 'やっつ', '八つ': 'やっつ',
+  '9つ': 'ここのつ', '九つ': 'ここのつ',
+
+  // Đếm người (人, にん, り)
+  '1人': 'ひとり', '一人': 'ひとり',
+  '2人': 'ふたり', '二人': 'ふたり',
+  '3人': 'さんにん', '三人': 'さんにん',
+  '4人': 'よにん', '四人': 'よにん',
+  '5人': 'ごにん', '五人': 'ごにん',
+
+  // Tuổi (歳, 才, さい)
+  '20歳': 'はたち', '20才': 'はたち', '二十歳': 'はたち',
+  '1歳': 'いっさい', '1才': 'いっさい', '一歳': 'いっさい',
+  '8歳': 'はっさい', '8才': 'はっさい', '八歳': 'はっさい',
+  '10歳': 'じゅっさい', '10才': 'じゅっさい', '十歳': 'じゅっさい',
+
+  // Chữ số đơn lẻ
+  '100': 'ひゃく',
+  '10': 'じゅう',
+  '1': 'いち', '2': 'に', '3': 'さん', '4': 'よん', '5': 'ご',
+  '6': 'ろく', '7': 'なな', '8': 'はち', '9': 'きゅう', '0': 'ぜろ',
+  '一': 'いち', '二': 'に', '三': 'さん', '四': 'よん', '五': 'ご',
+  '六': 'ろく', '七': 'なな', '八': 'はち', '九': 'きゅう', '十': 'じゅう',
+};
+
+const SORTED_NUMBER_COUNTER_KEYS = Object.keys(NUMBER_COUNTERS_TO_HIRAGANA).sort(
+  (a, b) => b.length - a.length
+);
+
+export function convertNumbersAndCountersToHiragana(sentence: string): string {
+  if (!sentence) return '';
+  let result = sentence;
+  for (const key of SORTED_NUMBER_COUNTER_KEYS) {
+    if (result.includes(key)) {
+      result = result.split(key).join(NUMBER_COUNTERS_TO_HIRAGANA[key]);
+    }
+  }
+  return result;
+}
+
+export function normalizePhoneticVariations(str: string): string {
+  if (!str) return '';
+  return str
+    // 10 phút, 20 phút, 30 phút... cho phép cả じっぷん lẫn じゅっぷん
+    .replace(/じっぷん/g, 'じゅっぷん')
+    // 7 giờ, 7 tiếng cho phép cả ななじ / しちじ
+    .replace(/ななじかん/g, 'しちじかん')
+    .replace(/ななじ/g, 'しちじ')
+    // 7 phút: しちふん / ななふん
+    .replace(/しちふん/g, 'ななふん')
+    // 8 phút: はちふん / はっぷん
+    .replace(/はちふん/g, 'はっぷん')
+    // 9 giờ: きゅうじ -> くじ
+    .replace(/きゅうじ/g, 'くじ')
+    // 4 giờ: よんじ -> よじ
+    .replace(/よんじ/g, 'よじ');
+}
+
+/**
+ * Converts all known Kanji words/compounds and numbers/counters in a sentence to Hiragana.
+ * Leaves Hiragana, Katakana, and Romaji intact.
  */
 export function convertKanjiToHiragana(sentence: string): string {
   if (!sentence) return '';
   let result = sentence;
+  // Convert number + counter combinations first (longer patterns first)!
+  result = convertNumbersAndCountersToHiragana(result);
   for (const kanji of SORTED_KANJI_KEYS) {
     if (result.includes(kanji)) {
       result = result.split(kanji).join(KANJI_TO_HIRAGANA_DICT[kanji]);
@@ -340,24 +497,28 @@ export function convertKanjiToHiragana(sentence: string): string {
 
 /**
  * Normalizes Japanese text for grammar comparison:
- * - Converts Kanji to Hiragana
+ * - Converts Kanji and numbers/counters to Hiragana
+ * - Converts Katakana to Hiragana for flexible matching
+ * - Normalizes phonetic variations (e.g. じっぷん vs じゅっぷん)
  * - Removes tildes (~, ～, 〜)
  * - Removes spaces and Japanese/English punctuation (。, 、, ?, !, :, ;)
- * - Converts Katakana to Hiragana for flexible matching
  */
 export function normalizeGrammarText(str: string): string {
   if (!str) return '';
 
-  // 1. Convert Kanji to Hiragana
+  // 1. Convert Kanji and numbers/counters to Hiragana
   let s = convertKanjiToHiragana(str);
 
   // 2. Convert Katakana to Hiragana so both Katakana and Hiragana match seamlessly!
   s = katakanaToHiragana(s);
 
-  // 3. Remove tildes and wave dashes
+  // 3. Normalize phonetic variations (e.g. じっぷん <-> じゅっぷん)
+  s = normalizePhoneticVariations(s);
+
+  // 4. Remove tildes and wave dashes
   s = s.replace(/[~～〜⁓〰^]/g, '');
 
-  // 4. Remove punctuation, dialogue tags, and whitespaces
+  // 5. Remove punctuation, dialogue tags, and whitespaces
   s = s.replace(/^[AB][：:]\s*/i, '');
   s = s.replace(/[\s\-_—–.,/／()（）[\]{}<>《》「」『』・、。!?:;"'‘’“”]/g, '');
 
