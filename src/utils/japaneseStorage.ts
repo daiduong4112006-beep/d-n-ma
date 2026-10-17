@@ -928,6 +928,97 @@ export function getCleanDefaultJpdCourse(): JapaneseCourse {
   };
 }
 
+// Ensures JPD123 course always has the latest grammar points, examples, vocabulary, and kanji
+export function ensureJpdCourseUpToDate(course: JapaneseCourse): { course: JapaneseCourse; changed: boolean } {
+  if (!course || (course.id !== 'course-jpd123' && course.code?.toLowerCase().replace(/\s+/g, '') !== 'jpd123')) {
+    return { course, changed: false };
+  }
+  let changed = false;
+  const updated: JapaneseCourse = { ...course };
+
+  if (!updated.grammarPoints || updated.grammarPoints.length <= 1) {
+    updated.grammarPoints = JPD123_GRAMMAR_POINTS;
+    changed = true;
+  } else {
+    const nextGrammar = [...updated.grammarPoints];
+    for (const defGp of JPD123_GRAMMAR_POINTS) {
+      const existingIdx = nextGrammar.findIndex((g: JapaneseGrammarPoint) => g.id === defGp.id);
+      if (existingIdx !== -1) {
+        const existing = nextGrammar[existingIdx];
+        const needsExampleSync = !existing.examples || existing.examples.length < defGp.examples.length;
+        const needsStructureSync =
+          (defGp.id === 'g-b4-1' && !existing.structure.includes('Trả lời')) ||
+          (defGp.id === 'g-b4-2' && !existing.structure.includes('Danh từ')) ||
+          (defGp.id === 'g-b5-4' && !existing.structure.includes('Trả lời')) ||
+          (defGp.id === 'g-b6-2' && !existing.structure.includes('Đồng ý'));
+
+        if (needsExampleSync || needsStructureSync) {
+          nextGrammar[existingIdx] = {
+            ...existing,
+            structure: defGp.structure,
+            title: defGp.title,
+            explanation: defGp.explanation,
+            meaning: defGp.meaning,
+            examples: defGp.examples,
+            updatedAt: defGp.updatedAt,
+          };
+          changed = true;
+        }
+      } else {
+        nextGrammar.push(defGp);
+        changed = true;
+      }
+    }
+    updated.grammarPoints = nextGrammar;
+  }
+
+  const hasOldKanjiLessons =
+    !updated.lessons ||
+    updated.lessons.length <= 4 ||
+    updated.lessons.some((l: JapaneseLesson) => l.id.startsWith('lesson-jpd123-l'));
+  if (hasOldKanjiLessons) {
+    updated.lessons = JPD123_VOCAB_LESSONS;
+    changed = true;
+  }
+
+  if (!updated.kanjiList || updated.kanjiList.length < ALL_KANJI_CORE_LIST.length) {
+    updated.kanjiList = ALL_KANJI_CORE_LIST;
+    changed = true;
+  }
+
+  if (!updated.kanjiVocabList || updated.kanjiVocabList.length < ALL_KANJI_VOCAB_LIST.length) {
+    updated.kanjiVocabList = ALL_KANJI_VOCAB_LIST;
+    changed = true;
+  }
+
+  if (updated.materials === undefined) {
+    updated.materials = JPD123_MATERIALS;
+    changed = true;
+  } else if (Array.isArray(updated.deletedMaterialIds) && updated.deletedMaterialIds.length > 0) {
+    const beforeCount = updated.materials.length;
+    updated.materials = updated.materials.filter(
+      (m: JapaneseMaterial) => !updated.deletedMaterialIds!.includes(m.id)
+    );
+    if (updated.materials.length !== beforeCount) {
+      changed = true;
+    }
+  }
+
+  if (Array.isArray(updated.lessons)) {
+    for (const lesson of updated.lessons) {
+      for (const card of lesson.cards || []) {
+        const isKata = /[\u30A0-\u30FF]/.test(card.term) && !/[\u4E00-\u9FAF]/.test(card.term);
+        if (isKata && (!card.reading || card.reading === card.term)) {
+          card.reading = katakanaToHiragana(card.term);
+          changed = true;
+        }
+      }
+    }
+  }
+
+  return { course: updated, changed };
+}
+
 export function getJapaneseCourses(email?: string | null): JapaneseCourse[] {
   if (typeof window === 'undefined') return [];
   try {
@@ -963,84 +1054,12 @@ export function getJapaneseCourses(email?: string | null): JapaneseCourse[] {
 
       // Ensure course-jpd123 has full data for Lessons 4-7 or restore if deleted
       let changed = false;
-      const jpdCourse = parsed.find((c: JapaneseCourse) => c && (c.id === 'course-jpd123' || c.code?.toLowerCase().replace(/\s+/g, '') === 'jpd123'));
-      if (jpdCourse) {
-        if (!jpdCourse.grammarPoints || jpdCourse.grammarPoints.length <= 1) {
-          jpdCourse.grammarPoints = JPD123_GRAMMAR_POINTS;
+      const jpdIdx = parsed.findIndex((c: JapaneseCourse) => c && (c.id === 'course-jpd123' || c.code?.toLowerCase().replace(/\s+/g, '') === 'jpd123'));
+      if (jpdIdx !== -1) {
+        const res = ensureJpdCourseUpToDate(parsed[jpdIdx]);
+        if (res.changed) {
+          parsed[jpdIdx] = res.course;
           changed = true;
-        } else {
-          // Synchronize default grammar points if user has older version
-          for (const defGp of JPD123_GRAMMAR_POINTS) {
-            const existingIdx = jpdCourse.grammarPoints.findIndex((g: JapaneseGrammarPoint) => g.id === defGp.id);
-            if (existingIdx !== -1) {
-              const existing = jpdCourse.grammarPoints[existingIdx];
-              const needsExampleSync = !existing.examples || existing.examples.length < defGp.examples.length;
-              const needsStructureSync =
-                (defGp.id === 'g-b4-1' && !existing.structure.includes('Trả lời')) ||
-                (defGp.id === 'g-b4-2' && !existing.structure.includes('Danh từ')) ||
-                (defGp.id === 'g-b5-4' && !existing.structure.includes('Trả lời')) ||
-                (defGp.id === 'g-b6-2' && !existing.structure.includes('Đồng ý'));
-
-              if (needsExampleSync || needsStructureSync) {
-                jpdCourse.grammarPoints[existingIdx] = {
-                  ...existing,
-                  structure: defGp.structure,
-                  title: defGp.title,
-                  explanation: defGp.explanation,
-                  meaning: defGp.meaning,
-                  examples: defGp.examples,
-                  updatedAt: defGp.updatedAt,
-                };
-                changed = true;
-              }
-            } else {
-              jpdCourse.grammarPoints.push(defGp);
-              changed = true;
-            }
-          }
-        }
-        const hasOldKanjiLessons =
-          !jpdCourse.lessons ||
-          jpdCourse.lessons.length <= 4 ||
-          jpdCourse.lessons.some((l: JapaneseLesson) => l.id.startsWith('lesson-jpd123-l'));
-        if (hasOldKanjiLessons) {
-          jpdCourse.lessons = JPD123_VOCAB_LESSONS;
-          changed = true;
-        }
-        if (!jpdCourse.kanjiList || jpdCourse.kanjiList.length < ALL_KANJI_CORE_LIST.length) {
-          jpdCourse.kanjiList = ALL_KANJI_CORE_LIST;
-          changed = true;
-        }
-        if (!jpdCourse.kanjiVocabList || jpdCourse.kanjiVocabList.length < ALL_KANJI_VOCAB_LIST.length) {
-          jpdCourse.kanjiVocabList = ALL_KANJI_VOCAB_LIST;
-          changed = true;
-        }
-        if (jpdCourse.materials === undefined) {
-          jpdCourse.materials = JPD123_MATERIALS;
-          changed = true;
-        } else {
-          // Respect user-deleted materials: filter out any in deletedMaterialIds
-          if (Array.isArray(jpdCourse.deletedMaterialIds) && jpdCourse.deletedMaterialIds.length > 0) {
-            const beforeCount = jpdCourse.materials.length;
-            jpdCourse.materials = jpdCourse.materials.filter(
-              (m: JapaneseMaterial) => !jpdCourse.deletedMaterialIds.includes(m.id)
-            );
-            if (jpdCourse.materials.length !== beforeCount) {
-              changed = true;
-            }
-          }
-        }
-        // Ensure Katakana cards in stored lessons have their phonetic Hiragana reading preserved
-        if (Array.isArray(jpdCourse.lessons)) {
-          for (const lesson of jpdCourse.lessons) {
-            for (const card of lesson.cards || []) {
-              const isKata = /[\u30A0-\u30FF]/.test(card.term) && !/[\u4E00-\u9FAF]/.test(card.term);
-              if (isKata && (!card.reading || card.reading === card.term)) {
-                card.reading = katakanaToHiragana(card.term);
-                changed = true;
-              }
-            }
-          }
         }
       } else {
         // If course-jpd123 was missing (e.g. accidentally deleted), automatically recover it for authorized users!

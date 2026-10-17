@@ -1092,11 +1092,28 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
                   <span className="text-slate-400">•</span>
                   <span className="text-amber-300">{currentCard.definition}</span>
                 </div>
-                <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-snug">
-                  Gõ câu ví dụ tiếng Nhật của từ này
-                </h2>
+
+                <div className="p-4 sm:p-5 rounded-3xl bg-slate-800/90 border border-indigo-500/40 shadow-2xl space-y-2">
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="text-[11px] font-black uppercase text-indigo-400 tracking-wider">
+                      CÂU VÍ DỤ TIẾNG NHẬT CẦN GÕ
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => speakJapanese(currentCard.example || '')}
+                      className="p-1 rounded-full text-slate-400 hover:text-cyan-400 hover:bg-slate-700 transition-colors cursor-pointer"
+                      title="Nghe phát âm câu ví dụ"
+                    >
+                      <Volume2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-white tracking-tight leading-relaxed">
+                    {currentCard.example}
+                  </h2>
+                </div>
+
                 <p className="text-xs text-slate-400">
-                  (Hệ thống chấp nhận gõ cả Hiragana, Katakana, Kanji và Romaji)
+                  (Nhìn câu ví dụ ở trên và gõ lại bằng Hiragana, Katakana, Kanji hoặc Romaji)
                 </p>
               </div>
             ) : direction === 'kanji-to-reading' ? (

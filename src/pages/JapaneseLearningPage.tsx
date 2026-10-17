@@ -24,6 +24,7 @@ import {
   canAccessJpd123,
   restoreDefaultJpd123Course,
   getCleanDefaultJpdCourse,
+  ensureJpdCourseUpToDate,
 } from '../utils/japaneseStorage';
 import { subscribeJapaneseCourses, syncJapaneseCourseToFirestore } from '../lib/firebase';
 import { JapaneseCourseDetail } from './JapaneseCourseDetail';
@@ -89,8 +90,22 @@ export const JapaneseLearningPage: React.FC<Props> = ({ currentUser, onBackToDas
           }
         }
 
+        // Guarantee all JPD123 courses have the latest grammar points and examples
+        let anyJpdChanged = false;
+        allowed = allowed.map((c) => {
+          const res = ensureJpdCourseUpToDate(c);
+          if (res.changed) anyJpdChanged = true;
+          return res.course;
+        });
+
         setCourses(allowed);
         saveJapaneseCourses(allowed, currentUser?.email, true);
+        if (anyJpdChanged && currentUser?.email) {
+          const jpdUpdated = allowed.find((c) => c && (c.id === 'course-jpd123' || c.code?.toLowerCase().replace(/\s+/g, '') === 'jpd123'));
+          if (jpdUpdated) {
+            syncJapaneseCourseToFirestore(jpdUpdated, currentUser?.email).catch(() => {});
+          }
+        }
         setSelectedCourse((prev) => {
           if (!prev) return (hasJpdAccess && allowed.length === 1 ? allowed[0] : null);
           const updated = allowed.find((c) => c.id === prev.id);
