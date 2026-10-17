@@ -340,6 +340,12 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
 
   // Handle typing with Romaji -> Kana conversion if IME mode is enabled (in vi-to-jp mode)
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Dismiss error feedback box as soon as user starts editing/fixing their answer!
+    if (isAnswerChecked && !isCorrect) {
+      setIsAnswerChecked(false);
+      setIsCorrect(null);
+    }
+
     const raw = e.target.value;
     if (direction === 'jp-to-vi' || imeMode === 'off') {
       setInputVal(raw);
@@ -427,6 +433,11 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
         checkAnswer();
       } else {
         handleNextCard();
+      }
+    } else if (isAnswerChecked && !isCorrect) {
+      if (!['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab'].includes(e.key)) {
+        setIsAnswerChecked(false);
+        setIsCorrect(null);
       }
     }
   };
