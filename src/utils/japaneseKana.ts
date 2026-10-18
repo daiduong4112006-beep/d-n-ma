@@ -98,13 +98,12 @@ export function convertRomajiToKana(text: string, mode: 'hiragana' | 'katakana' 
   const lower = normalizedText.toLowerCase();
 
   while (i < lower.length) {
-    // Preserve English acronyms in uppercase (e.g. ATM, CD, DVD, PC, TV, JR, NHK, etc.)
-    // or specific acronyms like 'atm'
+    // Preserve ATM acronym
     const remainingOrig = normalizedText.substring(i);
-    const acronymMatch = remainingOrig.match(/^([A-Z]{2,}|atm\b|ATM\b|Atm\b)/i);
-    if (acronymMatch) {
-      result += acronymMatch[0].toUpperCase();
-      i += acronymMatch[0].length;
+    const atmMatch = remainingOrig.match(/^atm(?=[^a-z]|$)/i);
+    if (atmMatch) {
+      result += 'ATM';
+      i += 3;
       continue;
     }
 
