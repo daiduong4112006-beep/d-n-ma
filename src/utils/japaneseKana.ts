@@ -85,7 +85,11 @@ const KATAKANA_MAP: Record<string, string> = {
  * Converts romaji input buffer into Hiragana or Katakana on-the-fly.
  * Handles double consonants (sokuon 'っ' or 'ッ') and 'n' rules.
  */
-export function convertRomajiToKana(text: string, mode: 'hiragana' | 'katakana' = 'hiragana'): string {
+export function convertRomajiToKana(
+  text: string,
+  mode: 'hiragana' | 'katakana' = 'hiragana',
+  finalizeTrailingN: boolean = false
+): string {
   const map = mode === 'hiragana' ? HIRAGANA_MAP : KATAKANA_MAP;
   const sokuon = mode === 'hiragana' ? 'っ' : 'ッ';
   const nKana = mode === 'hiragana' ? 'ん' : 'ン';
@@ -138,7 +142,7 @@ export function convertRomajiToKana(text: string, mode: 'hiragana' | 'katakana' 
     }
 
     // Single 'n' check: only convert if followed by an ASCII consonant (excluding y), apostrophe, or delimiter.
-    // Crucially: DO NOT convert if nextChar is undefined (user still typing), a vowel, 'y', or any Japanese/non-ASCII character!
+    // Or if finalizeTrailingN is true and it's at the end of the text.
     if (lower[i] === 'n') {
       const nextChar = lower[i + 1];
       if (nextChar) {
@@ -154,6 +158,10 @@ export function convertRomajiToKana(text: string, mode: 'hiragana' | 'katakana' 
           }
           continue;
         }
+      } else if (finalizeTrailingN) {
+        result += nKana;
+        i++;
+        continue;
       }
     }
 
@@ -227,7 +235,10 @@ export function normalizeJapaneseText(str: string): string {
   if (!str) return '';
   return str
     .trim()
+    .normalize('NFKC')
     .toLowerCase()
+    // Convert any trailing or word-boundary Romaji 'n' to 'ん' (e.g. "かばn" -> "かばん", "gohan" -> "ごはん")
+    .replace(/n(?=[^a-z]|$)/gi, 'ん')
     // Remove tildes and wave dashes: ASCII ~, fullwidth ～ (U+FF5E), wave dash 〜 (U+301C), etc.
     .replace(/[~～〜⁓〰^]/g, '')
     // Remove spaces, punctuation, slashes, dashes, parentheses
@@ -345,8 +356,8 @@ export function checkJapaneseAnswer(
   if (!u) return false;
 
   const userCanonical = toCanonicalKana(userRawInput);
-  const userConvertedHiragana = normalizeJapaneseText(convertRomajiToKana(userRawInput, 'hiragana'));
-  const userConvertedKatakana = normalizeJapaneseText(convertRomajiToKana(userRawInput, 'katakana'));
+  const userConvertedHiragana = normalizeJapaneseText(convertRomajiToKana(userRawInput, 'hiragana', true));
+  const userConvertedKatakana = normalizeJapaneseText(convertRomajiToKana(userRawInput, 'katakana', true));
   const userRomajiCanonical = toCanonicalKana(userConvertedHiragana);
 
   // Collect all valid target variants from card reading, term, and romaji

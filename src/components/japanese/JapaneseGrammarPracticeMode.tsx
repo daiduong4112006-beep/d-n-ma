@@ -276,18 +276,25 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
   const checkAnswer = () => {
     if (!currentItem) return;
 
+    const targetKana = imeMode === 'katakana' ? 'ン' : 'ん';
+
     if (parsed.isDialogue) {
       if (!inputA.trim() && !inputB.trim()) return;
+
+      const finA = inputA.replace(/n(?=[^a-z]|$)/gi, targetKana);
+      const finB = inputB.replace(/n(?=[^a-z]|$)/gi, targetKana);
+      if (finA !== inputA) setInputA(finA);
+      if (finB !== inputB) setInputB(finB);
 
       let okA = false;
       let okB = false;
 
       if (direction === 'vi-to-jp') {
-        okA = checkGrammarSentenceAnswer(inputA, parsed.partA?.japanese || '');
-        okB = checkGrammarSentenceAnswer(inputB, parsed.partB?.japanese || '', true);
+        okA = checkGrammarSentenceAnswer(finA, parsed.partA?.japanese || '');
+        okB = checkGrammarSentenceAnswer(finB, parsed.partB?.japanese || '', true);
       } else {
-        okA = checkVietnameseAnswer(inputA, parsed.partA?.vietnamese || '');
-        okB = checkVietnameseAnswer(inputB, parsed.partB?.vietnamese || '');
+        okA = checkVietnameseAnswer(finA, parsed.partA?.vietnamese || '');
+        okB = checkVietnameseAnswer(finB, parsed.partB?.vietnamese || '');
       }
 
       const overallCorrect = okA && okB;
@@ -321,11 +328,14 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
     } else {
       if (!singleInput.trim()) return;
 
+      const finSingle = singleInput.replace(/n(?=[^a-z]|$)/gi, targetKana);
+      if (finSingle !== singleInput) setSingleInput(finSingle);
+
       let ok = false;
       if (direction === 'vi-to-jp') {
-        ok = checkGrammarSentenceAnswer(singleInput, currentItem.japanese);
+        ok = checkGrammarSentenceAnswer(finSingle, currentItem.japanese);
       } else {
-        ok = checkVietnameseAnswer(singleInput, currentItem.vietnamese);
+        ok = checkVietnameseAnswer(finSingle, currentItem.vietnamese);
       }
 
       setIsAnswerChecked(true);

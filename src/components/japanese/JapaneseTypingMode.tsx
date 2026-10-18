@@ -374,17 +374,24 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
   const checkAnswer = () => {
     if (!currentCard || !inputVal.trim()) return;
 
+    // Auto-finalize any pending trailing 'n' to 'ん' or 'ン' so user input in state and on screen is 100% clean Kana!
+    const targetKanaN = isCurrentKata || imeMode === 'katakana' ? 'ン' : 'ん';
+    const finalized = inputVal.replace(/n(?=[^a-z]|$)/gi, targetKanaN);
+    if (finalized !== inputVal) {
+      setInputVal(finalized);
+    }
+
     let matched = false;
     if (isExampleMode) {
       if (direction === 'jp-to-vi') {
-        matched = checkVietnameseAnswer(inputVal, currentCard.exampleMeaning || currentCard.definition);
+        matched = checkVietnameseAnswer(finalized, currentCard.exampleMeaning || currentCard.definition);
       } else {
-        matched = checkGrammarSentenceAnswer(inputVal, currentCard.example || '', true);
+        matched = checkGrammarSentenceAnswer(finalized, currentCard.example || '', true);
       }
     } else if (direction === 'vi-to-jp') {
-      matched = checkJapaneseAnswer(inputVal, currentCard);
+      matched = checkJapaneseAnswer(finalized, currentCard);
     } else {
-      matched = checkVietnameseAnswer(inputVal, currentCard.definition);
+      matched = checkVietnameseAnswer(finalized, currentCard.definition);
     }
 
     setIsAnswerChecked(true);
@@ -451,7 +458,11 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
         handleNextCard();
       }
     } else if (isAnswerChecked && !isCorrect) {
-      if (!['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab'].includes(e.key)) {
+      const ignoredNavKeys = [
+        'Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab',
+        'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'
+      ];
+      if (!ignoredNavKeys.includes(e.key)) {
         setIsAnswerChecked(false);
         setIsCorrect(null);
       }
