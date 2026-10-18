@@ -125,25 +125,23 @@ export function convertRomajiToKana(text: string, mode: 'hiragana' | 'katakana' 
       }
     }
 
-    // Single 'n' check: followed by consonant (except y or vowel) or end of string
+    // Single 'n' check: only convert if followed by an ASCII consonant (excluding y), apostrophe, or delimiter.
+    // Crucially: DO NOT convert if nextChar is undefined (user still typing), a vowel, 'y', or any Japanese/non-ASCII character!
     if (lower[i] === 'n') {
       const nextChar = lower[i + 1];
-      if (
-        nextChar &&
-        nextChar !== 'a' &&
-        nextChar !== 'i' &&
-        nextChar !== 'u' &&
-        nextChar !== 'e' &&
-        nextChar !== 'o' &&
-        nextChar !== 'y'
-      ) {
-        result += nKana;
-        i++;
-        // If next is another n, continue so it doesn't double
-        if (nextChar === 'n') {
+      if (nextChar) {
+        const isAsciiConsonant = /^[bcdfghjklmnpqrstvwxz]$/i.test(nextChar);
+        const isDelimiter = /^[\s.,!?;:()\[\]\-_/\\`"~]$/.test(nextChar);
+
+        if (isAsciiConsonant || isDelimiter) {
+          result += nKana;
           i++;
+          // If next is another n or apostrophe, consume it
+          if (nextChar === 'n' || nextChar === "'") {
+            i++;
+          }
+          continue;
         }
-        continue;
       }
     }
 

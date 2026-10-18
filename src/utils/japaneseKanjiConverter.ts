@@ -506,8 +506,15 @@ export function convertKanjiToHiragana(sentence: string): string {
 export function normalizeGrammarText(str: string): string {
   if (!str) return '';
 
+  // 0. Unicode NFKC normalization (turns fullwidth ＡＴＭ into ATM, etc.)
+  let s = str.normalize('NFKC');
+
+  // Handle common Romaji typing artifacts like "あtm" -> "atm" or "ATM"
+  // When typing in Hiragana IME, typing "a" becomes "あ", and then "tm" stays as "tm", resulting in "あtm"
+  s = s.replace(/あtm/gi, 'atm');
+
   // 1. Convert Kanji and numbers/counters to Hiragana
-  let s = convertKanjiToHiragana(str);
+  s = convertKanjiToHiragana(s);
 
   // 2. Convert Katakana to Hiragana so both Katakana and Hiragana match seamlessly!
   s = katakanaToHiragana(s);
