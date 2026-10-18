@@ -90,17 +90,30 @@ export function convertRomajiToKana(text: string, mode: 'hiragana' | 'katakana' 
   const sokuon = mode === 'hiragana' ? 'っ' : 'ッ';
   const nKana = mode === 'hiragana' ? 'ん' : 'ン';
 
+  // Fix any existing artifacts like "あTM" / "あtm" -> "ATM"
+  const normalizedText = (text || '').replace(/あtm/gi, 'ATM');
+
   let result = '';
   let i = 0;
-  const lower = text.toLowerCase();
+  const lower = normalizedText.toLowerCase();
 
   while (i < lower.length) {
+    // Preserve English acronyms in uppercase (e.g. ATM, CD, DVD, PC, TV, JR, NHK, etc.)
+    // or specific acronyms like 'atm'
+    const remainingOrig = normalizedText.substring(i);
+    const acronymMatch = remainingOrig.match(/^([A-Z]{2,}|atm\b|ATM\b|Atm\b)/i);
+    if (acronymMatch) {
+      result += acronymMatch[0].toUpperCase();
+      i += acronymMatch[0].length;
+      continue;
+    }
+
     // Check if the current character is already a Japanese character (Hiragana, Katakana, Kanji, punctuation)
     const code = lower.charCodeAt(i);
     const isAsciiAlphabet = (code >= 97 && code <= 122) || code === 45; // a-z or '-'
 
     if (!isAsciiAlphabet) {
-      result += text[i];
+      result += normalizedText[i];
       i++;
       continue;
     }
@@ -159,7 +172,7 @@ export function convertRomajiToKana(text: string, mode: 'hiragana' | 'katakana' 
 
     if (!matched) {
       // Keep character as is (e.g. pending incomplete syllable like 'k', 's')
-      result += text[i];
+      result += normalizedText[i];
       i++;
     }
   }
