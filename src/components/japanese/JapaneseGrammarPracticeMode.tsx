@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import {
   X,
   Volume2,
@@ -17,6 +17,7 @@ import {
 import {
   convertRomajiToKana,
   speakJapanese,
+  checkVietnameseAnswer,
 } from '../../utils/japaneseKana';
 import { sound } from '../../utils/audio';
 import { shuffleArray } from '../../utils/shuffle';
@@ -61,6 +62,25 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
     return shouldShuffle ? shuffleArray([...examples]) : [...examples];
   });
 
+  const [direction, setDirection] = useState<'vi-to-jp' | 'jp-to-vi'>(() => {
+    const saved = localStorage.getItem('grammar_typing_direction');
+    return saved === 'jp-to-vi' ? 'jp-to-vi' : 'vi-to-jp';
+  });
+
+  const toggleDirection = (newDir?: 'vi-to-jp' | 'jp-to-vi') => {
+    const next = newDir || (direction === 'vi-to-jp' ? 'jp-to-vi' : 'vi-to-jp');
+    setDirection(next);
+    localStorage.setItem('grammar_typing_direction', next);
+    setSingleInput('');
+    setInputA('');
+    setInputB('');
+    setIsAnswerChecked(false);
+    setIsCorrect(null);
+    setCorrectA(null);
+    setCorrectB(null);
+    sound.playClick();
+  };
+
   const [currentIndex, setCurrentIndex] = useState(0);
 
   // Single sentence input state
@@ -94,7 +114,28 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
   const singleInputRef = useRef<HTMLInputElement>(null);
   const inputARef = useRef<HTMLInputElement>(null);
   const inputBRef = useRef<HTMLInputElement>(null);
+  const pendingCursorRef = useRef<{
+    field: 'single' | 'a' | 'b';
+    pos: number;
+  } | null>(null);
   const timerRef = useRef<number | null>(null);
+
+  // Preserve cursor position across React re-renders when editing in the middle of text
+  useLayoutEffect(() => {
+    if (pendingCursorRef.current) {
+      const { field, pos } = pendingCursorRef.current;
+      const el =
+        field === 'single'
+          ? singleInputRef.current
+          : field === 'a'
+          ? inputARef.current
+          : inputBRef.current;
+      if (el) {
+        el.setSelectionRange(pos, pos);
+      }
+      pendingCursorRef.current = null;
+    }
+  });
 
   const currentItem = items[currentIndex];
   const parsed: ParsedDialogue = currentItem
@@ -117,15 +158,22 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
     };
   }, [grammarPointTitle, currentItem?.grammarTitle, currentItem?.lessonTag, currentItem?.vietnamese, examples]);
 
-  // Timer counter
+  // Timer counter - stops when completed
   useEffect(() => {
+    if (isCompleted) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      return;
+    }
     timerRef.current = window.setInterval(() => {
       setSeconds((prev) => prev + 1);
     }, 1000);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, []);
+  }, [isCompleted]);
 
   // Format MM:SS
   const formatTime = (totalSecs: number) => {
@@ -157,41 +205,91 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
 
   // Handle IME inputs for single and dialogue
   const handleSingleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // When editing after an answer check, immediately hide error feedback
+    if (isAnswerChecked) {
+      setIsAnswerChecked(false);
+      setIsCorrect(null);
+    }
+
     const raw = e.target.value;
-    if (imeMode === 'off') {
+    const cursorPos = e.target.selectionStart ?? raw.length;
+
+    if (direction === 'jp-to-vi' || imeMode === 'off') {
+      pendingCursorRef.current = { field: 'single', pos: cursorPos };
       setSingleInput(raw);
     } else {
-      setSingleInput(convertRomajiToKana(raw, imeMode));
+      const rawPrefix = raw.slice(0, cursorPos);
+      const convertedPrefix = convertRomajiToKana(rawPrefix, imeMode);
+      const converted = convertRomajiToKana(raw, imeMode);
+      pendingCursorRef.current = { field: 'single', pos: convertedPrefix.length };
+      setSingleInput(converted);
     }
   };
 
   const handleInputAChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isAnswerChecked) {
+      setIsAnswerChecked(false);
+      setIsCorrect(null);
+      setCorrectA(null);
+      setCorrectB(null);
+    }
+
     const raw = e.target.value;
-    if (imeMode === 'off') {
+    const cursorPos = e.target.selectionStart ?? raw.length;
+
+    if (direction === 'jp-to-vi' || imeMode === 'off') {
+      pendingCursorRef.current = { field: 'a', pos: cursorPos };
       setInputA(raw);
     } else {
-      setInputA(convertRomajiToKana(raw, imeMode));
+      const rawPrefix = raw.slice(0, cursorPos);
+      const convertedPrefix = convertRomajiToKana(rawPrefix, imeMode);
+      const converted = convertRomajiToKana(raw, imeMode);
+      pendingCursorRef.current = { field: 'a', pos: convertedPrefix.length };
+      setInputA(converted);
     }
   };
 
   const handleInputBChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isAnswerChecked) {
+      setIsAnswerChecked(false);
+      setIsCorrect(null);
+      setCorrectA(null);
+      setCorrectB(null);
+    }
+
     const raw = e.target.value;
-    if (imeMode === 'off') {
+    const cursorPos = e.target.selectionStart ?? raw.length;
+
+    if (direction === 'jp-to-vi' || imeMode === 'off') {
+      pendingCursorRef.current = { field: 'b', pos: cursorPos };
       setInputB(raw);
     } else {
-      setInputB(convertRomajiToKana(raw, imeMode));
+      const rawPrefix = raw.slice(0, cursorPos);
+      const convertedPrefix = convertRomajiToKana(rawPrefix, imeMode);
+      const converted = convertRomajiToKana(raw, imeMode);
+      pendingCursorRef.current = { field: 'b', pos: convertedPrefix.length };
+      setInputB(converted);
     }
   };
 
-  // Check answer logic
+  // Check answer logic supporting both vi-to-jp and jp-to-vi
   const checkAnswer = () => {
     if (!currentItem) return;
 
     if (parsed.isDialogue) {
       if (!inputA.trim() && !inputB.trim()) return;
 
-      const okA = checkGrammarSentenceAnswer(inputA, parsed.partA?.japanese || '');
-      const okB = checkGrammarSentenceAnswer(inputB, parsed.partB?.japanese || '', true);
+      let okA = false;
+      let okB = false;
+
+      if (direction === 'vi-to-jp') {
+        okA = checkGrammarSentenceAnswer(inputA, parsed.partA?.japanese || '');
+        okB = checkGrammarSentenceAnswer(inputB, parsed.partB?.japanese || '', true);
+      } else {
+        okA = checkVietnameseAnswer(inputA, parsed.partA?.vietnamese || '');
+        okB = checkVietnameseAnswer(inputB, parsed.partB?.vietnamese || '');
+      }
+
       const overallCorrect = okA && okB;
 
       setCorrectA(okA);
@@ -223,7 +321,13 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
     } else {
       if (!singleInput.trim()) return;
 
-      const ok = checkGrammarSentenceAnswer(singleInput, currentItem.japanese);
+      let ok = false;
+      if (direction === 'vi-to-jp') {
+        ok = checkGrammarSentenceAnswer(singleInput, currentItem.japanese);
+      } else {
+        ok = checkVietnameseAnswer(singleInput, currentItem.vietnamese);
+      }
+
       setIsAnswerChecked(true);
       setIsCorrect(ok);
 
@@ -280,10 +384,10 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
   const handleKeyDownSingle = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (!isAnswerChecked) {
-        checkAnswer();
-      } else {
+      if (isAnswerChecked && isCorrect) {
         handleNext();
+      } else {
+        checkAnswer();
       }
     }
   };
@@ -291,8 +395,12 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
   const handleKeyDownA = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (isAnswerChecked) {
+      if (isAnswerChecked && isCorrect) {
         handleNext();
+        return;
+      }
+      if (isAnswerChecked && !isCorrect) {
+        checkAnswer();
         return;
       }
       // If B is empty, move focus to B; if B is filled, check
@@ -307,7 +415,7 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
   const handleKeyDownB = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (isAnswerChecked) {
+      if (isAnswerChecked && isCorrect) {
         handleNext();
         return;
       }
@@ -436,6 +544,41 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
         </div>
       </div>
 
+      {/* 2-Way Language Direction Switcher Bar (Outside for instant access) */}
+      <div className="max-w-4xl mx-auto w-full flex flex-wrap items-center justify-between gap-2 py-2 sm:py-2.5">
+        <div className="flex items-center bg-slate-900/90 border border-slate-800 rounded-2xl p-1 text-xs font-bold shadow-xs">
+          <button
+            type="button"
+            onClick={() => toggleDirection('vi-to-jp')}
+            className={`px-3.5 sm:px-4 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+              direction === 'vi-to-jp'
+                ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30 font-black'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <span className="text-sm">🇻🇳</span>
+            <span>Đề: Tiếng Việt ➔ Gõ: Tiếng Nhật</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => toggleDirection('jp-to-vi')}
+            className={`px-3.5 sm:px-4 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+              direction === 'jp-to-vi'
+                ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30 font-black'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <span className="text-sm">🇯🇵</span>
+            <span>Đề: Tiếng Nhật ➔ Gõ: Tiếng Việt</span>
+          </button>
+        </div>
+
+        <span className="text-[11px] text-slate-500 font-medium hidden sm:inline-block">
+          Bấm để đổi hướng luyện gõ tức thì
+        </span>
+      </div>
+
       {/* Options Modal */}
       {showOptionsModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
@@ -447,7 +590,7 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
                 </div>
                 <div>
                   <h3 className="text-base font-black">Tùy chọn luyện tập</h3>
-                  <p className="text-[11px] text-slate-400">Trộn câu, bộ gõ và âm thanh</p>
+                  <p className="text-[11px] text-slate-400">Hướng dịch, trộn câu, bộ gõ và âm thanh</p>
                 </div>
               </div>
               <button
@@ -460,6 +603,37 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
             </div>
 
             <div className="space-y-4 overflow-y-auto flex-1 pr-1.5 custom-scrollbar">
+              {/* Direction Switcher in Modal */}
+              <div className="space-y-2">
+                <label className="text-[11px] font-black uppercase text-slate-400 tracking-wider">
+                  Hướng luyện tập
+                </label>
+                <div className="grid grid-cols-2 gap-2 bg-slate-800/80 p-1 rounded-2xl border border-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => toggleDirection('vi-to-jp')}
+                    className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer text-center ${
+                      direction === 'vi-to-jp'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    🇻🇳 Đề Việt ➔ Gõ Nhật
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleDirection('jp-to-vi')}
+                    className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer text-center ${
+                      direction === 'jp-to-vi'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    🇯🇵 Đề Nhật ➔ Gõ Việt
+                  </button>
+                </div>
+              </div>
+
               {/* Shuffle Toggle & Restart */}
               <div className="space-y-2.5">
                 <label className="text-[11px] font-black uppercase text-slate-400 tracking-wider">
@@ -522,45 +696,47 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
                 </div>
               </div>
 
-              {/* IME Mode Switcher */}
-              <div className="space-y-2">
-                <label className="text-[11px] font-black uppercase text-slate-400 tracking-wider">
-                  Bộ gõ tiếng Nhật
-                </label>
-                <div className="grid grid-cols-3 gap-2 bg-slate-800/80 p-1 rounded-2xl border border-slate-700">
-                  <button
-                    type="button"
-                    onClick={() => setImeMode('hiragana')}
-                    className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer text-center ${
-                      imeMode === 'hiragana'
-                        ? 'bg-indigo-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    あ (Hiragana)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setImeMode('katakana')}
-                    className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer text-center ${
-                      imeMode === 'katakana'
-                        ? 'bg-indigo-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    ア (Katakana)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setImeMode('off')}
-                    className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer text-center ${
-                      imeMode === 'off' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    Tắt
-                  </button>
+              {/* IME Mode Switcher (visible for vi-to-jp) */}
+              {direction === 'vi-to-jp' && (
+                <div className="space-y-2">
+                  <label className="text-[11px] font-black uppercase text-slate-400 tracking-wider">
+                    Bộ gõ tiếng Nhật
+                  </label>
+                  <div className="grid grid-cols-3 gap-2 bg-slate-800/80 p-1 rounded-2xl border border-slate-700">
+                    <button
+                      type="button"
+                      onClick={() => setImeMode('hiragana')}
+                      className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer text-center ${
+                        imeMode === 'hiragana'
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      あ (Hiragana)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImeMode('katakana')}
+                      className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer text-center ${
+                        imeMode === 'katakana'
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      ア (Katakana)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImeMode('off')}
+                      className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer text-center ${
+                        imeMode === 'off' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Tắt
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Audio Settings */}
               <div className="space-y-2.5 pt-2 border-t border-slate-800">
@@ -667,83 +843,140 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
             </div>
           )}
 
-          {/* Vietnamese Prompt Card */}
+          {/* Prompt Card */}
           <div className="p-6 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-4 text-center">
             <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
               <span className="text-[11px] font-black uppercase text-cyan-400 tracking-wider">
-                ĐỀ BÀI: DỊCH SANG TIẾNG NHẬT
+                {direction === 'vi-to-jp' ? 'ĐỀ BÀI: DỊCH SANG TIẾNG NHẬT' : 'ĐỀ BÀI: DỊCH SANG TIẾNG VIỆT'}
               </span>
               <div className="flex items-center gap-1">
-                {/* Pill Switcher for IME [ あ  ア  Tắt ] */}
-                <div className="flex items-center bg-slate-950 border border-slate-700/80 rounded-xl p-0.5 text-xs font-bold">
+                {direction === 'vi-to-jp' ? (
+                  /* Pill Switcher for IME [ あ  ア  Tắt ] */
+                  <div className="flex items-center bg-slate-950 border border-slate-700/80 rounded-xl p-0.5 text-xs font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setImeMode('hiragana')}
+                      className={`px-2.5 py-0.5 rounded-lg transition-colors cursor-pointer ${
+                        imeMode === 'hiragana'
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      あ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImeMode('katakana')}
+                      className={`px-2.5 py-0.5 rounded-lg transition-colors cursor-pointer ${
+                        imeMode === 'katakana'
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      ア
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImeMode((m) => (m === 'off' ? 'hiragana' : 'off'))}
+                      className={`px-2 py-0.5 rounded-lg transition-colors cursor-pointer text-[10px] ${
+                        imeMode === 'off' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-white'
+                      }`}
+                    >
+                      Tắt
+                    </button>
+                  </div>
+                ) : (
                   <button
                     type="button"
-                    onClick={() => setImeMode('hiragana')}
-                    className={`px-2.5 py-0.5 rounded-lg transition-colors cursor-pointer ${
-                      imeMode === 'hiragana'
-                        ? 'bg-indigo-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
+                    onClick={() => speakJapanese(currentItem.japanese)}
+                    className="p-1.5 rounded-xl bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white transition-colors cursor-pointer flex items-center gap-1 text-xs"
+                    title="Phát âm câu tiếng Nhật"
                   >
-                    あ
+                    <Volume2 className="w-3.5 h-3.5" />
+                    <span>Nghe</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setImeMode('katakana')}
-                    className={`px-2.5 py-0.5 rounded-lg transition-colors cursor-pointer ${
-                      imeMode === 'katakana'
-                        ? 'bg-indigo-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    ア
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setImeMode((m) => (m === 'off' ? 'hiragana' : 'off'))}
-                    className={`px-2 py-0.5 rounded-lg transition-colors cursor-pointer text-[10px] ${
-                      imeMode === 'off' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-white'
-                    }`}
-                  >
-                    Tắt
-                  </button>
-                </div>
+                )}
               </div>
             </div>
 
             {/* Prompt Content */}
             {parsed.isDialogue ? (
               <div className="space-y-3 text-left">
-                {parsed.partA?.vietnamese && (
-                  <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-slate-800/50 border border-slate-700/60">
-                    <span className="w-6 h-6 rounded-full bg-indigo-600 text-white font-black text-xs flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-                      A
-                    </span>
-                    <p className="text-base sm:text-lg font-bold text-slate-100 leading-snug">
-                      {parsed.partA.vietnamese}
-                    </p>
-                  </div>
-                )}
-                {parsed.partB?.vietnamese && (
-                  <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-slate-800/50 border border-slate-700/60">
-                    <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-black text-xs flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-                      B
-                    </span>
-                    <p className="text-base sm:text-lg font-bold text-slate-100 leading-snug">
-                      {parsed.partB.vietnamese}
-                    </p>
-                  </div>
-                )}
-                {!parsed.partB?.vietnamese && (
-                  <h2 className="text-xl sm:text-2xl font-black text-white text-center leading-relaxed">
-                    {currentItem.vietnamese}
-                  </h2>
+                {direction === 'vi-to-jp' ? (
+                  <>
+                    {parsed.partA?.vietnamese && (
+                      <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-slate-800/50 border border-slate-700/60">
+                        <span className="w-6 h-6 rounded-full bg-indigo-600 text-white font-black text-xs flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                          A
+                        </span>
+                        <p className="text-base sm:text-lg font-bold text-slate-100 leading-snug">
+                          {parsed.partA.vietnamese}
+                        </p>
+                      </div>
+                    )}
+                    {parsed.partB?.vietnamese && (
+                      <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-slate-800/50 border border-slate-700/60">
+                        <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-black text-xs flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                          B
+                        </span>
+                        <p className="text-base sm:text-lg font-bold text-slate-100 leading-snug">
+                          {parsed.partB.vietnamese}
+                        </p>
+                      </div>
+                    )}
+                    {!parsed.partB?.vietnamese && (
+                      <h2 className="text-xl sm:text-2xl font-black text-white text-center leading-relaxed">
+                        {currentItem.vietnamese}
+                      </h2>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {parsed.partA?.japanese && (
+                      <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-slate-800/50 border border-slate-700/60">
+                        <span className="w-6 h-6 rounded-full bg-indigo-600 text-white font-black text-xs flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                          A
+                        </span>
+                        <div className="flex-1">
+                          <p className="text-base sm:text-lg font-bold text-slate-100 leading-snug">
+                            {parsed.partA.japanese}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => speakJapanese(parsed.partA?.japanese || '')}
+                          className="p-1 rounded-lg text-slate-400 hover:text-cyan-400"
+                        >
+                          <Volume2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                    {parsed.partB?.japanese && (
+                      <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-slate-800/50 border border-slate-700/60">
+                        <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-black text-xs flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                          B
+                        </span>
+                        <div className="flex-1">
+                          <p className="text-base sm:text-lg font-bold text-slate-100 leading-snug">
+                            {parsed.partB.japanese}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => speakJapanese(parsed.partB?.japanese || '')}
+                          className="p-1 rounded-lg text-slate-400 hover:text-cyan-400"
+                        >
+                          <Volume2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             ) : (
               <div className="py-2">
                 <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-white tracking-tight leading-relaxed">
-                  {currentItem.vietnamese}
+                  {direction === 'vi-to-jp' ? currentItem.vietnamese : currentItem.japanese}
                 </h2>
               </div>
             )}
@@ -762,7 +995,7 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
                         A
                       </span>
                       <span className="text-xs font-black uppercase text-indigo-400 tracking-wider">
-                        CÂU HỎI (A)
+                        {direction === 'vi-to-jp' ? 'CÂU HỎI (A) - TIẾNG NHẬT' : 'CÂU HỎI (A) - NGHĨA VIỆT'}
                       </span>
                     </div>
                     {parsed.partA?.japanese && (
@@ -792,7 +1025,11 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
                       onChange={handleInputAChange}
                       onKeyDown={handleKeyDownA}
                       readOnly={isAnswerChecked && isCorrect === true}
-                      placeholder="Nhập câu hỏi A (gõ tiếng Nhật hoặc Romaji)..."
+                      placeholder={
+                        direction === 'vi-to-jp'
+                          ? 'Nhập câu hỏi A (gõ Hiragana hoặc Romaji)...'
+                          : 'Nhập nghĩa tiếng Việt của câu A...'
+                      }
                       className="w-full text-base sm:text-xl font-bold py-2 sm:py-2.5 px-3 bg-transparent outline-none text-slate-900 placeholder:text-slate-300"
                     />
                   </div>
@@ -806,7 +1043,7 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
                         B
                       </span>
                       <span className="text-xs font-black uppercase text-emerald-400 tracking-wider">
-                        CÂU TRẢ LỜI (B)
+                        {direction === 'vi-to-jp' ? 'CÂU TRẢ LỜI (B) - TIẾNG NHẬT' : 'CÂU TRẢ LỜI (B) - NGHĨA VIỆT'}
                       </span>
                     </div>
                     {parsed.partB?.japanese && (
@@ -836,7 +1073,11 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
                       onChange={handleInputBChange}
                       onKeyDown={handleKeyDownB}
                       readOnly={isAnswerChecked && isCorrect === true}
-                      placeholder="Nhập câu trả lời B (vd: にぎやかなまち)..."
+                      placeholder={
+                        direction === 'vi-to-jp'
+                          ? 'Nhập câu trả lời B (gõ Hiragana hoặc Romaji)...'
+                          : 'Nhập nghĩa tiếng Việt của câu B...'
+                      }
                       className="w-full text-base sm:text-xl font-bold py-2 sm:py-2.5 px-3 bg-transparent outline-none text-slate-900 placeholder:text-slate-300"
                     />
                   </div>
@@ -847,7 +1088,7 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
               <div className="space-y-2">
                 <div className="flex items-center justify-between px-1">
                   <span className="text-xs font-black uppercase text-slate-400 tracking-wider">
-                    GÕ TIẾNG NHẬT (KANJI HOẶC HIRAGANA)
+                    {direction === 'vi-to-jp' ? 'GÕ TIẾNG NHẬT (KANA)' : 'GÕ NGHĨA TIẾNG VIỆT'}
                   </span>
                   <button
                     type="button"
@@ -874,7 +1115,11 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
                     onChange={handleSingleInputChange}
                     onKeyDown={handleKeyDownSingle}
                     readOnly={isAnswerChecked && isCorrect === true}
-                    placeholder="Gõ tiếng Nhật (gõ Kanji hoặc Hiragana đều được)..."
+                    placeholder={
+                      direction === 'vi-to-jp'
+                        ? 'Gõ tiếng Nhật (gõ Hiragana hoặc Romaji)...'
+                        : 'Nhập nghĩa tiếng Việt của câu...'
+                    }
                     className="w-full text-center text-xl sm:text-2xl font-black py-3 sm:py-4 px-4 bg-transparent outline-none text-slate-900 placeholder:text-slate-300"
                     autoFocus
                   />
@@ -900,12 +1145,14 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
                     )}
                     <div className="text-left space-y-1">
                       <span className="font-black text-base block">
-                        {isCorrect ? 'Chính xác! 🎉' : 'Chưa chính xác! Hãy xem vị trí bị sai:'}
+                        {isCorrect ? 'Chính xác! 🎉' : 'Chưa chính xác! Hãy xem đáp án đúng:'}
                       </span>
                       {isCorrect && (
                         <div className="text-xs text-slate-200">
                           <span className="font-bold text-slate-400 mr-2">Đáp án:</span>
-                          <b className="text-white text-base">{currentItem.japanese}</b>
+                          <b className="text-white text-base">
+                            {direction === 'vi-to-jp' ? currentItem.japanese : currentItem.vietnamese}
+                          </b>
                         </div>
                       )}
                     </div>
@@ -935,26 +1182,38 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
                       <span>Hỏi AI</span>
                     </button>
 
-                    {!isCorrect && (
+                    {!isCorrect ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={checkAnswer}
+                          className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-xs font-bold text-white border border-amber-500 transition-all cursor-pointer shadow-md flex items-center gap-1.5 active:scale-95"
+                          title="Kiểm tra lại câu trả lời sau khi sửa (Enter)"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Kiểm tra lại (Enter)</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleNext}
+                          className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer flex items-center gap-1"
+                          title="Bỏ qua câu này và chuyển sang câu tiếp theo"
+                        >
+                          <span>Bỏ qua (Tiếp)</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    ) : (
                       <button
                         type="button"
-                        onClick={handleRetrySame}
-                        className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-indigo-600 text-xs font-bold text-white border border-slate-700 hover:border-indigo-500 transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
-                        title="Giữ nguyên chữ đã gõ và sửa lại vị trí sai"
+                        onClick={handleNext}
+                        className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white flex items-center gap-1 cursor-pointer shadow-md"
                       >
-                        <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Sửa lại</span>
+                        <span>Tiếp (Enter)</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
                       </button>
                     )}
-
-                    <button
-                      type="button"
-                      onClick={handleNext}
-                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white flex items-center gap-1 cursor-pointer shadow-md"
-                    >
-                      <span>Tiếp (Enter)</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
                   </div>
                 </div>
 
@@ -963,164 +1222,207 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
                   <div className="pt-2 border-t border-rose-900/50 text-left">
                     {parsed.isDialogue ? (
                       <div className="space-y-2.5">
-                        {!correctA && parsed.partA?.japanese && (
+                        {!correctA && (
                           <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-1.5">
                             <div className="text-[11px] font-black uppercase text-indigo-400 tracking-wider">
-                              Câu A (Hỏi):
+                              Câu A:
                             </div>
-                            {(() => {
-                              const diffA = computeJapaneseDiff(inputA, parsed.partA?.japanese || '');
-                              return (
-                                <div className="space-y-1.5 text-xs font-mono">
-                                  {diffA.firstErrorHint && (
-                                    <div className="text-amber-300 font-bold bg-amber-950/40 px-2 py-1 rounded-lg border border-amber-800/40">
-                                      💡 {diffA.firstErrorHint}
+                            {direction === 'vi-to-jp' ? (
+                              (() => {
+                                const diffA = computeJapaneseDiff(inputA, parsed.partA?.japanese || '');
+                                return (
+                                  <div className="space-y-1.5 text-xs font-mono">
+                                    {diffA.firstErrorHint && (
+                                      <div className="text-amber-300 font-bold bg-amber-950/40 px-2 py-1 rounded-lg border border-amber-800/40">
+                                        💡 {diffA.firstErrorHint}
+                                      </div>
+                                    )}
+                                    <div className="flex flex-wrap items-center gap-1">
+                                      <span className="text-slate-400 text-[11px] font-bold select-none">Bạn gõ:</span>
+                                      <div className="inline-flex flex-wrap items-center bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
+                                        {diffA.userParts.map((p, idx) => (
+                                          <span
+                                            key={idx}
+                                            className={
+                                              p.type === 'wrong'
+                                                ? 'bg-rose-600 text-white font-black px-1 rounded shadow-xs line-through decoration-rose-200'
+                                                : 'text-emerald-300'
+                                            }
+                                          >
+                                            {p.text}
+                                          </span>
+                                        ))}
+                                      </div>
                                     </div>
-                                  )}
-                                  <div className="flex flex-wrap items-center gap-1">
-                                    <span className="text-slate-400 text-[11px] font-bold select-none">Bạn gõ:</span>
-                                    <div className="inline-flex flex-wrap items-center bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
-                                      {diffA.userParts.map((p, idx) => (
-                                        <span
-                                          key={idx}
-                                          className={
-                                            p.type === 'wrong'
-                                              ? 'bg-rose-600 text-white font-black px-1 rounded shadow-xs line-through decoration-rose-200'
-                                              : 'text-emerald-300'
-                                          }
-                                        >
-                                          {p.text}
-                                        </span>
-                                      ))}
+                                    <div className="flex flex-wrap items-center gap-1">
+                                      <span className="text-slate-400 text-[11px] font-bold select-none">Đáp án:</span>
+                                      <div className="inline-flex flex-wrap items-center bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
+                                        {diffA.targetParts.map((p, idx) => (
+                                          <span
+                                            key={idx}
+                                            className={
+                                              p.type === 'missing'
+                                                ? 'bg-amber-400 text-slate-950 font-black px-1 rounded shadow-xs'
+                                                : 'text-slate-200'
+                                            }
+                                          >
+                                            {p.text}
+                                          </span>
+                                        ))}
+                                      </div>
                                     </div>
                                   </div>
-                                  <div className="flex flex-wrap items-center gap-1">
-                                    <span className="text-slate-400 text-[11px] font-bold select-none">Đáp án:</span>
-                                    <div className="inline-flex flex-wrap items-center bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
-                                      {diffA.targetParts.map((p, idx) => (
-                                        <span
-                                          key={idx}
-                                          className={
-                                            p.type === 'missing'
-                                              ? 'bg-amber-400 text-slate-950 font-black px-1 rounded shadow-xs'
-                                              : 'text-slate-200'
-                                          }
-                                        >
-                                          {p.text}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </div>
+                                );
+                              })()
+                            ) : (
+                              <div className="space-y-1.5 text-xs">
+                                <div className="text-slate-300">
+                                  <span className="text-slate-400 font-bold mr-2">Bạn gõ:</span>
+                                  <span className="text-rose-400 font-bold">{inputA || '(trống)'}</span>
                                 </div>
-                              );
-                            })()}
+                                <div className="text-slate-200">
+                                  <span className="text-slate-400 font-bold mr-2">Nghĩa tiếng Việt chuẩn:</span>
+                                  <span className="text-emerald-300 font-bold">{parsed.partA?.vietnamese}</span>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
 
-                        {!correctB && parsed.partB?.japanese && (
+                        {!correctB && (
                           <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-1.5">
                             <div className="text-[11px] font-black uppercase text-emerald-400 tracking-wider">
-                              Câu B (Đáp):
+                              Câu B:
                             </div>
-                            {(() => {
-                              const diffB = computeJapaneseDiff(inputB, parsed.partB?.japanese || '');
-                              return (
-                                <div className="space-y-1.5 text-xs font-mono">
-                                  {diffB.firstErrorHint && (
-                                    <div className="text-amber-300 font-bold bg-amber-950/40 px-2 py-1 rounded-lg border border-amber-800/40">
-                                      💡 {diffB.firstErrorHint}
+                            {direction === 'vi-to-jp' ? (
+                              (() => {
+                                const diffB = computeJapaneseDiff(inputB, parsed.partB?.japanese || '');
+                                return (
+                                  <div className="space-y-1.5 text-xs font-mono">
+                                    {diffB.firstErrorHint && (
+                                      <div className="text-amber-300 font-bold bg-amber-950/40 px-2 py-1 rounded-lg border border-amber-800/40">
+                                        💡 {diffB.firstErrorHint}
+                                      </div>
+                                    )}
+                                    <div className="flex flex-wrap items-center gap-1">
+                                      <span className="text-slate-400 text-[11px] font-bold select-none">Bạn gõ:</span>
+                                      <div className="inline-flex flex-wrap items-center bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
+                                        {diffB.userParts.map((p, idx) => (
+                                          <span
+                                            key={idx}
+                                            className={
+                                              p.type === 'wrong'
+                                                ? 'bg-rose-600 text-white font-black px-1 rounded shadow-xs line-through decoration-rose-200'
+                                                : 'text-emerald-300'
+                                            }
+                                          >
+                                            {p.text}
+                                          </span>
+                                        ))}
+                                      </div>
                                     </div>
-                                  )}
-                                  <div className="flex flex-wrap items-center gap-1">
-                                    <span className="text-slate-400 text-[11px] font-bold select-none">Bạn gõ:</span>
-                                    <div className="inline-flex flex-wrap items-center bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
-                                      {diffB.userParts.map((p, idx) => (
-                                        <span
-                                          key={idx}
-                                          className={
-                                            p.type === 'wrong'
-                                              ? 'bg-rose-600 text-white font-black px-1 rounded shadow-xs line-through decoration-rose-200'
-                                              : 'text-emerald-300'
-                                          }
-                                        >
-                                          {p.text}
-                                        </span>
-                                      ))}
+                                    <div className="flex flex-wrap items-center gap-1">
+                                      <span className="text-slate-400 text-[11px] font-bold select-none">Đáp án:</span>
+                                      <div className="inline-flex flex-wrap items-center bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
+                                        {diffB.targetParts.map((p, idx) => (
+                                          <span
+                                            key={idx}
+                                            className={
+                                              p.type === 'missing'
+                                                ? 'bg-amber-400 text-slate-950 font-black px-1 rounded shadow-xs'
+                                                : 'text-slate-200'
+                                            }
+                                          >
+                                            {p.text}
+                                          </span>
+                                        ))}
+                                      </div>
                                     </div>
                                   </div>
-                                  <div className="flex flex-wrap items-center gap-1">
-                                    <span className="text-slate-400 text-[11px] font-bold select-none">Đáp án:</span>
-                                    <div className="inline-flex flex-wrap items-center bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
-                                      {diffB.targetParts.map((p, idx) => (
-                                        <span
-                                          key={idx}
-                                          className={
-                                            p.type === 'missing'
-                                              ? 'bg-amber-400 text-slate-950 font-black px-1 rounded shadow-xs'
-                                              : 'text-slate-200'
-                                          }
-                                        >
-                                          {p.text}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </div>
+                                );
+                              })()
+                            ) : (
+                              <div className="space-y-1.5 text-xs">
+                                <div className="text-slate-300">
+                                  <span className="text-slate-400 font-bold mr-2">Bạn gõ:</span>
+                                  <span className="text-rose-400 font-bold">{inputB || '(trống)'}</span>
                                 </div>
-                              );
-                            })()}
+                                <div className="text-slate-200">
+                                  <span className="text-slate-400 font-bold mr-2">Nghĩa tiếng Việt chuẩn:</span>
+                                  <span className="text-emerald-300 font-bold">{parsed.partB?.vietnamese}</span>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
                     ) : (
                       /* Single sentence error diff */
                       <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2">
-                        {(() => {
-                          const diff = computeJapaneseDiff(singleInput, currentItem.japanese);
-                          return (
-                            <div className="space-y-1.5 text-xs font-mono">
-                              {diff.firstErrorHint && (
-                                <div className="text-amber-300 font-bold bg-amber-950/40 px-2.5 py-1.5 rounded-xl border border-amber-800/40 flex items-center gap-1.5">
-                                  <span>💡 Điểm sai:</span>
-                                  <span>{diff.firstErrorHint}</span>
+                        {direction === 'vi-to-jp' ? (
+                          (() => {
+                            const diff = computeJapaneseDiff(singleInput, currentItem.japanese);
+                            return (
+                              <div className="space-y-1.5 text-xs font-mono">
+                                {diff.firstErrorHint && (
+                                  <div className="text-amber-300 font-bold bg-amber-950/40 px-2.5 py-1.5 rounded-xl border border-amber-800/40 flex items-center gap-1.5">
+                                    <span>💡 Điểm sai:</span>
+                                    <span>{diff.firstErrorHint}</span>
+                                  </div>
+                                )}
+                                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                  <span className="text-slate-400 text-[11px] font-bold select-none">Bạn đã gõ:</span>
+                                  <div className="inline-flex flex-wrap items-center bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-800">
+                                    {diff.userParts.map((p, idx) => (
+                                      <span
+                                        key={idx}
+                                        className={
+                                          p.type === 'wrong'
+                                            ? 'bg-rose-600 text-white font-black px-1 rounded shadow-xs line-through decoration-rose-200'
+                                            : 'text-emerald-300 font-bold'
+                                        }
+                                      >
+                                        {p.text}
+                                      </span>
+                                    ))}
+                                  </div>
                                 </div>
-                              )}
-                              <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                                <span className="text-slate-400 text-[11px] font-bold select-none">Bạn đã gõ:</span>
-                                <div className="inline-flex flex-wrap items-center bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-800">
-                                  {diff.userParts.map((p, idx) => (
-                                    <span
-                                      key={idx}
-                                      className={
-                                        p.type === 'wrong'
-                                          ? 'bg-rose-600 text-white font-black px-1 rounded shadow-xs line-through decoration-rose-200'
-                                          : 'text-emerald-300 font-bold'
-                                      }
-                                    >
-                                      {p.text}
-                                    </span>
-                                  ))}
+                                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                  <span className="text-slate-400 text-[11px] font-bold select-none">Đáp án chuẩn:</span>
+                                  <div className="inline-flex flex-wrap items-center bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-800">
+                                    {diff.targetParts.map((p, idx) => (
+                                      <span
+                                        key={idx}
+                                        className={
+                                          p.type === 'missing'
+                                            ? 'bg-amber-400 text-slate-950 font-black px-1 rounded shadow-xs'
+                                            : 'text-slate-200 font-bold'
+                                        }
+                                      >
+                                        {p.text}
+                                      </span>
+                                    ))}
+                                  </div>
                                 </div>
                               </div>
-                              <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                                <span className="text-slate-400 text-[11px] font-bold select-none">Đáp án chuẩn:</span>
-                                <div className="inline-flex flex-wrap items-center bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-800">
-                                  {diff.targetParts.map((p, idx) => (
-                                    <span
-                                      key={idx}
-                                      className={
-                                        p.type === 'missing'
-                                          ? 'bg-amber-400 text-slate-950 font-black px-1 rounded shadow-xs'
-                                          : 'text-slate-200 font-bold'
-                                      }
-                                    >
-                                      {p.text}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
+                            );
+                          })()
+                        ) : (
+                          <div className="space-y-2 text-xs">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-slate-400 font-bold select-none">Bạn đã gõ:</span>
+                              <span className="bg-rose-950/80 text-rose-300 font-bold px-2.5 py-1 rounded-xl border border-rose-800/50">
+                                {singleInput || '(chưa nhập)'}
+                              </span>
                             </div>
-                          );
-                        })()}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-slate-400 font-bold select-none">Nghĩa tiếng Việt chuẩn:</span>
+                              <span className="bg-emerald-950/80 text-emerald-300 font-bold px-2.5 py-1 rounded-xl border border-emerald-800/50">
+                                {currentItem.vietnamese}
+                              </span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1144,7 +1446,9 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
                   ĐÃ GÕ XONG • KIỂM TRA (ENTER)
                 </button>
                 <p className="text-[11px] text-slate-500 text-center mt-2">
-                  Mẹo: Gõ bằng chữ Hán hay Hiragana đều được tính là đúng.
+                  {direction === 'vi-to-jp'
+                    ? 'Mẹo: Gõ bằng Hiragana hoặc Katakana (Romaji sẽ tự động chuyển đổi).'
+                    : 'Mẹo: Gõ nghĩa tiếng Việt có hoặc không có dấu đều được chấp nhận.'}
                 </p>
               </div>
             )}

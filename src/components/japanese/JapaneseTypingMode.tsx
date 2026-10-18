@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import {
   X,
   Volume2,
@@ -134,7 +134,17 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
   });
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const pendingCursorRef = useRef<number | null>(null);
   const timerRef = useRef<number | null>(null);
+
+  // Preserve cursor position across React re-renders when editing in the middle of text
+  useLayoutEffect(() => {
+    if (pendingCursorRef.current !== null && inputRef.current) {
+      const pos = pendingCursorRef.current;
+      inputRef.current.setSelectionRange(pos, pos);
+      pendingCursorRef.current = null;
+    }
+  });
 
   const currentCard = cards[currentIndex];
   const isCurrentKata = currentCard
@@ -347,10 +357,16 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     }
 
     const raw = e.target.value;
+    const cursorPos = e.target.selectionStart ?? raw.length;
+
     if (direction === 'jp-to-vi' || imeMode === 'off') {
+      pendingCursorRef.current = cursorPos;
       setInputVal(raw);
     } else {
+      const rawPrefix = raw.slice(0, cursorPos);
+      const convertedPrefix = convertRomajiToKana(rawPrefix, imeMode);
       const converted = convertRomajiToKana(raw, imeMode);
+      pendingCursorRef.current = convertedPrefix.length;
       setInputVal(converted);
     }
   };

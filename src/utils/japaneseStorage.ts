@@ -898,7 +898,7 @@ export function updateJapaneseCardMastery(lessonId: string, cardId: string, mast
 // Japanese Courses Management (e.g. JPD123)
 // ---------------------------------------------------------------------------
 
-export const JPD123_GRAMMAR_VERSION = '20261018_v2_vocab_audit';
+export const JPD123_GRAMMAR_VERSION = '20261018_v3_all_kana';
 
 export const DEFAULT_JPD123_COURSE: JapaneseCourse = {
   id: 'course-jpd123',
