@@ -126,7 +126,7 @@ export const JPD123_GRAMMAR_POINTS: JapaneseGrammarPoint[] = [
       { japanese: 'ここに いろいろな りょうりが あります。', vietnamese: 'Ở đây có nhiều món ăn khác nhau.' },
       { japanese: 'このまちに みどりが たくさん あります。', vietnamese: 'Ở thành phố này có nhiều cây xanh.' },
       { japanese: 'とうきょうに おおきいこうえんや きれいなビルが あります。', vietnamese: 'Ở Tokyo có công viên to và tòa nhà đẹp.' },
-      { japanese: 'えきの ちかくに コンビニや ＡＴＭが あります。', vietnamese: 'Gần ga có cửa hàng tiện lợi và cây ATM.' },
+      { japanese: 'えきの ちかくに コンビニや ATMが あります。', vietnamese: 'Gần ga có cửa hàng tiện lợi và cây ATM.' },
       { japanese: 'やまに きれいな かわと おんせんが あります。', vietnamese: 'Ở trên núi có dòng sông đẹp và suối nước nóng.' },
       { japanese: 'まちに ふるいおてらや ゆうめいなおしろが あります。', vietnamese: 'Trong thị trấn có chùa cổ và thành cổ nổi tiếng.' },
     ],

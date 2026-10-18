@@ -1,5 +1,5 @@
 import { convertRomajiToKana, katakanaToHiragana } from './japaneseKana';
-import { convertKanjiToHiragana } from './japaneseKanjiConverter';
+import { convertKanjiToHiragana, checkGrammarSentenceAnswer } from './japaneseKanjiConverter';
 
 export interface DiffPart {
   text: string;
@@ -18,14 +18,8 @@ export interface DetailedDiffResult {
  */
 function normalizeCharForDiff(c: string): string {
   if (!c) return '';
-  // Convert full-width ASCII to half-width
-  const code = c.charCodeAt(0);
-  let ch = c;
-  if (code >= 0xff01 && code <= 0xff5e) {
-    ch = String.fromCharCode(code - 0xfee0);
-  } else if (code === 0x3000) {
-    ch = ' ';
-  }
+  // Unicode NFKC converts full-width ASCII to half-width, full-width space to half-width space, etc.
+  let ch = c.normalize('NFKC');
   // Convert Katakana to Hiragana for comparison
   ch = katakanaToHiragana(ch);
   return ch.toLowerCase();
@@ -149,20 +143,30 @@ function buildDiffSegments(
         i++;
       }
 
-      if (wrongUser.length > 0) {
-        userParts.push({ text: wrongUser, type: 'wrong' });
-      }
-      if (missingTarget.length > 0) {
-        targetParts.push({ text: missingTarget, type: 'missing' });
-      }
+      // Check if mismatch only consists of formatting (spaces, periods at end)
+      const meaningfulWrong = wrongUser.replace(/[\s。.,!?]/g, '');
+      const meaningfulMissing = missingTarget.replace(/[\s。.,!?]/g, '');
 
-      if (!firstErrorHint) {
-        if (wrongUser && missingTarget) {
-          firstErrorHint = `Gõ nhầm "${wrongUser}" ➔ cần là "${missingTarget}"`;
-        } else if (missingTarget) {
-          firstErrorHint = `Thiếu đoạn "${missingTarget}"`;
-        } else if (wrongUser) {
-          firstErrorHint = `Thừa ký tự "${wrongUser}"`;
+      if (!meaningfulWrong && !meaningfulMissing) {
+        // Purely spacing or punctuation difference: mark as correct
+        if (wrongUser.length > 0) userParts.push({ text: wrongUser, type: 'correct' });
+        if (missingTarget.length > 0) targetParts.push({ text: missingTarget, type: 'correct' });
+      } else {
+        if (wrongUser.length > 0) {
+          userParts.push({ text: wrongUser, type: meaningfulWrong.length > 0 ? 'wrong' : 'correct' });
+        }
+        if (missingTarget.length > 0) {
+          targetParts.push({ text: missingTarget, type: meaningfulMissing.length > 0 ? 'missing' : 'correct' });
+        }
+
+        if (!firstErrorHint) {
+          if (meaningfulWrong && meaningfulMissing) {
+            firstErrorHint = `Gõ nhầm "${meaningfulWrong}" ➔ cần là "${meaningfulMissing}"`;
+          } else if (meaningfulMissing) {
+            firstErrorHint = `Thiếu đoạn "${meaningfulMissing}"`;
+          } else if (meaningfulWrong) {
+            firstErrorHint = `Thừa ký tự "${meaningfulWrong}"`;
+          }
         }
       }
     }
@@ -185,6 +189,15 @@ export function computeJapaneseDiff(userInput: string, targetSentence: string): 
       targetParts: [{ text: cleanTarget, type: 'missing' }],
       firstErrorHint: 'Bạn chưa nhập câu trả lời',
       hasErrors: true,
+    };
+  }
+
+  // If answer matches under relaxed grammar check, it's 100% correct!
+  if (checkGrammarSentenceAnswer(cleanInput, cleanTarget)) {
+    return {
+      userParts: [{ text: cleanInput, type: 'correct' }],
+      targetParts: [{ text: cleanTarget, type: 'correct' }],
+      hasErrors: false,
     };
   }
 
