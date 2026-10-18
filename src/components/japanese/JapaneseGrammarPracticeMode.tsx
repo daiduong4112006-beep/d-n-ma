@@ -281,10 +281,17 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
     if (parsed.isDialogue) {
       if (!inputA.trim() && !inputB.trim()) return;
 
-      const finA = inputA.replace(/n(?=[^a-z]|$)/gi, targetKana);
-      const finB = inputB.replace(/n(?=[^a-z]|$)/gi, targetKana);
-      if (finA !== inputA) setInputA(finA);
-      if (finB !== inputB) setInputB(finB);
+      let finA = inputA;
+      let finB = inputB;
+
+      // Auto-finalize any pending trailing 'n' to 'ん' or 'ン' ONLY when typing Japanese (vi-to-jp)
+      if (direction === 'vi-to-jp' && imeMode !== 'off') {
+        const targetKana = imeMode === 'katakana' ? 'ン' : 'ん';
+        finA = inputA.replace(/n(?=[^a-z]|$)/gi, targetKana);
+        finB = inputB.replace(/n(?=[^a-z]|$)/gi, targetKana);
+        if (finA !== inputA) setInputA(finA);
+        if (finB !== inputB) setInputB(finB);
+      }
 
       let okA = false;
       let okB = false;
@@ -328,8 +335,14 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
     } else {
       if (!singleInput.trim()) return;
 
-      const finSingle = singleInput.replace(/n(?=[^a-z]|$)/gi, targetKana);
-      if (finSingle !== singleInput) setSingleInput(finSingle);
+      let finSingle = singleInput;
+
+      // Auto-finalize any pending trailing 'n' to 'ん' or 'ン' ONLY when typing Japanese (vi-to-jp)
+      if (direction === 'vi-to-jp' && imeMode !== 'off') {
+        const targetKana = imeMode === 'katakana' ? 'ン' : 'ん';
+        finSingle = singleInput.replace(/n(?=[^a-z]|$)/gi, targetKana);
+        if (finSingle !== singleInput) setSingleInput(finSingle);
+      }
 
       let ok = false;
       if (direction === 'vi-to-jp') {

@@ -374,11 +374,14 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
   const checkAnswer = () => {
     if (!currentCard || !inputVal.trim()) return;
 
-    // Auto-finalize any pending trailing 'n' to 'ん' or 'ン' so user input in state and on screen is 100% clean Kana!
-    const targetKanaN = isCurrentKata || imeMode === 'katakana' ? 'ン' : 'ん';
-    const finalized = inputVal.replace(/n(?=[^a-z]|$)/gi, targetKanaN);
-    if (finalized !== inputVal) {
-      setInputVal(finalized);
+    let finalized = inputVal;
+    // Auto-finalize any pending trailing 'n' to 'ん' or 'ン' ONLY when typing Japanese (vi-to-jp)
+    if (direction === 'vi-to-jp' && imeMode !== 'off') {
+      const targetKanaN = isCurrentKata || imeMode === 'katakana' ? 'ン' : 'ん';
+      finalized = inputVal.replace(/n(?=[^a-z]|$)/gi, targetKanaN);
+      if (finalized !== inputVal) {
+        setInputVal(finalized);
+      }
     }
 
     let matched = false;
