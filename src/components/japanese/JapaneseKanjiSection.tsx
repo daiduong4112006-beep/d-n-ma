@@ -359,6 +359,7 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
     return (
       <JapaneseFlashcardMode
         customCards={currentFolderVocab}
+        isKanjiVocabMode={true}
         title={`Flashcard Từ vựng Chữ Hán • ${
           !selectedFolder || selectedFolder === 'ALL'
             ? 'Toàn bộ từ ghép'

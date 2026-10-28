@@ -26,6 +26,7 @@ interface JapaneseFlashcardModeProps {
   lesson?: JapaneseLesson;
   customCards?: JapaneseVocabCard[];
   kanjiCards?: JapaneseKanjiCard[];
+  isKanjiVocabMode?: boolean;
   title?: string;
   storageId?: string;
   onExit: () => void;
@@ -36,6 +37,7 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
   lesson,
   customCards,
   kanjiCards,
+  isKanjiVocabMode = false,
   title,
   storageId,
   onExit,
@@ -348,7 +350,11 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
                 >
                   <span>
                     {direction === 'jp-to-vi'
-                      ? '🇯🇵 Tiếng Nhật → 🇻🇳 Tiếng Việt'
+                      ? (isKanjiMode || isKanjiVocabMode)
+                        ? '🇯🇵 Chữ Hán → 🇯🇵🇻🇳 Chữ Nhật & Tiếng Việt'
+                        : '🇯🇵 Tiếng Nhật → 🇻🇳 Tiếng Việt'
+                      : (isKanjiMode || isKanjiVocabMode)
+                      ? '🇻🇳 Tiếng Việt → 🇯🇵 Chữ Hán'
                       : '🇻🇳 Tiếng Việt → 🇯🇵 Tiếng Nhật'}
                   </span>
                   <span className="text-[11px] text-indigo-400 font-bold">Chạm để đổi</span>
@@ -475,10 +481,16 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
             <span className="font-black tracking-wider uppercase text-[10px] sm:text-xs text-indigo-400">
               {direction === 'jp-to-vi'
                 ? isFlipped
-                  ? isKanjiMode ? 'Mặt sau: Âm Hán Việt & Nghĩa' : 'Mặt sau: Nghĩa Tiếng Việt'
-                  : isKanjiMode ? 'Mặt trước: Chữ Hán' : 'Mặt trước: Từ vựng Tiếng Nhật'
+                  ? (isKanjiMode || isKanjiVocabMode)
+                    ? 'Mặt sau: Chữ Nhật & Tiếng Việt'
+                    : 'Mặt sau: Nghĩa Tiếng Việt'
+                  : (isKanjiMode || isKanjiVocabMode)
+                  ? 'Mặt trước: Chữ Hán'
+                  : 'Mặt trước: Từ vựng Tiếng Nhật'
                 : isFlipped
-                ? isKanjiMode ? 'Mặt sau: Chữ Hán' : 'Mặt sau: Tiếng Nhật'
+                ? (isKanjiMode || isKanjiVocabMode)
+                  ? 'Mặt sau: Chữ Hán'
+                  : 'Mặt sau: Tiếng Nhật'
                 : 'Mặt trước: Nghĩa Tiếng Việt'}
             </span>
 
@@ -519,59 +531,184 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
           {/* Card Center Content */}
           <div className="my-auto text-center space-y-4 sm:space-y-6 py-4">
             {isKanjiMode ? (
-              // KANJI CARD RENDERING
+              // KANJI CARD RENDERING (Chữ Hán Cốt Lõi)
               direction === 'jp-to-vi' ? (
                 !isFlipped ? (
+                  // Mặt trước (1 bên là Chữ Hán):
                   <div className="space-y-4">
-                    <div className="text-8xl sm:text-9xl md:text-[10rem] font-black text-white tracking-wider">
+                    <div className="text-8xl sm:text-9xl md:text-[10rem] font-black text-white font-japanese tracking-wider drop-shadow-lg">
                       {currentItem.kanji}
                     </div>
-                    <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
-                      {currentItem.kunyomi && currentItem.kunyomi !== '-' && (
-                        <span className="px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                          Kun: {currentItem.kunyomi}
+                    {currentItem.strokeCount && (
+                      <div className="flex justify-center pt-2">
+                        <span className="px-3.5 py-1 rounded-full bg-slate-800/90 text-slate-400 text-xs sm:text-sm font-bold border border-slate-700/60 shadow-sm">
+                          {currentItem.strokeCount} nét
                         </span>
-                      )}
-                      {currentItem.onyomi && currentItem.onyomi !== '-' && (
-                        <span className="px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                          On: {currentItem.onyomi}
-                        </span>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    <h2 className="text-4xl sm:text-5xl md:text-6xl font-black text-amber-400 tracking-wider">
-                      {currentItem.hanViet}
-                    </h2>
-                    <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-100 max-w-2xl mx-auto leading-relaxed">
-                      {currentItem.meaning}
-                    </p>
-                    <div className="pt-4 border-t border-slate-800 flex items-center justify-center gap-4 text-sm text-slate-400">
-                      <span>Chữ Hán: <b className="text-white text-xl sm:text-2xl font-black">{currentItem.kanji}</b></span>
-                      {currentItem.strokeCount && <span>({currentItem.strokeCount} nét)</span>}
+                  // Mặt sau (Bên kia là chữ Nhật và ở dưới là tiếng Việt):
+                  <div className="space-y-6 sm:space-y-8 animate-fade-in">
+                    {/* Ở TRÊN: CHỮ NHẬT (KUN & ON) */}
+                    <div className="space-y-2.5">
+                      <span className="text-[11px] font-black uppercase text-indigo-400 tracking-widest block">
+                        CÁCH ĐỌC TIẾNG NHẬT
+                      </span>
+                      <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+                        {currentItem.kunyomi && currentItem.kunyomi !== '-' && (
+                          <div className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 shadow-sm">
+                            <span className="text-[10px] font-black uppercase text-indigo-400 mr-2 tracking-wider">KUN:</span>
+                            <span className="text-xl sm:text-2xl md:text-3xl font-black font-japanese">{currentItem.kunyomi}</span>
+                          </div>
+                        )}
+                        {currentItem.onyomi && currentItem.onyomi !== '-' && (
+                          <div className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-2xl bg-purple-500/15 border border-purple-500/30 text-purple-200 shadow-sm">
+                            <span className="text-[10px] font-black uppercase text-purple-400 mr-2 tracking-wider">ON:</span>
+                            <span className="text-xl sm:text-2xl md:text-3xl font-black font-japanese">{currentItem.onyomi}</span>
+                          </div>
+                        )}
+                        {(!currentItem.kunyomi || currentItem.kunyomi === '-') && (!currentItem.onyomi || currentItem.onyomi === '-') && (
+                          <span className="text-slate-400 text-sm italic">Không có âm đọc riêng</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Ở DƯỚI: TIẾNG VIỆT (HÁN VIỆT & NGHĨA) */}
+                    <div className="space-y-2 pt-4 sm:pt-6 border-t border-slate-800">
+                      <span className="text-[11px] font-black uppercase text-amber-400 tracking-widest block">
+                        Ý NGHĨA TIẾNG VIỆT
+                      </span>
+                      <h2 className="text-4xl sm:text-5xl md:text-6xl font-black text-amber-400 tracking-wider uppercase">
+                        {currentItem.hanViet}
+                      </h2>
+                      <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-100 max-w-2xl mx-auto leading-relaxed">
+                        {currentItem.meaning}
+                      </p>
+                    </div>
+
+                    {/* Đối chiếu Chữ Hán thu nhỏ dưới cùng */}
+                    <div className="pt-2 flex items-center justify-center gap-3 text-xs sm:text-sm text-slate-400">
+                      <span>Chữ Hán: <b className="text-white text-xl sm:text-2xl font-black font-japanese">{currentItem.kanji}</b></span>
+                      {currentItem.strokeCount && <span>• {currentItem.strokeCount} nét</span>}
                     </div>
                   </div>
                 )
               ) : (
                 !isFlipped ? (
                   <div className="space-y-4">
-                    <h2 className="text-4xl sm:text-5xl md:text-6xl font-black text-amber-400">
+                    <span className="text-[11px] font-black uppercase text-amber-400 tracking-widest block">
+                      Ý NGHĨA TIẾNG VIỆT
+                    </span>
+                    <h2 className="text-4xl sm:text-5xl md:text-6xl font-black text-amber-400 tracking-wider uppercase">
                       {currentItem.hanViet}
                     </h2>
-                    <p className="text-2xl sm:text-3xl font-bold text-slate-200">
+                    <p className="text-2xl sm:text-3xl font-bold text-slate-200 max-w-2xl mx-auto">
                       {currentItem.meaning}
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    <div className="text-8xl sm:text-9xl md:text-[10rem] font-black text-white">
+                  <div className="space-y-6">
+                    <div className="text-8xl sm:text-9xl md:text-[10rem] font-black text-white font-japanese">
                       {currentItem.kanji}
                     </div>
-                    <div className="flex justify-center gap-3 text-sm text-indigo-300">
-                      {currentItem.kunyomi && <span>Kun: {currentItem.kunyomi}</span>}
-                      {currentItem.onyomi && <span>On: {currentItem.onyomi}</span>}
+                    <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
+                      {currentItem.kunyomi && currentItem.kunyomi !== '-' && (
+                        <span className="px-3 py-1 rounded-xl bg-indigo-500/20 text-indigo-300 font-bold">
+                          Kun: {currentItem.kunyomi}
+                        </span>
+                      )}
+                      {currentItem.onyomi && currentItem.onyomi !== '-' && (
+                        <span className="px-3 py-1 rounded-xl bg-purple-500/20 text-purple-300 font-bold">
+                          On: {currentItem.onyomi}
+                        </span>
+                      )}
                     </div>
+                  </div>
+                )
+              )
+            ) : isKanjiVocabMode ? (
+              // KANJI VOCAB CARD RENDERING (Từ ghép chữ Hán: 先生, 電車...)
+              direction === 'jp-to-vi' ? (
+                !isFlipped ? (
+                  // Mặt trước (1 bên là Chữ Hán ghép):
+                  <div className="space-y-4">
+                    <div className="text-7xl sm:text-8xl md:text-9xl font-black text-white font-japanese tracking-wide drop-shadow-lg">
+                      {currentItem.term}
+                    </div>
+                    {currentItem.partOfSpeech && (
+                      <div className="flex justify-center pt-1">
+                        <span className="px-3.5 py-1 rounded-full bg-slate-800 text-slate-400 text-xs sm:text-sm font-bold border border-slate-700/60 uppercase">
+                          {currentItem.partOfSpeech}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  // Mặt sau (Bên kia là chữ Nhật và ở dưới là tiếng Việt):
+                  <div className="space-y-6 sm:space-y-8 animate-fade-in">
+                    {/* Ở TRÊN: CHỮ NHẬT (CÁCH ĐỌC KANA) */}
+                    <div className="space-y-2">
+                      <span className="text-[11px] font-black uppercase text-cyan-400 tracking-widest block">
+                        CÁCH ĐỌC TIẾNG NHẬT
+                      </span>
+                      <div className="flex items-center justify-center gap-3 flex-wrap pt-1">
+                        <span className="text-4xl sm:text-5xl md:text-6xl font-black text-cyan-300 font-japanese">
+                          {currentItem.reading || currentItem.term}
+                        </span>
+                        {currentItem.romaji && (
+                          <span className="text-lg sm:text-xl font-mono font-bold text-slate-400">
+                            [{currentItem.romaji}]
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Ở DƯỚI: TIẾNG VIỆT (NGHĨA & VÍ DỤ) */}
+                    <div className="space-y-2 pt-4 sm:pt-6 border-t border-slate-800">
+                      <span className="text-[11px] font-black uppercase text-emerald-400 tracking-widest block">
+                        NGHĨA TIẾNG VIỆT
+                      </span>
+                      <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-emerald-400 leading-tight">
+                        {currentItem.definition}
+                      </h2>
+                      {currentItem.example && (
+                        <p className="text-sm sm:text-base md:text-lg text-slate-300 italic max-w-2xl mx-auto leading-relaxed pt-1">
+                          &ldquo;{currentItem.example}&rdquo;
+                          {currentItem.exampleMeaning && (
+                            <span className="block text-xs sm:text-sm text-slate-400 not-italic mt-0.5">
+                              {currentItem.exampleMeaning}
+                            </span>
+                          )}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Đối chiếu Chữ Hán ghép thu nhỏ dưới cùng */}
+                    <div className="pt-2 flex items-center justify-center gap-2 text-xs sm:text-sm text-slate-400">
+                      <span>Từ Hán ghép: <b className="text-white text-xl sm:text-2xl font-black font-japanese">{currentItem.term}</b></span>
+                    </div>
+                  </div>
+                )
+              ) : (
+                // Reverse direction (vi-to-jp)
+                !isFlipped ? (
+                  <div className="space-y-4">
+                    <span className="text-[11px] font-black uppercase text-emerald-400 tracking-widest block">
+                      NGHĨA TIẾNG VIỆT
+                    </span>
+                    <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-white leading-tight">
+                      {currentItem.definition}
+                    </h2>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <h2 className="text-6xl sm:text-7xl md:text-8xl font-black text-cyan-400 font-japanese">
+                      {currentItem.term}
+                    </h2>
+                    <p className="text-2xl sm:text-3xl font-bold text-indigo-300 font-japanese">
+                      {currentItem.reading || currentItem.term}
+                    </p>
                   </div>
                 )
               )
