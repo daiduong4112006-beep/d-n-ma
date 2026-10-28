@@ -26,6 +26,7 @@ import { sound } from '../../utils/audio';
 import { JapaneseFlashcardMode } from './JapaneseFlashcardMode';
 import { JapaneseKanjiStudyMode } from './JapaneseKanjiStudyMode';
 import { JapaneseTypingMode } from './JapaneseTypingMode';
+import { JapaneseKanjiTypingMode } from './JapaneseKanjiTypingMode';
 import { JapaneseMultiChoiceMode } from './JapaneseMultiChoiceMode';
 
 interface Props {
@@ -340,9 +341,14 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
 
   if (activeStudyMode === 'kanji-typing') {
     return (
-      <JapaneseTypingMode
-        lesson={virtualLessonForKanjiCore}
-        isKanjiSection={true}
+      <JapaneseKanjiTypingMode
+        mode="core"
+        kanjiCards={currentFolderKanji}
+        title={`Luyện gõ Chữ Hán Cốt Lõi • ${
+          !selectedFolder || selectedFolder === 'ALL'
+            ? 'Toàn bộ Chữ Hán'
+            : LESSON_FOLDER_METADATA[selectedFolder]?.title || selectedFolder
+        }`}
         onExit={() => setActiveStudyMode('none')}
         onCardMastered={(id) => handleToggleKanjiMastered(id)}
       />
@@ -367,9 +373,14 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
 
   if (activeStudyMode === 'vocab-typing') {
     return (
-      <JapaneseTypingMode
-        lesson={virtualLessonForVocab}
-        isKanjiSection={true}
+      <JapaneseKanjiTypingMode
+        mode="vocab"
+        vocabCards={currentFolderVocab}
+        title={`Luyện gõ Từ vựng Chữ Hán • ${
+          !selectedFolder || selectedFolder === 'ALL'
+            ? 'Toàn bộ từ ghép'
+            : LESSON_FOLDER_METADATA[selectedFolder]?.title || selectedFolder
+        }`}
         onExit={() => setActiveStudyMode('none')}
         onCardMastered={(id) => handleToggleVocabMastered(id)}
       />
