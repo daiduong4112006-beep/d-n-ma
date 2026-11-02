@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   Clock,
   TrendingUp,
+  Search,
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -23,8 +24,8 @@ interface DashboardProps {
   onCreateQuiz: () => void;
   onNavigateToImport?: () => void;
   onPracticeQuizMistakes?: (quizId: string) => void;
-  searchTerm: string;
-  selectedSubject: string;
+  searchTerm?: string;
+  selectedSubject?: string;
   currentUser?: { email: string; name: string } | null;
   onOpenAuthModal?: () => void;
   onQuizCreated?: (newQuiz: Quiz) => void;
@@ -47,16 +48,29 @@ export const Dashboard: React.FC<DashboardProps> = ({
 }) => {
   const [deleteCandidateId, setDeleteCandidateId] = useState<string | null>(null);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [internalSearch, setInternalSearch] = useState('');
+  const [internalSubject, setInternalSubject] = useState('All');
+
+  const effectiveSearch = searchTerm !== undefined ? searchTerm : internalSearch;
+  const effectiveSubject = selectedSubject !== undefined && selectedSubject !== '' ? selectedSubject : internalSubject;
+
+  const availableSubjects = React.useMemo(() => {
+    const set = new Set<string>();
+    quizzes.forEach((q) => {
+      if (q.subject && q.subject.trim()) set.add(q.subject.trim());
+    });
+    return ['All', ...Array.from(set)];
+  }, [quizzes]);
 
   // Filter quizzes by search and subject
   const filteredQuizzes = quizzes.filter((quiz) => {
     const matchesSearch =
-      !searchTerm ||
-      quiz.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      quiz.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      quiz.subject.toLowerCase().includes(searchTerm.toLowerCase());
+      !effectiveSearch ||
+      quiz.title.toLowerCase().includes(effectiveSearch.toLowerCase()) ||
+      quiz.description.toLowerCase().includes(effectiveSearch.toLowerCase()) ||
+      quiz.subject.toLowerCase().includes(effectiveSearch.toLowerCase());
 
-    const matchesSubject = selectedSubject === 'All' || quiz.subject === selectedSubject;
+    const matchesSubject = effectiveSubject === 'All' || quiz.subject === effectiveSubject;
 
     return matchesSearch && matchesSubject;
   });
@@ -181,7 +195,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </div>
 
       {/* Quizzes List Header */}
-      <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-slate-800 flex-wrap gap-3">
+      <div className="flex flex-col md:flex-row md:items-center justify-between pb-3 border-b border-slate-200/80 dark:border-slate-800 gap-3">
         <div>
           <h2 className="text-lg md:text-xl font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2.5">
             <span>Bộ đề gần đây</span>
@@ -194,7 +208,34 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Inline Search */}
+          <div className="relative w-full sm:w-52">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Tìm theo tên, môn..."
+              value={effectiveSearch}
+              onChange={(e) => setInternalSearch(e.target.value)}
+              className="w-full pl-8 pr-3 py-2 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs font-medium"
+            />
+          </div>
+
+          {/* Subject Filter */}
+          {availableSubjects.length > 2 && (
+            <select
+              value={effectiveSubject}
+              onChange={(e) => setInternalSubject(e.target.value)}
+              className="px-3 py-2 text-xs font-semibold rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-2xs"
+            >
+              {availableSubjects.map((sub) => (
+                <option key={sub} value={sub}>
+                  {sub === 'All' ? 'Tất cả môn' : sub}
+                </option>
+              ))}
+            </select>
+          )}
+
           {/* AI Generator Button */}
           <button
             type="button"
