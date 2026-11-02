@@ -292,15 +292,20 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
   };
 
   // Virtual lesson helper for typing & multichoice study modes
+  const isVocabFiltered = Boolean(filterKanjiChar || vocabSearch.trim());
+  const activePracticingVocab = isVocabFiltered ? filteredVocab : currentFolderVocab;
+
   const virtualLessonForVocab: JapaneseLesson = {
-    id: `kanji_vocab_${selectedFolder || 'all'}`,
-    title: `Từ vựng Chữ Hán • ${
-      !selectedFolder || selectedFolder === 'ALL'
-        ? 'Tất cả bài học'
-        : LESSON_FOLDER_METADATA[selectedFolder]?.title || selectedFolder
-    }`,
-    cards: currentFolderVocab,
-    description: `Luyện tập ${currentFolderVocab.length} từ ghép chữ Hán`,
+    id: `kanji_vocab_${selectedFolder || 'all'}${filterKanjiChar ? `_${filterKanjiChar}` : ''}`,
+    title: filterKanjiChar
+      ? `Từ vựng chứa chữ 「${filterKanjiChar}」`
+      : `Từ vựng Chữ Hán • ${
+          !selectedFolder || selectedFolder === 'ALL'
+            ? 'Tất cả bài học'
+            : LESSON_FOLDER_METADATA[selectedFolder]?.title || selectedFolder
+        }`,
+    cards: activePracticingVocab,
+    description: `Luyện tập ${activePracticingVocab.length} từ ghép chữ Hán`,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -358,14 +363,18 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
   if (activeStudyMode === 'vocab-flashcard') {
     return (
       <JapaneseFlashcardMode
-        customCards={currentFolderVocab}
+        customCards={activePracticingVocab}
         isKanjiVocabMode={true}
-        title={`Flashcard Từ vựng Chữ Hán • ${
-          !selectedFolder || selectedFolder === 'ALL'
-            ? 'Toàn bộ từ ghép'
-            : LESSON_FOLDER_METADATA[selectedFolder]?.title || selectedFolder
-        }`}
-        storageId={`kanji_vocab_flashcard_${selectedFolder || 'all'}`}
+        title={
+          filterKanjiChar
+            ? `Flashcard Từ ghép chứa chữ 「${filterKanjiChar}」 (${activePracticingVocab.length} từ)`
+            : `Flashcard Từ vựng Chữ Hán • ${
+                !selectedFolder || selectedFolder === 'ALL'
+                  ? 'Toàn bộ từ ghép'
+                  : LESSON_FOLDER_METADATA[selectedFolder]?.title || selectedFolder
+              }`
+        }
+        storageId={`kanji_vocab_flashcard_${selectedFolder || 'all'}${filterKanjiChar ? `_${filterKanjiChar}` : ''}`}
         onExit={() => setActiveStudyMode('none')}
         onCardMastered={(id) => handleToggleVocabMastered(id)}
       />
@@ -376,12 +385,16 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
     return (
       <JapaneseKanjiTypingMode
         mode="vocab"
-        vocabCards={currentFolderVocab}
-        title={`Luyện gõ Từ vựng Chữ Hán • ${
-          !selectedFolder || selectedFolder === 'ALL'
-            ? 'Toàn bộ từ ghép'
-            : LESSON_FOLDER_METADATA[selectedFolder]?.title || selectedFolder
-        }`}
+        vocabCards={activePracticingVocab}
+        title={
+          filterKanjiChar
+            ? `Luyện gõ Từ ghép chứa chữ 「${filterKanjiChar}」 (${activePracticingVocab.length} từ)`
+            : `Luyện gõ Từ vựng Chữ Hán • ${
+                !selectedFolder || selectedFolder === 'ALL'
+                  ? 'Toàn bộ từ ghép'
+                  : LESSON_FOLDER_METADATA[selectedFolder]?.title || selectedFolder
+              }`
+        }
         onExit={() => setActiveStudyMode('none')}
         onCardMastered={(id) => handleToggleVocabMastered(id)}
       />
@@ -1071,7 +1084,7 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
           <div className="flex items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs">
             <div className="flex items-center gap-2">
               <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white uppercase tracking-wider">
-                TỪ VỰNG CHỮ HÁN ({currentFolderVocab.length})
+                TỪ VỰNG CHỮ HÁN ({isVocabFiltered ? `${filteredVocab.length}/${currentFolderVocab.length}` : currentFolderVocab.length})
               </h3>
               {vocabMasteredCount > 0 && (
                 <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40">
@@ -1085,34 +1098,52 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
               {/* Flashcard */}
               <button
                 type="button"
-                onClick={() => setActiveStudyMode('vocab-flashcard')}
+                onClick={() => {
+                  if (activePracticingVocab.length === 0) {
+                    alert('Không có từ vựng nào phù hợp để luyện tập!');
+                    return;
+                  }
+                  setActiveStudyMode('vocab-flashcard');
+                }}
                 className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs shadow-xs flex items-center gap-1 cursor-pointer active:scale-95 transition-all"
-                title="Lật thẻ Flashcard từ vựng"
+                title={filterKanjiChar ? `Flashcard ${filteredVocab.length} từ đang lọc theo chữ 「${filterKanjiChar}」` : "Lật thẻ Flashcard từ vựng"}
               >
                 <Layers className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Flashcard</span>
+                <span className="hidden sm:inline">Flashcard{filterKanjiChar ? ` (${filteredVocab.length})` : ''}</span>
               </button>
 
               {/* Luyện gõ */}
               <button
                 type="button"
-                onClick={() => setActiveStudyMode('vocab-typing')}
+                onClick={() => {
+                  if (activePracticingVocab.length === 0) {
+                    alert('Không có từ vựng nào phù hợp để luyện tập!');
+                    return;
+                  }
+                  setActiveStudyMode('vocab-typing');
+                }}
                 className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 text-white font-bold text-xs shadow-xs flex items-center gap-1 cursor-pointer active:scale-95 transition-all"
-                title="Luyện gõ từ vựng"
+                title={filterKanjiChar ? `Luyện gõ ${filteredVocab.length} từ đang lọc theo chữ 「${filterKanjiChar}」` : "Luyện gõ từ vựng"}
               >
                 <Keyboard className="w-3.5 h-3.5 text-orange-400" />
-                <span className="hidden sm:inline">Gõ</span>
+                <span className="hidden sm:inline">Gõ{filterKanjiChar ? ` (${filteredVocab.length})` : ''}</span>
               </button>
 
               {/* Trắc nghiệm */}
               <button
                 type="button"
-                onClick={() => setActiveStudyMode('vocab-multichoice')}
+                onClick={() => {
+                  if (activePracticingVocab.length === 0) {
+                    alert('Không có từ vựng nào phù hợp để luyện tập!');
+                    return;
+                  }
+                  setActiveStudyMode('vocab-multichoice');
+                }}
                 className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 font-bold text-xs shadow-2xs flex items-center gap-1 cursor-pointer active:scale-95 transition-all"
-                title="Trắc nghiệm 4 đáp án"
+                title={filterKanjiChar ? `Trắc nghiệm ${filteredVocab.length} từ đang lọc theo chữ 「${filterKanjiChar}」` : "Trắc nghiệm 4 đáp án"}
               >
                 <CheckSquare2 className="w-3.5 h-3.5 text-emerald-500" />
-                <span className="hidden sm:inline">Trắc nghiệm</span>
+                <span className="hidden sm:inline">Trắc nghiệm{filterKanjiChar ? ` (${filteredVocab.length})` : ''}</span>
               </button>
             </div>
           </div>
