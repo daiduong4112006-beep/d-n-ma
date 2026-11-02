@@ -793,9 +793,7 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
             <div className="space-y-4">
               {/* Big Vocab Compound */}
               <div className="flex items-center justify-center gap-3">
-                <span className="text-5xl sm:text-6xl font-black text-white font-japanese tracking-wide drop-shadow-md">
-                  {currentVocab.term}
-                </span>
+
                 <button
                   type="button"
                   onClick={handleSpeakCard}

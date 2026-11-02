@@ -50,7 +50,7 @@ import { saveJapaneseCourses, saveAllowedJpd123Emails, canAccessJpd123, DEFAULT_
 import { updateStudyProgressFromCloud } from './utils/studyProgressStorage';
 
 // Components
-import { Header } from './components/Header';
+import { Sidebar, ContentHeader } from './components/Sidebar';
 import { AuthModal } from './components/AuthModal';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 
@@ -661,10 +661,37 @@ export default function App() {
 
   const subjectsList = getSubjectsList(quizzes);
 
+  const pageTitle =
+    activeTab === 'dashboard' || activeTab === 'my-quizzes'
+      ? 'Bộ đề của tôi'
+      : activeTab === 'quiz-detail'
+      ? 'Chi tiết bộ đề & Ôn tập'
+      : activeTab === 'create-quiz'
+      ? 'Tạo bộ đề mới'
+      : activeTab === 'edit-quiz'
+      ? 'Chỉnh sửa câu hỏi'
+      : activeTab === 'quiz-mode'
+      ? 'Thi trắc nghiệm'
+      : activeTab === 'quiz-result'
+      ? 'Kết quả bài thi'
+      : activeTab === 'review-mode'
+      ? 'Xem lại đáp án'
+      : activeTab === 'practice-mistakes'
+      ? 'Luyện câu hay sai'
+      : activeTab === 'statistics'
+      ? 'Thống kê kết quả'
+      : activeTab === 'import-export'
+      ? 'Nhập & Xuất đề thi'
+      : activeTab === 'saved-vocabulary'
+      ? 'Từ cần lưu ý ghi nhớ'
+      : activeTab === 'japanese'
+      ? 'Học Tiếng Nhật - Luyện Từ Vựng'
+      : 'Cài đặt hệ thống';
+
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-clip bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col antialiased">
-      {/* Top Navbar & Header */}
-      <Header
+    <div className="min-h-screen w-full max-w-full overflow-x-clip bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col md:flex-row antialiased">
+      {/* Left Sidebar Navigation */}
+      <Sidebar
         activeTab={activeTab}
         setActiveTab={(tab) => {
           navigateTo(tab);
@@ -672,39 +699,7 @@ export default function App() {
         onCreateNewQuiz={() => {
           navigateTo('import-export', { quizToEdit: null });
         }}
-        title={
-          activeTab === 'dashboard' || activeTab === 'my-quizzes'
-            ? 'Bộ đề của tôi'
-            : activeTab === 'quiz-detail'
-            ? 'Chi tiết bộ đề & Ôn tập'
-            : activeTab === 'create-quiz'
-            ? 'Tạo bộ đề mới'
-            : activeTab === 'edit-quiz'
-            ? 'Chỉnh sửa câu hỏi'
-            : activeTab === 'quiz-mode'
-            ? 'Thi trắc nghiệm'
-            : activeTab === 'quiz-result'
-            ? 'Kết quả bài thi'
-            : activeTab === 'review-mode'
-            ? 'Xem lại đáp án'
-            : activeTab === 'practice-mistakes'
-            ? 'Luyện câu hay sai'
-            : activeTab === 'statistics'
-            ? 'Thống kê kết quả'
-            : activeTab === 'import-export'
-            ? 'Nhập & Xuất đề thi'
-            : activeTab === 'saved-vocabulary'
-            ? 'Từ cần lưu ý ghi nhớ'
-            : activeTab === 'japanese'
-            ? 'Học Tiếng Nhật - Luyện Từ Vựng'
-            : 'Cài đặt hệ thống'
-        }
-        subtitle="Ôn luyện trắc nghiệm MCQ theo phương pháp Quizlet"
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        selectedSubject={selectedSubject}
-        onSubjectChange={setSelectedSubject}
-        subjectsList={subjectsList}
+        title={pageTitle}
         currentUser={currentUser}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         isDarkMode={isDarkMode}
@@ -713,8 +708,24 @@ export default function App() {
         onToggleSound={handleToggleSound}
       />
 
-      {/* Main Workspace Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-h-screen md:h-screen overflow-hidden">
+        {/* Content Header (page title + search) */}
+        <ContentHeader
+          title={pageTitle}
+          subtitle="Ôn luyện trắc nghiệm MCQ theo phương pháp Quizlet"
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          selectedSubject={selectedSubject}
+          onSubjectChange={setSelectedSubject}
+          subjectsList={subjectsList}
+          onCreateNewQuiz={() => {
+            navigateTo('import-export', { quizToEdit: null });
+          }}
+        />
+
+        {/* Scrollable Main Workspace */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           {/* Main List: My Quizzes */}
           {(activeTab === 'dashboard' || activeTab === 'my-quizzes' || !['dashboard', 'my-quizzes', 'quiz-detail', 'create-quiz', 'edit-quiz', 'quiz-mode', 'quiz-result', 'review-mode', 'practice-mistakes', 'statistics', 'import-export', 'saved-vocabulary', 'japanese', 'settings'].includes(activeTab)) && (
             <Dashboard
@@ -1031,6 +1042,7 @@ export default function App() {
             />
           )}
         </main>
+      </div>
 
       {/* User Auth Modal */}
       <AuthModal
