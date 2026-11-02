@@ -700,6 +700,17 @@ export default function App() {
           navigateTo('import-export', { quizToEdit: null });
         }}
         title={pageTitle}
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        selectedSubject={selectedSubject}
+        onSubjectChange={setSelectedSubject}
+        subjectsList={(() => {
+          const set = new Set<string>();
+          quizzes.forEach((q) => {
+            if (q.subject && q.subject.trim()) set.add(q.subject.trim());
+          });
+          return ['All', ...Array.from(set)];
+        })()}
         currentUser={currentUser}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         isDarkMode={isDarkMode}

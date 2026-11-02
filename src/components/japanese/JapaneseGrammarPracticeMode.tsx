@@ -51,6 +51,10 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
   examples,
   onExit,
 }) => {
+  // Helper: For grammar mode, show kana reading instead of kanji when available
+  const getDisplayJapanese = (item: GrammarPracticeExample) => {
+    return item.reading?.trim() || item.japanese;
+  };
   const [isShuffleEnabled, setIsShuffleEnabled] = useState<boolean>(() => {
     const saved = localStorage.getItem('grammar_shuffle_enabled');
     return saved !== null ? saved === 'true' : true; // Default ON

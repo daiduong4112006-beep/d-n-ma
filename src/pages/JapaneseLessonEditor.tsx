@@ -269,7 +269,7 @@ export const JapaneseLessonEditor: React.FC<JapaneseLessonEditorProps> = ({
                     value={card.term}
                     onChange={(e) => handleCardChange(index, 'term', e.target.value)}
                     placeholder="ví dụ: 電車"
-                    className="w-full px-4 py-3 rounded-xl bg-slate-950/80 border border-slate-800 text-sm font-bold text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950/80 border border-slate-800 text-sm font-bold text-slate-300/70 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   />
                   <div className="flex items-center justify-between text-[11px] text-slate-500 px-1 font-bold">
                     <span>THUẬT NGỮ (KANJI / TỪ TIẾNG NHẬT)</span>

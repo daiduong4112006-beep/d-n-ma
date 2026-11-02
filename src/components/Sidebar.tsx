@@ -44,6 +44,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   setActiveTab,
   onCreateNewQuiz,
+  title,
+  subtitle,
+  searchTerm,
+  onSearchChange,
+  selectedSubject,
+  onSubjectChange,
+  subjectsList = [],
   currentUser,
   onOpenAuthModal,
   isDarkMode,
@@ -148,13 +155,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {item.label}
           </span>
         )}
-
-        {/* Tooltip for collapsed state */}
-        {isCollapsed && (
-          <span className="absolute left-full ml-3 px-3 py-1.5 rounded-lg bg-slate-800 dark:bg-slate-700 text-slate-100 text-xs font-semibold whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 shadow-xl border border-slate-700 dark:border-slate-600 pointer-events-none">
-            {item.label}
-          </span>
-        )}
       </button>
     );
   };
@@ -186,7 +186,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Navigation Links */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-1">
         {!isCollapsed && (
           <div className="px-2 mb-3">
             <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-widest">
@@ -207,10 +207,64 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {isCollapsed && <div className="my-4 mx-2 h-px bg-slate-200 dark:bg-slate-800" />}
 
         {systemItems.map(renderNavItem)}
+
+        {/* Search & Filter (only show on dashboard tab) */}
+        {(activeTab === 'dashboard' || activeTab === 'my-quizzes') && onSearchChange && (
+          <div className={`mt-4 pt-4 border-t border-slate-200/40 dark:border-slate-800/40 space-y-2 ${isCollapsed ? 'px-1' : ''}`}>
+            {!isCollapsed && (
+              <div className="px-1 mb-2">
+                <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-widest">
+                  Tìm kiếm
+                </span>
+              </div>
+            )}
+            <div className={`relative ${isCollapsed ? 'px-0' : ''}`}>
+              <Search className={`absolute ${isCollapsed ? 'left-2.5' : 'left-3'} top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400`} />
+              <input
+                type="text"
+                placeholder={isCollapsed ? '...' : 'Tìm theo tên, môn...'}
+                value={searchTerm || ''}
+                onChange={(e) => onSearchChange(e.target.value)}
+                title={isCollapsed ? 'Tìm kiếm bộ đề' : undefined}
+                className={`w-full ${isCollapsed ? 'pl-8 pr-2 py-2 text-[10px]' : 'pl-8 pr-3 py-2 text-xs'} rounded-xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs font-medium transition-all`}
+              />
+            </div>
+
+            {!isCollapsed && onSubjectChange && subjectsList.length > 1 && (
+              <select
+                value={selectedSubject || 'All'}
+                onChange={(e) => onSubjectChange(e.target.value)}
+                className="w-full px-3 py-2 text-xs font-semibold rounded-xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-2xs"
+              >
+                {subjectsList.map((sub) => (
+                  <option key={sub} value={sub}>
+                    {sub === 'All' ? 'Tất cả môn' : sub}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {isCollapsed && onSubjectChange && subjectsList.length > 1 && (
+              <button
+                type="button"
+                onClick={() => {
+                  // Cycle through subjects
+                  const idx = subjectsList.indexOf(selectedSubject || 'All');
+                  const next = subjectsList[(idx + 1) % subjectsList.length];
+                  onSubjectChange(next);
+                }}
+                title={`Lọc: ${selectedSubject === 'All' ? 'Tất cả' : selectedSubject || 'Tất cả'}`}
+                className="w-full p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 text-slate-500 hover:text-indigo-500 transition-all cursor-pointer flex items-center justify-center"
+              >
+                <Filter className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
       </nav>
 
       {/* Bottom Section: Controls + User */}
-      <div className="border-t border-slate-200/60 dark:border-slate-800/60 px-3 py-3 space-y-2 shrink-0">
+      <div className="border-t border-slate-200/60 dark:border-slate-800/60 px-3 py-3 space-y-2 shrink-0 overflow-x-hidden">
         {/* Theme & Sound toggles */}
         {!isCollapsed ? (
           <div className="flex items-center gap-2">
@@ -304,18 +358,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         )}
       </div>
-
-      {/* Collapse/Expand Toggle (desktop only) */}
-      <button
-        type="button"
-        onClick={toggleCollapse}
-        className="hidden md:flex absolute -right-3 top-20 w-6 h-6 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 items-center justify-center cursor-pointer hover:bg-indigo-600 hover:border-indigo-500 hover:text-white transition-all z-50 shadow-lg text-slate-400"
-        title={isCollapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'}
-      >
-        <ChevronLeft
-          className={`w-3.5 h-3.5 transition-transform duration-300 ${isCollapsed ? 'rotate-180' : ''}`}
-        />
-      </button>
     </>
   );
 
@@ -352,11 +394,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Mobile Slide-out Sidebar */}
       <aside
-        className={`md:hidden fixed top-14 left-0 bottom-0 z-50 w-[280px] bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-transform duration-300 ease-in-out shadow-2xl ${
+        className={`md:hidden fixed top-14 left-0 bottom-0 z-50 w-[280px] bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-transform duration-300 ease-in-out shadow-2xl overflow-hidden overflow-x-hidden ${
           isMobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-1">
           <div className="px-2 mb-3">
             <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-widest">
               Menu chính
@@ -477,7 +519,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Desktop Sidebar */}
       <aside
-        className={`hidden md:flex flex-col relative shrink-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-r border-slate-200/80 dark:border-slate-800 h-screen transition-all duration-300 ease-in-out ${
+        className={`hidden md:flex flex-col relative shrink-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-r border-slate-200/80 dark:border-slate-800 h-screen transition-all duration-300 ease-in-out overflow-hidden overflow-x-hidden select-none ${
           isCollapsed ? 'w-[72px]' : 'w-[260px]'
         }`}
       >

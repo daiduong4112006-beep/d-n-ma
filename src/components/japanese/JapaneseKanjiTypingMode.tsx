@@ -791,9 +791,11 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
 
           {mode === 'vocab' && currentVocab && (
             <div className="space-y-4">
-              {/* Big Vocab Compound */}
+              {/* Big Vocab Compound (Chữ Hán) */}
               <div className="flex items-center justify-center gap-3">
-
+                <span className="text-5xl sm:text-6xl font-black text-white font-japanese tracking-wide drop-shadow-md">
+                  {currentVocab.term}
+                </span>
                 <button
                   type="button"
                   onClick={handleSpeakCard}
@@ -804,8 +806,8 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
                 </button>
               </div>
 
-              {/* Vietnamese Meaning */}
-              <p className="text-xl sm:text-2xl font-bold text-cyan-300 max-w-lg mx-auto">
+              {/* Vietnamese Meaning (Nghĩa tiếng Việt) */}
+              <p className="text-lg sm:text-xl font-bold text-cyan-300 max-w-lg mx-auto">
                 {currentVocab.definition}
               </p>
 
@@ -861,7 +863,7 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
                       ? kunCorrect
                         ? 'border-emerald-500 text-emerald-400 bg-emerald-500/10'
                         : 'border-rose-500 text-rose-300 bg-rose-500/10'
-                      : 'border-slate-700 text-white focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20'
+                      : 'border-slate-700 text-slate-300/70 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20'
                   }`}
                 />
                 {hasKunyomi && (
@@ -921,7 +923,7 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
                       ? onCorrect
                         ? 'border-emerald-500 text-emerald-400 bg-emerald-500/10'
                         : 'border-rose-500 text-rose-300 bg-rose-500/10'
-                      : 'border-slate-700 text-white focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20'
+                      : 'border-slate-700 text-slate-300/70 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20'
                   }`}
                 />
                 {hasOnyomi && (
@@ -993,7 +995,7 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
                     ? isOverallCorrect
                       ? 'border-emerald-500 text-emerald-400 bg-emerald-500/10'
                       : 'border-rose-500 text-rose-300 bg-rose-500/10'
-                    : 'border-slate-700 text-white focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20'
+                    : 'border-slate-700 text-slate-300/70 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20'
                 }`}
               />
             </div>
@@ -1006,6 +1008,11 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
                   <span className="font-black text-rose-300 font-japanese text-base ml-1">
                     {currentVocab.reading || currentVocab.term}
                   </span>
+                  {currentVocab.romaji && (
+                    <span className="text-xs text-rose-300/80 font-sans ml-2 font-normal">
+                      ({currentVocab.romaji})
+                    </span>
+                  )}
                 </div>
                 <span className="text-[10px] text-slate-400">Ấn phím bất kỳ để sửa</span>
               </div>
