@@ -9,6 +9,9 @@ import {
   BookOpen,
   Lock,
   Sparkles,
+  CheckCircle2,
+  Clock,
+  TrendingUp,
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -57,6 +60,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     return matchesSearch && matchesSubject;
   });
+
+  // Calculate global stats
+  const totalQuizzes = quizzes.length;
+  const completedQuizzes = quizzes.filter((q) => q.lastScore !== undefined).length;
+  const inProgressQuizzes = totalQuizzes - completedQuizzes;
+
+  let totalAnswered = 0;
+  let totalCorrect = 0;
+  quizzes.forEach((q) => {
+    q.questions.forEach((question) => {
+      totalAnswered += question.timesAnswered;
+      totalCorrect += question.timesCorrect;
+    });
+  });
+  const globalAccuracy = totalAnswered > 0 ? Math.round((totalCorrect / totalAnswered) * 100) : 0;
 
   const confirmDelete = () => {
     if (deleteCandidateId) {
@@ -113,11 +131,60 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       )}
 
+      {/* Stats Overview Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-indigo-900/5 dark:from-indigo-600/20 dark:to-indigo-900/10 border border-indigo-200/40 dark:border-indigo-500/20 transition-all hover:-translate-y-0.5 hover:shadow-lg">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[11px] font-bold text-indigo-600/70 dark:text-indigo-300/70 uppercase tracking-wider">Tổng bộ đề</span>
+            <div className="w-9 h-9 rounded-xl bg-indigo-500/15 flex items-center justify-center">
+              <BookOpen className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
+            </div>
+          </div>
+          <p className="text-3xl font-black text-slate-900 dark:text-white">{totalQuizzes}</p>
+          <p className="text-[11px] text-indigo-500/50 dark:text-indigo-300/50 mt-1">{filteredQuizzes.length} hiển thị</p>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-emerald-900/5 dark:from-emerald-600/20 dark:to-emerald-900/10 border border-emerald-200/40 dark:border-emerald-500/20 transition-all hover:-translate-y-0.5 hover:shadow-lg">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[11px] font-bold text-emerald-600/70 dark:text-emerald-300/70 uppercase tracking-wider">Đã hoàn thành</span>
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/15 flex items-center justify-center">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
+            </div>
+          </div>
+          <p className="text-3xl font-black text-emerald-600 dark:text-emerald-400">{completedQuizzes}</p>
+          <p className="text-[11px] text-emerald-500/50 dark:text-emerald-300/50 mt-1">
+            {totalQuizzes > 0 ? Math.round((completedQuizzes / totalQuizzes) * 100) : 0}% tổng
+          </p>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 to-amber-900/5 dark:from-amber-600/20 dark:to-amber-900/10 border border-amber-200/40 dark:border-amber-500/20 transition-all hover:-translate-y-0.5 hover:shadow-lg">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[11px] font-bold text-amber-600/70 dark:text-amber-300/70 uppercase tracking-wider">Đang học</span>
+            <div className="w-9 h-9 rounded-xl bg-amber-500/15 flex items-center justify-center">
+              <Clock className="w-4 h-4 text-amber-500 dark:text-amber-400" />
+            </div>
+          </div>
+          <p className="text-3xl font-black text-amber-600 dark:text-amber-400">{inProgressQuizzes}</p>
+          <p className="text-[11px] text-amber-500/50 dark:text-amber-300/50 mt-1">Cần ôn tập</p>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-violet-500/10 to-violet-900/5 dark:from-violet-600/20 dark:to-violet-900/10 border border-violet-200/40 dark:border-violet-500/20 transition-all hover:-translate-y-0.5 hover:shadow-lg">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[11px] font-bold text-violet-600/70 dark:text-violet-300/70 uppercase tracking-wider">Chính xác TB</span>
+            <div className="w-9 h-9 rounded-xl bg-violet-500/15 flex items-center justify-center">
+              <TrendingUp className="w-4 h-4 text-violet-500 dark:text-violet-400" />
+            </div>
+          </div>
+          <p className="text-3xl font-black text-violet-600 dark:text-violet-400">{globalAccuracy}%</p>
+          <p className="text-[11px] text-violet-500/50 dark:text-violet-300/50 mt-1">{totalAnswered} câu đã trả lời</p>
+        </div>
+      </div>
+
       {/* Quizzes List Header */}
       <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-slate-800 flex-wrap gap-3">
         <div>
-          <h2 className="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2.5">
-            <span>Bộ đề của tôi</span>
+          <h2 className="text-lg md:text-xl font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2.5">
+            <span>Bộ đề gần đây</span>
             <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-extrabold">
               {filteredQuizzes.length} bộ đề
             </span>
@@ -132,7 +199,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <button
             type="button"
             onClick={handleOpenAiModal}
-            className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-extrabold text-indigo-600 dark:text-indigo-300 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/80 border border-indigo-200/80 dark:border-indigo-800 rounded-xl shadow-xs transition-all cursor-pointer shrink-0"
+            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-extrabold text-indigo-600 dark:text-indigo-300 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/80 border border-indigo-200/80 dark:border-indigo-800 rounded-xl shadow-xs transition-all cursor-pointer shrink-0"
           >
             <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
             <span>AI Sinh Bộ Đề</span>
@@ -141,7 +208,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <button
             type="button"
             onClick={handleCreateClick}
-            className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-all cursor-pointer shrink-0"
+            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-all cursor-pointer shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span>Tạo bộ đề mới</span>
@@ -151,7 +218,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       {/* Quizzes Grid */}
       {filteredQuizzes.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {filteredQuizzes.map((quiz) => (
             <QuizCard
               key={quiz.id}
@@ -243,4 +310,3 @@ export const Dashboard: React.FC<DashboardProps> = ({
     </div>
   );
 };
-
