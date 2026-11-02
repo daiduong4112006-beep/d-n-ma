@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Quiz } from '../types/quiz';
 import { parseTextFormat, ParsedQuestion } from '../utils/parser';
 import { FileText, Upload, CheckCircle, AlertCircle, Plus, Copy, Sparkles, BookOpen, Edit3, Trash2, X, Check, Bot, Loader2, Wand2, Image, UploadCloud } from 'lucide-react';
@@ -27,6 +27,7 @@ export const ImportQuiz: React.FC<ImportQuizProps> = ({
   const [hasParsed, setHasParsed] = useState(false);
   const [isAiParsing, setIsAiParsing] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Sample template formatted according to user requested syntax
   const sampleText = `The stored-program concept means a computer could get its instructions by reading them from memory, and a program could be set or altered by setting the values of a portion of memory.
@@ -310,10 +311,7 @@ D. PHP
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const processTextFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
@@ -324,6 +322,17 @@ D. PHP
       setHasParsed(false);
     };
     reader.readAsText(file);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processTextFile(file);
+  };
+
+  const handleDropFile = (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file) processTextFile(file);
   };
 
   const handleFinalImport = () => {
@@ -398,48 +407,56 @@ D. PHP
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12 animate-in fade-in duration-300">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
-        <div>
-          <h2 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-indigo-600" />
-            <span>Thêm Nhanh Bộ Câu Hỏi Từ Văn Bản</span>
-          </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Dán văn bản theo định dạng đơn giản để tạo ngay bộ đề thi trắc nghiệm.
-          </p>
-        </div>
+      <div className="p-6 sm:p-8 rounded-3xl bg-linear-to-br from-indigo-950/60 via-slate-900 to-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-indigo-500/10 to-transparent rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-purple-500/10 to-transparent rounded-full blur-3xl pointer-events-none"></div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={handleLoadMessySample}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 rounded-xl transition-all cursor-pointer shadow-2xs"
-            title="Nạp mẫu văn bản thô, lộn xộn để thử AI lọc tự động"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
-            <span>✨ Mẫu văn bản AI lộn xộn</span>
-          </button>
+        <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+              <FileText className="w-4 h-4" />
+              <span>Công cụ tạo đề</span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+              Thêm Nhanh Bộ Câu Hỏi Từ Văn Bản
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xl leading-relaxed">
+              Dán văn bản theo định dạng hoặc tải tệp lên để hệ thống tự động trích xuất các câu hỏi trắc nghiệm kèm đáp án và lời giải chi tiết.
+            </p>
+          </div>
 
-          <button
-            type="button"
-            onClick={handleLoadSample}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 rounded-xl transition-all cursor-pointer"
-            title="Nạp mẫu có cấu trúc định dạng chuẩn"
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>Mẫu cú pháp chuẩn</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleLoadMessySample}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/80 hover:bg-amber-100 dark:hover:bg-amber-900/60 rounded-xl transition-all cursor-pointer shadow-2xs active:scale-95"
+              title="Nạp mẫu văn bản thô, lộn xộn để thử AI lọc tự động"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+              <span>✨ Mẫu AI lộn xộn</span>
+            </button>
 
-          <label className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl cursor-pointer transition-all">
-            <Upload className="w-3.5 h-3.5" />
-            <span>Tải file (.txt / doc)</span>
-            <input
-              type="file"
-              accept=".txt,.text,.csv,.json,.doc,.docx"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-          </label>
+            <button
+              type="button"
+              onClick={handleLoadSample}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800/80 rounded-xl transition-all cursor-pointer active:scale-95"
+              title="Nạp mẫu có cấu trúc định dạng chuẩn"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
+              <span>Mẫu cú pháp chuẩn</span>
+            </button>
+
+            <label className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer transition-all active:scale-95">
+              <Upload className="w-3.5 h-3.5" />
+              <span>Tải file (.txt / doc)</span>
+              <input
+                type="file"
+                accept=".txt,.text,.csv,.json,.doc,.docx"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </label>
+          </div>
         </div>
       </div>
 
@@ -538,26 +555,44 @@ D. PHP
         <div className="p-3 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 text-xs space-y-1.5 font-mono text-indigo-950 dark:text-indigo-200">
           <div className="flex items-center gap-1.5 font-bold text-indigo-700 dark:text-indigo-300">
             <BookOpen className="w-3.5 h-3.5" />
-            <span>Cấu trúc nhập nhanh (Hỗ trợ 1 hoặc nhiều đáp án đúng):</span>
+            <span>Cấu trúc nhập nhanh:</span>
           </div>
           <div className="text-[11px] leading-relaxed text-slate-700 dark:text-slate-300 pl-5">
-            [Tên câu hỏi]<br />
-            <span className="font-bold text-emerald-600 dark:text-emerald-400">[Ảnh: https://link-anh.com/image.png] (Tùy chọn)</span><br />
-            A. [Lựa chọn 1]<br />
-            B. [Lựa chọn 2]<br />
-            C. [Lựa chọn 3]<br />
-            D. [Lựa chọn 4]<br />
-            <span className="font-bold text-indigo-600 dark:text-indigo-400">@ [Đáp án đúng, vd: @ C hoặc nhiều đáp án @ c,d / @ a, b]</span><br />
-            <span className="font-bold text-indigo-700 dark:text-indigo-300">Giải thích chi tiết</span><br />
-            [Nội dung giải thích]<br />
-            <span className="font-bold text-amber-600 dark:text-amber-400">Ghi chú ghi nhớ</span><br />
-            [Nội dung ghi chú]<br />
-            <span className="font-bold text-rose-600 dark:text-rose-400">! (Dấu chấm cảm để phân cách câu)</span>
+            [Tên câu hỏi] → A. B. C. D. → <span className="font-bold text-indigo-600 dark:text-indigo-400">@ Đáp án (vd @ C hoặc @ a, b)</span> → <span className="font-bold text-indigo-700 dark:text-indigo-300">#Giải thích</span> → <span className="font-bold text-amber-600 dark:text-amber-400">$Ghi chú</span> → <span className="font-bold text-rose-600 dark:text-rose-400">! (phân cách câu)</span>
           </div>
         </div>
 
+        {/* Drag & Drop Upload Zone (when no content) */}
+        {!rawContent.trim() && (
+          <div
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={handleDropFile}
+            onClick={() => fileInputRef.current?.click()}
+            className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 rounded-2xl p-6 text-center space-y-2.5 transition-all cursor-pointer bg-slate-50/50 dark:bg-slate-800/20 group"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-slate-800 text-indigo-600 dark:text-slate-400 group-hover:scale-110 group-hover:text-indigo-500 flex items-center justify-center mx-auto transition-all">
+              <UploadCloud className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                Kéo thả file .txt, .doc, .csv vào đây hoặc <span className="text-indigo-600 dark:text-indigo-400 underline">bấm để duyệt file</span>
+              </p>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                Hoặc dán trực tiếp nội dung văn bản vào khung bên dưới
+              </p>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".txt,.text,.csv,.json,.doc,.docx"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+          </div>
+        )}
+
         <textarea
-          rows={11}
+          rows={rawContent.trim() ? 10 : 5}
           placeholder="Dán hoặc tải file văn bản thô, lộn xộn tại đây (có thể từ file Word, TXT, PDF, câu hỏi lẫn lộn đáp án, ghi chú...)..."
           value={rawContent}
           onChange={(e) => {
