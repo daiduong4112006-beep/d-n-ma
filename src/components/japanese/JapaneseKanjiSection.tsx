@@ -753,7 +753,7 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* TOP NAVIGATION IN FOLDER DETAIL */}
       {/* Thanh bên trái của khóa học đã có danh sách thư mục → trên máy tính chỉ giữ nút thêm */}
-      <div className={`flex items-center justify-between gap-3 flex-wrap ${folder !== undefined ? 'lg:justify-end' : ''}`}>
+      <div className={`flex items-center justify-between gap-3 flex-wrap ${folder !== undefined ? 'lg:hidden' : ''}`}>
         <button
           type="button"
           onClick={() => {
@@ -819,7 +819,7 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
       </div>
 
       {/* FOLDER BANNER */}
-      <div className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <span className="px-2.5 py-0.5 rounded-md text-[11px] font-black bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20">
             {selectedFolder === 'ALL' ? 'jpd123 • TỔNG HỢP' : currentFolderMeta.code}
@@ -836,6 +836,7 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
           </p>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
         {filterKanjiChar && (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 text-xs font-bold text-orange-700 dark:text-orange-300">
             <Filter className="w-3.5 h-3.5" />
@@ -849,6 +850,17 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
             </button>
           </div>
         )}
+        {folder !== undefined && (
+          <button
+            type="button"
+            onClick={openAddModal}
+            className="hidden lg:inline-flex px-4 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-400 text-white text-xs font-black shadow-md shadow-rose-500/30 items-center gap-1.5 cursor-pointer whitespace-nowrap"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Thêm Hán tự</span>
+          </button>
+        )}
+        </div>
       </div>
 
       {/* =================================================================== */}
@@ -860,9 +872,9 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
         {/* ================================================================= */}
         <div className="2xl:col-span-7 space-y-4">
           {/* Kanji Header Row */}
-          <div className="flex items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white uppercase tracking-wider">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 p-3 sm:p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white uppercase tracking-wider whitespace-nowrap">
                 KANJI CORE ({currentFolderKanji.length})
               </h3>
               {kanjiMasteredCount > 0 && (
@@ -872,7 +884,7 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
               )}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {/* STUDY MODE Button */}
               <button
                 type="button"
@@ -935,7 +947,7 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
               Không tìm thấy chữ Hán
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-2 min-[1900px]:grid-cols-3 gap-3">
               {filteredKanji.map((k) => {
                 const isMastered = !!k.mastered;
                 const isFiltered = filterKanjiChar === k.kanji;
@@ -1000,12 +1012,12 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
                       </div>
 
                       {/* Row 3: Action Buttons */}
-                      <div className="pt-1 flex items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800/80">
+                      <div className="pt-1 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800/80">
                         {/* GHI NHỚ Button */}
                         <button
                           type="button"
                           onClick={(e) => handleToggleKanjiMastered(k.id, e)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 ${
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 whitespace-nowrap shrink-0 ${
                             isMastered
                               ? 'border border-emerald-500 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
                               : 'bg-orange-600 hover:bg-orange-500 text-white shadow-xs'
@@ -1070,9 +1082,9 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
         {/* ================================================================= */}
         <div className="2xl:col-span-5 space-y-4">
           {/* Header Row */}
-          <div className="flex items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white uppercase tracking-wider">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 p-3 sm:p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white uppercase tracking-wider whitespace-nowrap">
                 TỪ VỰNG CHỮ HÁN ({isVocabFiltered ? `${filteredVocab.length}/${currentFolderVocab.length}` : currentFolderVocab.length})
               </h3>
               {vocabMasteredCount > 0 && (
@@ -1083,7 +1095,7 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
             </div>
 
             {/* Mode Action Buttons */}
-            <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
               {/* Flashcard */}
               <button
                 type="button"
@@ -1132,7 +1144,7 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
                 title={filterKanjiChar ? `Trắc nghiệm ${filteredVocab.length} từ đang lọc theo chữ 「${filterKanjiChar}」` : "Trắc nghiệm 4 đáp án"}
               >
                 <CheckSquare2 className="w-3.5 h-3.5 text-emerald-500" />
-                <span className="hidden sm:inline">Trắc nghiệm{filterKanjiChar ? ` (${filteredVocab.length})` : ''}</span>
+                <span className="hidden sm:inline whitespace-nowrap">Trắc nghiệm{filterKanjiChar ? ` (${filteredVocab.length})` : ''}</span>
               </button>
             </div>
           </div>
@@ -1211,7 +1223,7 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
                       <button
                         type="button"
                         onClick={(e) => handleToggleVocabMastered(card.id, e)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 ${
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 whitespace-nowrap shrink-0 ${
                           isMastered
                             ? 'border border-emerald-500 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
                             : 'bg-orange-600 hover:bg-orange-500 text-white shadow-xs'

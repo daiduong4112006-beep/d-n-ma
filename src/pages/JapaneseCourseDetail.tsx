@@ -480,11 +480,11 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
 
   return (
     <div className="animate-in fade-in duration-200">
-      <div className="grid lg:grid-cols-[288px_minmax(0,1fr)] gap-6 items-start">
+      <div className="grid lg:grid-cols-[264px_minmax(0,1fr)] gap-5 items-start">
         {/* ================= THANH KHÓA HỌC BÊN TRÁI ================= */}
-        <aside className="lg:sticky lg:top-6 space-y-4 min-w-0">
+        <aside className="lg:sticky lg:top-4 space-y-3 min-w-0 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
           {/* Thẻ khóa học */}
-          <div className="relative overflow-hidden rounded-3xl p-5 bg-slate-900 text-white border border-slate-800">
+          <div className="relative overflow-hidden rounded-3xl p-4 bg-slate-900 text-white border border-slate-800" title={course.description}>
             <span
               aria-hidden="true"
               className="pointer-events-none absolute -right-4 -bottom-10 font-japanese font-black text-[140px] leading-none text-white/[0.04] select-none"
@@ -516,9 +516,6 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
                 </h1>
               </div>
             </div>
-            <p className="relative mt-3 text-xs text-slate-400 leading-relaxed hidden lg:block">
-              {course.description || 'Khóa học tiếng Nhật tổng hợp bao gồm Từ vựng, Chữ Hán và Ngữ pháp.'}
-            </p>
           </div>
 
           {/* Điều hướng 5 mục */}
@@ -675,7 +672,7 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
               </ToneButton>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
               {filteredLessons.map((lesson) => {
                 const total = lesson.cards.length;
                 const mem = lesson.cards.filter((c) => c.mastered).length;
