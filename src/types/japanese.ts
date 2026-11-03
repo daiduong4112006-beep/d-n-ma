@@ -49,14 +49,43 @@ export interface AttachedFile {
   note?: string;
 }
 
+export interface GrammarExample {
+  japanese: string;
+  reading?: string;
+  vietnamese: string;
+  /** Ví dụ bổ sung (không có trong tài liệu gốc) */
+  extra?: boolean;
+}
+
+/** Cột trong bảng so sánh (vd. 『どの』 | 『どれ』) */
+export interface GrammarColumn {
+  title?: string;
+  lines?: string[];
+  examples?: GrammarExample[];
+}
+
+/** Mục con trong một mẫu ngữ pháp (vd. 『A và B』 / 『A nhưng B』) */
+export interface GrammarSection {
+  title?: string;
+  usage?: string;
+  structure?: string;
+  notes?: string[];
+  examples?: GrammarExample[];
+  columns?: GrammarColumn[];
+}
+
 export interface JapaneseGrammarPoint {
   id: string;
   lessonTag?: string;     // e.g. "Bài 4", "Bài 5", "Bài 6", "Bài 7"
   title: string;          // e.g. "Cấu trúc ～てから"
-  structure: string;      // e.g. "V1-て + から、V2"
+  structure: string;      // e.g. "V1-て + から、V2" — dòng （？）（＋）（ー）; ~~x~~ = gạch bỏ
   meaning: string;        // e.g. "Sau khi làm V1 thì làm V2"
+  usage?: string;         // → Dùng khi nào
+  notes?: string[];       // ※ Lưu ý
   explanation?: string;   // Chi tiết giải thích
-  examples?: { japanese: string; reading?: string; vietnamese: string }[];
+  examples?: GrammarExample[];
+  sections?: GrammarSection[];
+  table?: { header?: string[][]; rows: string[][] };
   attachedFiles?: AttachedFile[]; // Nhét file tài liệu vào ngữ pháp
   isCustom?: boolean;            // Đánh dấu người dùng đã chỉnh sửa thủ công
   createdAt: string;

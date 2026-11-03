@@ -909,7 +909,7 @@ export const REMOVED_JPD123_KANJI_IDS: string[] = [
   'k-l7-11',
 ];
 
-export const JPD123_GRAMMAR_VERSION = '20261018_v4_fix_atm';
+export const JPD123_GRAMMAR_VERSION = '20261103_v5_docx_rebuild';
 
 export const DEFAULT_JPD123_COURSE: JapaneseCourse = {
   id: 'course-jpd123',

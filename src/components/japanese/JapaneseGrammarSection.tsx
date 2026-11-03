@@ -26,7 +26,8 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { JapaneseGrammarPoint, AttachedFile } from '../../types/japanese';
-import { JPD123_GRAMMAR_POINTS } from '../../data/jpd123Grammar';
+import { JPD123_GRAMMAR_POINTS, getAllGrammarExamples } from '../../data/jpd123Grammar';
+import type { GrammarExample, GrammarSection as GSection } from '../../types/japanese';
 import { readFileAsDataUrl } from '../../utils/japaneseStorage';
 import { sound } from '../../utils/audio';
 import { speakJapanese } from '../../utils/japaneseKana';
@@ -96,7 +97,7 @@ const matchStructureLabel = (rawLine: string): StructureLabelMatch | null => {
   }
 
   // Pattern 4: Negative (❌ Phủ định, phủ định, câu phủ định, （－）, (-))
-  const negMatch = line.match(/^(?:(?:[❌✖✕\-－]\s*(?:phủ\s*định)?|phủ\s*định|câu\s*phủ\s*định|[（(][\-－][）)]|\[(?:phủ\s*định|[\-－❌])\]))(?:\s*\(([^)]+)\))?[:：\s]*(.*)$/iu);
+  const negMatch = line.match(/^(?:(?:[❌✖✕\-－]\s*(?:phủ\s*định)?|phủ\s*định|câu\s*phủ\s*định|[（(][\-－ー][）)]|\[(?:phủ\s*định|[\-－❌])\]))(?:\s*\(([^)]+)\))?[:：\s]*(.*)$/iu);
   if (negMatch) {
     const sub = negMatch[1]?.trim();
     const remaining = negMatch[2]?.trim() || '';
@@ -308,6 +309,209 @@ const parseStructureLines = (raw: string): ParsedStructureLine[] => {
 
   return result;
 };
+
+/* ---------- Hiển thị dùng chung cho chi tiết ngữ pháp ---------- */
+/** Chữ có đánh dấu ~~x~~ (phần bị gạch bỏ khi chia) */
+const Rich: React.FC<{ text: string; className?: string }> = ({ text, className }) => (
+  <span className={className}>
+    {text.split(/(~~[^~]+~~)/g).map((part, i) =>
+      part.startsWith('~~') && part.endsWith('~~') ? (
+        <s key={i} className="decoration-rose-500 decoration-2 text-rose-400/90">
+          {part.slice(2, -2)}
+        </s>
+      ) : (
+        <React.Fragment key={i}>{part}</React.Fragment>
+      )
+    )}
+  </span>
+);
+
+const StructurePanel: React.FC<{ structure: string }> = ({ structure }) => (
+  <div className="rounded-2xl bg-slate-950 border border-slate-800 divide-y divide-slate-800/80 overflow-hidden">
+    {parseStructureLines(structure).map((line, lIdx) => (
+      <div key={lIdx} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3">
+        <span
+          className={`px-2.5 py-0.5 rounded-lg text-[11px] font-black shrink-0 inline-flex items-center gap-1 border self-start sm:self-center sm:min-w-[104px] justify-center ${line.badgeClass}`}
+        >
+          {line.badge}
+        </span>
+        <Rich text={line.text} className="font-japanese font-bold text-sm sm:text-base text-slate-100 leading-relaxed break-words" />
+      </div>
+    ))}
+  </div>
+);
+
+const NoteList: React.FC<{ notes?: string[]; usage?: string }> = ({ notes, usage }) =>
+  !usage && !(notes && notes.length) ? null : (
+    <div className="space-y-1.5">
+      {usage && (
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          <span className="text-indigo-500 font-black mr-1">→</span>
+          {usage}
+        </p>
+      )}
+      {(notes || []).map((n, i) => (
+        <p
+          key={i}
+          className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed px-3.5 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-500/5 border border-amber-200/70 dark:border-amber-500/20"
+        >
+          <b className="text-amber-600 dark:text-amber-400 mr-1">※</b>
+          <Rich text={n} />
+        </p>
+      ))}
+    </div>
+  );
+
+const ExampleList: React.FC<{ examples?: GrammarExample[]; compact?: boolean }> = ({ examples, compact }) =>
+  !examples || !examples.length ? null : (
+    <ol className="space-y-2">
+      {examples.map((ex, idx) => {
+        const parts = ex.japanese.split(/\s*\/\s*(?=[AB][：:])/);
+        const isDialogue = parts.length > 1 || /^\s*A[：:]/.test(ex.japanese);
+        return (
+          <li
+            key={idx}
+            className={`flex gap-3 rounded-2xl border transition-colors ${compact ? 'p-2.5' : 'p-3.5'} ${
+              ex.extra
+                ? 'border-dashed border-emerald-300/70 dark:border-emerald-500/30'
+                : 'border-slate-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-500/30'
+            }`}
+          >
+            <span className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500 text-[11px] font-black flex items-center justify-center shrink-0 mt-0.5">
+              {idx + 1}
+            </span>
+            <div className="flex-1 min-w-0 space-y-1">
+              {parts.map((p, pIdx) => {
+                const m = p.match(/^\s*([AB])[：:]\s*/);
+                const speaker = isDialogue && m ? m[1] : null;
+                const clean = m ? p.slice(m[0].length) : p;
+                return (
+                  <div key={pIdx} className="flex items-start gap-2">
+                    {speaker && (
+                      <span
+                        className={`w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5 text-white ${
+                          speaker === 'A' ? 'bg-indigo-500' : 'bg-emerald-500'
+                        }`}
+                      >
+                        {speaker}
+                      </span>
+                    )}
+                    <span className="flex-1 font-japanese font-bold text-slate-900 dark:text-white text-sm sm:text-[15px] leading-relaxed">
+                      {clean}
+                      {!isDialogue && ex.reading && <span className="ml-2 text-indigo-500 font-medium text-xs">({ex.reading})</span>}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => speakJapanese(clean)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer shrink-0"
+                      title="Nghe phát âm"
+                    >
+                      <Volume2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                );
+              })}
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+                {ex.vietnamese}
+                {ex.extra && (
+                  <span className="ml-2 px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-wide align-middle">
+                    Bổ sung
+                  </span>
+                )}
+              </p>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+
+const SectionBlock: React.FC<{ section: GSection }> = ({ section }) => (
+  <div className="space-y-3 p-4 rounded-2xl bg-slate-50/70 dark:bg-slate-950/40 border border-slate-200/70 dark:border-slate-800">
+    {section.title && (
+      <h5 className="text-sm font-black text-slate-800 dark:text-slate-100">
+        <Rich text={section.title} />
+      </h5>
+    )}
+    <NoteList usage={section.usage} />
+    {section.structure && <StructurePanel structure={section.structure} />}
+    <NoteList notes={section.notes} />
+    {section.columns && section.columns.length > 0 && (
+      <div className={`grid gap-3 ${section.columns.length === 3 ? 'xl:grid-cols-3' : 'md:grid-cols-2'}`}>
+        {section.columns.map((col, ci) => (
+          <div key={ci} className="space-y-2.5 p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+            {col.title && (
+              <div className="text-sm font-black text-indigo-600 dark:text-indigo-300">
+                <Rich text={col.title} />
+              </div>
+            )}
+            {col.lines && col.lines.length > 0 && (
+              <div className="space-y-1">
+                {col.lines.map((l, li) =>
+                  l === '―' ? (
+                    <hr key={li} className="border-slate-200 dark:border-slate-800 my-1.5" />
+                  ) : (
+                    <p key={li} className="text-[13px] sm:text-sm text-slate-700 dark:text-slate-200 font-japanese leading-relaxed">
+                      <Rich text={l} />
+                    </p>
+                  )
+                )}
+              </div>
+            )}
+            <ExampleList examples={col.examples} compact />
+          </div>
+        ))}
+      </div>
+    )}
+    <ExampleList examples={section.examples} />
+  </div>
+);
+
+const GrammarTable: React.FC<{ table: NonNullable<JapaneseGrammarPoint['table']> }> = ({ table }) => (
+  <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+    <table className="w-full text-sm font-japanese">
+      <thead>
+        {(table.header || []).map((row, ri) => {
+          // gộp các ô tiêu đề giống nhau liền kề
+          const cells: { t: string; span: number }[] = [];
+          row.forEach((t) => {
+            const last = cells[cells.length - 1];
+            if (last && last.t === t && t) last.span++;
+            else cells.push({ t, span: 1 });
+          });
+          return (
+            <tr key={ri} className="bg-indigo-50 dark:bg-indigo-500/10">
+              {cells.map((c, ci) => (
+                <th key={ci} colSpan={c.span} className="px-3 py-2 text-center text-xs font-black text-indigo-700 dark:text-indigo-300 border-b border-slate-200 dark:border-slate-800">
+                  {c.t}
+                </th>
+              ))}
+            </tr>
+          );
+        })}
+      </thead>
+      <tbody>
+        {table.rows.map((row, ri) => (
+          <tr key={ri} className="border-b last:border-0 border-slate-100 dark:border-slate-800">
+            {row.map((c, ci) =>
+              ci === 0 ? (
+                <th key={ci} className="px-3 py-2.5 text-left text-xs font-black text-slate-700 dark:text-slate-200 whitespace-nowrap bg-slate-50 dark:bg-slate-950/40">
+                  {c}
+                </th>
+              ) : (
+                <td key={ci} className="px-3 py-2.5 font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                  <Rich text={c} />
+                </td>
+              )
+            )}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
+
+const isPracticable = (ex: GrammarExample) => (ex.japanese.match(/\/\s*[AB][：:]/g) || []).length <= 1;
 
 interface Props {
   grammarPoints: JapaneseGrammarPoint[];
@@ -564,7 +768,9 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
   } | null>(null);
 
   const handleStartPracticePoint = (gp: JapaneseGrammarPoint) => {
-    if (!gp.examples || gp.examples.length === 0) {
+    // hội thoại 3 lượt trở lên không phù hợp chế độ gõ 2 vai → bỏ qua khi luyện
+    const exs = getAllGrammarExamples(gp).filter(isPracticable);
+    if (exs.length === 0) {
       alert('Cấu trúc này chưa có câu ví dụ để luyện tập.');
       return;
     }
@@ -572,7 +778,7 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
     setPracticeSession({
       title: `Luyện tập: ${gp.title}`,
       grammarPointTitle: gp.title,
-      examples: gp.examples.map((ex) => ({
+      examples: exs.map((ex) => ({
         ...ex,
         grammarTitle: gp.title,
         lessonTag: gp.lessonTag,
@@ -587,8 +793,8 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
 
     const allExamples: { japanese: string; reading?: string; vietnamese: string; grammarTitle?: string; lessonTag?: string }[] = [];
     for (const gp of targetPoints) {
-      if (gp.examples) {
-        for (const ex of gp.examples) {
+      {
+        for (const ex of getAllGrammarExamples(gp).filter(isPracticable)) {
           allExamples.push({
             ...ex,
             grammarTitle: gp.title,
@@ -755,7 +961,7 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
                       <span className="min-w-0 flex-1">
                         <span className="block text-[13px] font-bold leading-snug line-clamp-2">{shortTitle(g.title)}</span>
                         <span className={`block text-[11px] font-semibold mt-0.5 ${active ? 'text-white/70' : 'text-slate-400'}`}>
-                          {g.lessonTag || '—'} · {g.examples?.length || 0} ví dụ
+                          {g.lessonTag || '—'} · {getAllGrammarExamples(g).length} ví dụ
                           {g.attachedFiles && g.attachedFiles.length > 0 ? ` · ${g.attachedFiles.length} file` : ''}
                         </span>
                       </span>
@@ -781,7 +987,7 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
                   </p>
                   <div className="flex flex-wrap items-center gap-2 pt-1">
                     <ToneButton tone="indigo" onClick={() => handleStartPracticePoint(gp)}>
-                      <Keyboard className="w-4 h-4" /> Luyện tập{gp.examples?.length ? ` (${gp.examples.length})` : ''}
+                      <Keyboard className="w-4 h-4" /> Luyện tập{getAllGrammarExamples(gp).length ? ` (${getAllGrammarExamples(gp).length})` : ''}
                     </ToneButton>
                     <button
                       type="button"
@@ -812,86 +1018,43 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
 
                 <div className="p-5 sm:p-6 space-y-6">
                   {/* Cấu trúc */}
-                  <section className="space-y-2">
-                    <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">Cấu trúc</h4>
-                    <div className="rounded-2xl bg-slate-950 dark:bg-slate-950 border border-slate-800 divide-y divide-slate-800/80 overflow-hidden">
-                      {parseStructureLines(gp.structure).map((line, lIdx) => (
-                        <div key={lIdx} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3">
-                          <span
-                            className={`px-2.5 py-0.5 rounded-lg text-[11px] font-black shrink-0 inline-flex items-center gap-1 border self-start sm:self-center sm:min-w-[104px] justify-center ${line.badgeClass}`}
-                          >
-                            {line.badge}
-                          </span>
-                          <span className="font-japanese font-bold text-sm sm:text-base text-slate-100 leading-relaxed break-words select-all">
-                            {line.text}
-                          </span>
-                        </div>
+                  {gp.structure && gp.structure.trim() && (
+                    <section className="space-y-2">
+                      <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">Cấu trúc</h4>
+                      <StructurePanel structure={gp.structure} />
+                    </section>
+                  )}
+                  {(gp.usage || (gp.notes && gp.notes.length > 0)) && <NoteList usage={gp.usage} notes={gp.notes} />}
+                  {!gp.notes?.length && gp.explanation && (
+                    <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-500/5 border border-amber-200/70 dark:border-amber-500/20 whitespace-pre-line">
+                      <b className="text-amber-600 dark:text-amber-400">Ghi chú: </b>
+                      {gp.explanation}
+                    </p>
+                  )}
+                  {gp.table && (
+                    <section className="space-y-2">
+                      <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">Bảng chia</h4>
+                      <GrammarTable table={gp.table} />
+                    </section>
+                  )}
+                  {gp.sections && gp.sections.length > 0 && (
+                    <section className="space-y-3">
+                      {gp.sections.map((sec, si) => (
+                        <SectionBlock key={si} section={sec} />
                       ))}
-                    </div>
-                    {gp.explanation && (
-                      <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-500/5 border border-amber-200/70 dark:border-amber-500/20">
-                        <b className="text-amber-600 dark:text-amber-400">Ghi chú: </b>
-                        {gp.explanation}
-                      </p>
-                    )}
-                  </section>
+                    </section>
+                  )}
 
                   {/* Ví dụ */}
                   {gp.examples && gp.examples.length > 0 && (
                     <section className="space-y-2">
-                      <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                      <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
                         Ví dụ ({gp.examples.length})
+                        {gp.examples.some((e) => e.extra) && (
+                          <span className="normal-case tracking-normal font-bold text-emerald-500">· viền nét đứt = ví dụ bổ sung</span>
+                        )}
                       </h4>
-                      <ol className="space-y-2">
-                        {gp.examples.map((ex, idx) => {
-                          const isDialogue = /(^|\s)A[：:]/.test(ex.japanese) && /\/\s*B[：:]/.test(ex.japanese);
-                          const parts = isDialogue ? ex.japanese.split(/\s*\/\s*(?=B[：:])/) : [ex.japanese];
-                          return (
-                            <li
-                              key={idx}
-                              className="flex gap-3 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-500/30 transition-colors"
-                            >
-                              <span className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500 text-[11px] font-black flex items-center justify-center shrink-0 mt-0.5">
-                                {idx + 1}
-                              </span>
-                              <div className="flex-1 min-w-0 space-y-1">
-                                {parts.map((p, pIdx) => {
-                                  const speaker = isDialogue ? (p.trim().startsWith('A') ? 'A' : 'B') : null;
-                                  const clean = isDialogue ? p.replace(/^\s*[AB][：:]\s*/, '') : p;
-                                  return (
-                                    <div key={pIdx} className="flex items-start gap-2">
-                                      {speaker && (
-                                        <span
-                                          className={`w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5 text-white ${
-                                            speaker === 'A' ? 'bg-indigo-500' : 'bg-emerald-500'
-                                          }`}
-                                        >
-                                          {speaker}
-                                        </span>
-                                      )}
-                                      <span className="flex-1 font-japanese font-bold text-slate-900 dark:text-white text-sm sm:text-[15px] leading-relaxed">
-                                        {clean}
-                                        {!isDialogue && ex.reading && (
-                                          <span className="ml-2 text-indigo-500 font-medium text-xs">({ex.reading})</span>
-                                        )}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => speakJapanese(clean)}
-                                        className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer shrink-0"
-                                        title="Nghe phát âm"
-                                      >
-                                        <Volume2 className="w-4 h-4" />
-                                      </button>
-                                    </div>
-                                  );
-                                })}
-                                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">{ex.vietnamese}</p>
-                              </div>
-                            </li>
-                          );
-                        })}
-                      </ol>
+                      <ExampleList examples={gp.examples} />
                     </section>
                   )}
 

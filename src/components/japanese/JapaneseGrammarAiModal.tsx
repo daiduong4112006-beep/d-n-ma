@@ -131,7 +131,7 @@ export const JapaneseGrammarAiModal: React.FC<JapaneseGrammarAiModalProps> = ({
         endpoint: '/api/ai/grammar-tutor',
         payload: {
           grammarTitle: grammarPoint.title,
-          formation: grammarPoint.formation,
+          formation: grammarPoint.structure,
           meaning: grammarPoint.meaning,
           mode: 'chat',
           userPrompt: text,
@@ -195,7 +195,7 @@ export const JapaneseGrammarAiModal: React.FC<JapaneseGrammarAiModalProps> = ({
                   <h3 className="text-base sm:text-lg font-black text-white truncate">{grammarPoint.title}</h3>
                 </div>
                 <p className="text-xs text-slate-400 font-medium truncate">
-                  {grammarPoint.meaning} {grammarPoint.formation ? `• ${grammarPoint.formation}` : ''}
+                  {grammarPoint.meaning} {grammarPoint.structure ? `• ${grammarPoint.structure}` : ''}
                 </p>
               </div>
             </div>
