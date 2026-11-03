@@ -1399,6 +1399,7 @@ export const QuizDetailPage: React.FC<QuizDetailPageProps> = ({
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
         quiz={currentQuiz}
+        ownerName={currentUser?.name}
       />
     )}
 

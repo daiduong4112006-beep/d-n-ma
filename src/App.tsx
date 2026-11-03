@@ -1,3 +1,4 @@
+import { SharedQuizPage } from './pages/SharedQuizPage';
 import React, { useState, useEffect } from 'react';
 import { Lock } from 'lucide-react';
 import { Quiz, QuizAttempt, Question, WrongQuestionDetail, GlobalStatistics, StudyOptions } from './types/quiz';
@@ -46,7 +47,7 @@ import {
 } from './lib/firebase';
 import { sound } from './utils/audio';
 import { updateStarredWordsFromCloud } from './utils/vocabulary';
-import { saveJapaneseCourses, saveAllowedJpd123Emails, canAccessJpd123, DEFAULT_JPD123_COURSE, getCleanDefaultJpdCourse } from './utils/japaneseStorage';
+import { saveJapaneseCourses, getJapaneseCourses, saveAllowedJpd123Emails, canAccessJpd123, DEFAULT_JPD123_COURSE, getCleanDefaultJpdCourse } from './utils/japaneseStorage';
 import { updateStudyProgressFromCloud } from './utils/studyProgressStorage';
 
 // Components
@@ -724,7 +725,7 @@ export default function App() {
         {/* Scrollable Main Workspace */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           {/* Main List: My Quizzes */}
-          {(activeTab === 'dashboard' || activeTab === 'my-quizzes' || !['dashboard', 'my-quizzes', 'quiz-detail', 'create-quiz', 'edit-quiz', 'quiz-mode', 'quiz-result', 'review-mode', 'practice-mistakes', 'statistics', 'import-export', 'saved-vocabulary', 'japanese', 'settings'].includes(activeTab)) && (
+          {(activeTab === 'dashboard' || activeTab === 'my-quizzes' || !['dashboard', 'my-quizzes', 'quiz-detail', 'create-quiz', 'edit-quiz', 'quiz-mode', 'quiz-result', 'review-mode', 'practice-mistakes', 'statistics', 'import-export', 'saved-vocabulary', 'japanese', 'settings', 'shared'].includes(activeTab)) && (
             <Dashboard
               quizzes={quizzes}
               onStartQuizWithOptions={handleStartQuizWithOptions}
@@ -769,6 +770,20 @@ export default function App() {
                 refreshData();
                 navigateTo('quiz-detail', { quizDetail: newQuiz });
               }}
+            />
+          )}
+
+          {/* Bộ đề được chia sẻ (mở từ link #shared?id=...) */}
+          {activeTab === 'shared' && (
+            <SharedQuizPage
+              quizzes={quizzes}
+              onSaveCopy={(copy) => {
+                const list = saveQuiz(copy);
+                setQuizzes(list);
+                return list.find((x) => x.id === copy.id) || copy;
+              }}
+              onOpenQuiz={(quiz) => navigateTo('quiz-detail', { quizDetail: quiz })}
+              onBack={() => navigateTo('dashboard')}
             />
           )}
 

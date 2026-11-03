@@ -1182,3 +1182,86 @@ export const subscribeStudyProgress = (
   }
 };
 
+
+// ---------------------------------------------------------------------------
+// CHIA SẺ BỘ ĐỀ: lưu một bản chụp công khai ở `shared_quizzes/{shareId}`
+// Người nhận mở link #shared?id=... để xem trước và lưu về bộ đề của mình.
+// ---------------------------------------------------------------------------
+export interface SharedQuizDoc {
+  shareId: string;
+  quiz: Quiz;
+  ownerName?: string;
+  sourceQuizId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const SHARE_IDS_KEY = 'mcq_share_ids';
+
+const newShareId = () => {
+  const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = '';
+  const arr = new Uint32Array(10);
+  try {
+    crypto.getRandomValues(arr);
+  } catch {
+    for (let i = 0; i < arr.length; i++) arr[i] = Math.floor(Math.random() * 1e9);
+  }
+  arr.forEach((n) => (s += chars[n % chars.length]));
+  return s;
+};
+
+/** Bản bộ đề để chia sẻ: bỏ tiến độ / điểm riêng của người chia sẻ */
+const toShareableQuiz = (quiz: Quiz): Quiz => {
+  const clean: Quiz = JSON.parse(JSON.stringify(quiz));
+  delete (clean as any).userId;
+  delete (clean as any).userEmail;
+  delete clean.lastScore;
+  delete clean.lastTotal;
+  delete clean.lastAttemptDate;
+  clean.timesCompleted = 0;
+  clean.questions = (clean.questions || []).map((q) => ({
+    ...q,
+    timesAnswered: 0,
+    timesCorrect: 0,
+    timesWrong: 0,
+    mastered: false,
+  }));
+  return clean;
+};
+
+/**
+ * Tạo (hoặc cập nhật) link chia sẻ cho một bộ đề. Mỗi bộ đề giữ một mã cố định
+ * trên máy này để link cũ vẫn dùng được và luôn mở ra nội dung mới nhất.
+ */
+export const createOrUpdateSharedQuiz = async (quiz: Quiz, ownerName?: string): Promise<string> => {
+  if (!isFirestoreAvailable()) throw new Error('offline');
+  let map: Record<string, string> = {};
+  try {
+    map = JSON.parse(localStorage.getItem(SHARE_IDS_KEY) || '{}');
+  } catch {}
+  const shareId = map[quiz.id] || newShareId();
+  const now = new Date().toISOString();
+  const payload: SharedQuizDoc = {
+    shareId,
+    quiz: toShareableQuiz(quiz),
+    ownerName: ownerName || '',
+    sourceQuizId: quiz.id,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const size = new Blob([JSON.stringify(payload)]).size;
+  if (size > 950_000) throw new Error('too-large');
+  await withTimeout(setDoc(doc(db, 'shared_quizzes', shareId), payload), 12000, 'Chia sẻ bộ đề');
+  map[quiz.id] = shareId;
+  try {
+    localStorage.setItem(SHARE_IDS_KEY, JSON.stringify(map));
+  } catch {}
+  return shareId;
+};
+
+export const getSharedQuiz = async (shareId: string): Promise<SharedQuizDoc | null> => {
+  if (!isFirebaseConfigured()) throw new Error('offline');
+  const snap = await withTimeout(getDoc(doc(db, 'shared_quizzes', shareId)), 12000, 'Tải bộ đề chia sẻ');
+  return snap.exists() ? (snap.data() as SharedQuizDoc) : null;
+};

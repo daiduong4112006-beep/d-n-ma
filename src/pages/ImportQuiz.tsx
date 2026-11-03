@@ -315,6 +315,43 @@ D. PHP
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
+      // File .json xuất từ "Chia sẻ bộ đề" / "Xuất đề" → nhập thẳng thành bộ đề mới
+      if (/\.json$/i.test(file.name)) {
+        try {
+          const data = JSON.parse(text);
+          if (data && !Array.isArray(data) && Array.isArray(data.questions) && data.questions.length > 0) {
+            const ok = window.confirm(`Nhập bộ đề "${data.title || file.name}" (${data.questions.length} câu) vào bộ đề của bạn?`);
+            if (ok) {
+              const now = new Date().toISOString();
+              onSaveImportedQuiz({
+                ...data,
+                id: `quiz-imp-${Date.now()}`,
+                title: data.title || file.name.replace(/\.[^/.]+$/, ''),
+                description: data.description || '',
+                subject: data.subject || 'Khác',
+                topic: data.topic || 'Nhập từ file',
+                createdAt: now,
+                updatedAt: now,
+                timesCompleted: 0,
+                lastScore: undefined,
+                lastTotal: undefined,
+                lastAttemptDate: undefined,
+                questions: data.questions.map((q: any, idx: number) => ({
+                  ...q,
+                  id: q.id || `q-imp-${Date.now()}-${idx}`,
+                  timesAnswered: 0,
+                  timesCorrect: 0,
+                  timesWrong: 0,
+                  mastered: false,
+                })),
+              });
+            }
+            return;
+          }
+        } catch {
+          /* không phải JSON bộ đề → xử lý như văn bản thường */
+        }
+      }
       setRawContent(text);
       if (!quizTitle && file.name) {
         setQuizTitle(file.name.replace(/\.[^/.]+$/, ''));

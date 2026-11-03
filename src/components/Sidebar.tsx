@@ -18,6 +18,8 @@ import {
   Plus,
   Menu,
   X,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { sound } from '../utils/audio';
 
@@ -163,11 +165,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const sidebarContent = (
     <>
       {/* Logo Section */}
-      <div className="flex items-center gap-3 px-4 h-16 border-b border-slate-200/60 dark:border-slate-800/60 shrink-0">
+      <div
+        className={`flex border-b border-slate-200/60 dark:border-slate-800/60 shrink-0 ${
+          isCollapsed ? 'flex-col items-center gap-2 py-3' : 'items-center gap-2 px-4 h-16'
+        }`}
+      >
         <button
           type="button"
           onClick={() => setActiveTab('dashboard')}
-          className="flex items-center gap-2.5 text-left group cursor-pointer"
+          className={`flex items-center gap-2.5 text-left group cursor-pointer min-w-0 ${isCollapsed ? '' : 'flex-1'}`}
         >
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform shrink-0">
             <GraduationCap className="w-5 h-5" />
@@ -182,6 +188,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </p>
             </div>
           )}
+        </button>
+
+        {/* Nút thu gọn / mở rộng thanh bên (nằm trong thanh nên không gây thanh cuộn ngang) */}
+        <button
+          type="button"
+          onClick={toggleCollapse}
+          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+          title={isCollapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'}
+          aria-label={isCollapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'}
+        >
+          {isCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
         </button>
       </div>
 

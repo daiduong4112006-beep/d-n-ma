@@ -29,6 +29,8 @@ export interface Quiz {
   lastTotal?: number;
   lastAttemptDate?: string;
   timesCompleted: number;
+  /** Mã chia sẻ gốc nếu bộ đề được lưu từ link chia sẻ */
+  sharedFrom?: string;
 }
 
 export interface QuestionResult {
