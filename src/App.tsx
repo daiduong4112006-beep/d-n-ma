@@ -39,12 +39,9 @@ import {
   logoutUser,
   deleteCurrentUserAccount,
   deleteUserFromFirestore,
-  saveUserSettingsToFirestore,
-  getUserSettingsFromFirestore,
   syncJapaneseCourseToFirestore,
   submitSharedResult,
 } from './lib/firebase';
-import { sound } from './utils/audio';
 import { updateStarredWordsFromCloud } from './utils/vocabulary';
 import { saveJapaneseCourses, getJapaneseCourses, saveAllowedJpd123Emails, canAccessJpd123, DEFAULT_JPD123_COURSE, getCleanDefaultJpdCourse } from './utils/japaneseStorage';
 import { updateStudyProgressFromCloud } from './utils/studyProgressStorage';
@@ -58,27 +55,23 @@ import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 
 // Pages
 import { Dashboard } from './pages/Dashboard';
-
-// Các trang lớn chỉ tải khi mở (giúp lần vào đầu nhanh hơn)
-const SharedQuizPage = lazy(() => import('./pages/SharedQuizPage').then((m) => ({ default: m.SharedQuizPage })));
-const QuizDetailPage = lazy(() => import('./pages/QuizDetailPage').then((m) => ({ default: m.QuizDetailPage })));
-const QuizFormPage = lazy(() => import('./pages/QuizFormPage').then((m) => ({ default: m.QuizFormPage })));
-const QuizPage = lazy(() => import('./pages/QuizPage').then((m) => ({ default: m.QuizPage })));
-const QuizResult = lazy(() => import('./pages/QuizResult').then((m) => ({ default: m.QuizResult })));
-const ReviewPage = lazy(() => import('./pages/ReviewPage').then((m) => ({ default: m.ReviewPage })));
-const PracticeMistakes = lazy(() => import('./pages/PracticeMistakes').then((m) => ({ default: m.PracticeMistakes })));
-const Statistics = lazy(() => import('./pages/Statistics').then((m) => ({ default: m.Statistics })));
-const ImportQuiz = lazy(() => import('./pages/ImportQuiz').then((m) => ({ default: m.ImportQuiz })));
-const SettingsPage = lazy(() => import('./pages/Settings').then((m) => ({ default: m.SettingsPage })));
-const SavedVocabularyPage = lazy(() => import('./pages/SavedVocabularyPage').then((m) => ({ default: m.SavedVocabularyPage })));
-const JapaneseLearningPage = lazy(() => import('./pages/JapaneseLearningPage').then((m) => ({ default: m.JapaneseLearningPage })));
-
-const PageLoading: React.FC = () => (
-  <div className="flex items-center justify-center py-24 text-sm font-semibold text-slate-400">
-    <span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
-    Đang tải…
-  </div>
-);
+import {
+  SharedQuizPage,
+  QuizDetailPage,
+  QuizFormPage,
+  QuizPage,
+  QuizResult,
+  ReviewPage,
+  PracticeMistakes,
+  Statistics,
+  ImportQuiz,
+  SettingsPage,
+  SavedVocabularyPage,
+  JapaneseLearningPage,
+  PageLoading,
+} from './app/lazyPages';
+import { getPageTitle } from './app/pageTitles';
+import { useThemeAndSound } from './hooks/useThemeAndSound';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -108,18 +101,6 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('All');
 
-  // Theme & Sound Settings State
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem('mcq_theme');
-      if (saved) return saved === 'dark';
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
-    } catch {
-      return false;
-    }
-  });
-
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => sound.isEnabled());
 
   // User Auth State
   const [currentUser, setCurrentUser] = useState<{ email: string; name: string } | null>(() => {
@@ -132,6 +113,9 @@ export default function App() {
   });
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+
+  // Giao diện sáng/tối & âm thanh (đồng bộ theo tài khoản)
+  const { isDarkMode, soundEnabled, handleToggleDarkMode, handleToggleSound } = useThemeAndSound(currentUser?.email);
 
   // Global Keyboard Shortcuts (Press '?' to show cheat sheet)
   useEffect(() => {
@@ -148,53 +132,6 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
-
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('mcq_theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('mcq_theme', 'light');
-    }
-  }, [isDarkMode]);
-
-  // Load user settings from Firestore when user logs in
-  useEffect(() => {
-    if (currentUser?.email) {
-      getUserSettingsFromFirestore(currentUser.email).then((settings) => {
-        if (settings) {
-          if (typeof settings.isDarkMode === 'boolean') {
-            setIsDarkMode(settings.isDarkMode);
-          }
-          if (typeof settings.soundEnabled === 'boolean') {
-            sound.setEnabled(settings.soundEnabled);
-            setSoundEnabled(settings.soundEnabled);
-          }
-        }
-      });
-    }
-  }, [currentUser]);
-
-  const handleToggleDarkMode = () => {
-    setIsDarkMode((prev) => {
-      const next = !prev;
-      if (currentUser?.email) {
-        saveUserSettingsToFirestore(currentUser.email, { isDarkMode: next, soundEnabled });
-      }
-      return next;
-    });
-  };
-
-  const handleToggleSound = () => {
-    const next = !soundEnabled;
-    sound.setEnabled(next);
-    setSoundEnabled(next);
-    if (next) sound.playCorrect();
-    if (currentUser?.email) {
-      saveUserSettingsToFirestore(currentUser.email, { isDarkMode, soundEnabled: next });
-    }
-  };
 
   const refreshData = () => {
     const loadedQuizzes = getQuizzes();
@@ -683,32 +620,7 @@ export default function App() {
 
   const subjectsList = getSubjectsList(quizzes);
 
-  const pageTitle =
-    activeTab === 'dashboard' || activeTab === 'my-quizzes'
-      ? 'Bộ đề của tôi'
-      : activeTab === 'quiz-detail'
-      ? 'Chi tiết bộ đề & Ôn tập'
-      : activeTab === 'create-quiz'
-      ? 'Tạo bộ đề mới'
-      : activeTab === 'edit-quiz'
-      ? 'Chỉnh sửa câu hỏi'
-      : activeTab === 'quiz-mode'
-      ? 'Thi trắc nghiệm'
-      : activeTab === 'quiz-result'
-      ? 'Kết quả bài thi'
-      : activeTab === 'review-mode'
-      ? 'Xem lại đáp án'
-      : activeTab === 'practice-mistakes'
-      ? 'Luyện câu hay sai'
-      : activeTab === 'statistics'
-      ? 'Thống kê kết quả'
-      : activeTab === 'import-export'
-      ? 'Nhập & Xuất đề thi'
-      : activeTab === 'saved-vocabulary'
-      ? 'Từ cần lưu ý ghi nhớ'
-      : activeTab === 'japanese'
-      ? 'Học Tiếng Nhật - Luyện Từ Vựng'
-      : 'Cài đặt hệ thống';
+  const pageTitle = getPageTitle(activeTab);
 
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-clip bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col md:flex-row antialiased">
