@@ -1,5 +1,4 @@
-import { SharedQuizPage } from './pages/SharedQuizPage';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Lock } from 'lucide-react';
 import { Quiz, QuizAttempt, Question, WrongQuestionDetail, GlobalStatistics, StudyOptions } from './types/quiz';
 import {
@@ -52,21 +51,32 @@ import { updateStudyProgressFromCloud } from './utils/studyProgressStorage';
 // Components
 import { Sidebar } from './components/Sidebar';
 import { AuthModal } from './components/AuthModal';
+import { EmailVerifyBanner } from './components/EmailVerifyBanner';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 
 // Pages
 import { Dashboard } from './pages/Dashboard';
-import { QuizDetailPage } from './pages/QuizDetailPage';
-import { QuizFormPage } from './pages/QuizFormPage';
-import { QuizPage } from './pages/QuizPage';
-import { QuizResult } from './pages/QuizResult';
-import { ReviewPage } from './pages/ReviewPage';
-import { PracticeMistakes } from './pages/PracticeMistakes';
-import { Statistics } from './pages/Statistics';
-import { ImportQuiz } from './pages/ImportQuiz';
-import { SettingsPage } from './pages/Settings';
-import { SavedVocabularyPage } from './pages/SavedVocabularyPage';
-import { JapaneseLearningPage } from './pages/JapaneseLearningPage';
+
+// Các trang lớn chỉ tải khi mở (giúp lần vào đầu nhanh hơn)
+const SharedQuizPage = lazy(() => import('./pages/SharedQuizPage').then((m) => ({ default: m.SharedQuizPage })));
+const QuizDetailPage = lazy(() => import('./pages/QuizDetailPage').then((m) => ({ default: m.QuizDetailPage })));
+const QuizFormPage = lazy(() => import('./pages/QuizFormPage').then((m) => ({ default: m.QuizFormPage })));
+const QuizPage = lazy(() => import('./pages/QuizPage').then((m) => ({ default: m.QuizPage })));
+const QuizResult = lazy(() => import('./pages/QuizResult').then((m) => ({ default: m.QuizResult })));
+const ReviewPage = lazy(() => import('./pages/ReviewPage').then((m) => ({ default: m.ReviewPage })));
+const PracticeMistakes = lazy(() => import('./pages/PracticeMistakes').then((m) => ({ default: m.PracticeMistakes })));
+const Statistics = lazy(() => import('./pages/Statistics').then((m) => ({ default: m.Statistics })));
+const ImportQuiz = lazy(() => import('./pages/ImportQuiz').then((m) => ({ default: m.ImportQuiz })));
+const SettingsPage = lazy(() => import('./pages/Settings').then((m) => ({ default: m.SettingsPage })));
+const SavedVocabularyPage = lazy(() => import('./pages/SavedVocabularyPage').then((m) => ({ default: m.SavedVocabularyPage })));
+const JapaneseLearningPage = lazy(() => import('./pages/JapaneseLearningPage').then((m) => ({ default: m.JapaneseLearningPage })));
+
+const PageLoading: React.FC = () => (
+  <div className="flex items-center justify-center py-24 text-sm font-semibold text-slate-400">
+    <span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+    Đang tải…
+  </div>
+);
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -722,8 +732,10 @@ export default function App() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-h-screen md:h-screen overflow-hidden">
+        <EmailVerifyBanner />
         {/* Scrollable Main Workspace */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+          <Suspense fallback={<PageLoading />}>
           {/* Main List: My Quizzes */}
           {(activeTab === 'dashboard' || activeTab === 'my-quizzes' || !['dashboard', 'my-quizzes', 'quiz-detail', 'create-quiz', 'edit-quiz', 'quiz-mode', 'quiz-result', 'review-mode', 'practice-mistakes', 'statistics', 'import-export', 'saved-vocabulary', 'japanese', 'settings', 'shared'].includes(activeTab)) && (
             <Dashboard
@@ -1053,6 +1065,7 @@ export default function App() {
               onToggleSound={handleToggleSound}
             />
           )}
+          </Suspense>
         </main>
       </div>
 

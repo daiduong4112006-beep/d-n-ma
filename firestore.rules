@@ -9,8 +9,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Phải đăng nhập VÀ đã xác minh email (Google luôn đã xác minh)
     function signedIn() {
-      return request.auth != null && request.auth.token.email != null;
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email_verified == true;
     }
     function myEmail() {
       return request.auth.token.email.lower();

@@ -10,6 +10,7 @@ import {
   saveUserToFirestore,
   getUserFromFirestore,
   deleteUserFromFirestore,
+  sendResetPassword,
 } from '../lib/firebase';
 import { clearAllUserData, transferGuestDataToUser } from '../utils/storage';
 
@@ -187,6 +188,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         errMsg = `Lỗi: ${err.message}`;
       }
       setMessage(errMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    const target = email.trim();
+    if (!target) {
+      setMessage('Nhập email của bạn vào ô Email trước, rồi bấm "Quên mật khẩu?".');
+      return;
+    }
+    setLoading(true);
+    setMessage(null);
+    try {
+      await sendResetPassword(target);
+      setMessage(`Đã gửi email đặt lại mật khẩu tới ${target}. Mở hộp thư (kể cả mục Spam) và làm theo hướng dẫn.`);
+    } catch (err: any) {
+      if (err?.code === 'auth/invalid-email') setMessage('Định dạng Email không hợp lệ.');
+      else setMessage(`Không gửi được email đặt lại mật khẩu: ${err?.message || 'Có lỗi xảy ra'}`);
     } finally {
       setLoading(false);
     }
@@ -446,6 +466,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     />
                   </div>
                 </div>
+                {mode === 'login' && (
+                  <div className="-mt-2 text-right">
+                    <button
+                      type="button"
+                      disabled={loading}
+                      onClick={handleForgotPassword}
+                      className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer disabled:opacity-60"
+                    >
+                      Quên mật khẩu?
+                    </button>
+                  </div>
+                )}
+                {mode === 'register' && (
+                  <p className="-mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+                    Sau khi đăng ký, bạn sẽ nhận email xác minh. Cần bấm link trong email thì dữ liệu mới được lưu lên đám mây.
+                  </p>
+                )}
 
                 <button
                   type="submit"

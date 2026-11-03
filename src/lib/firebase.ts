@@ -9,6 +9,8 @@ import {
   deleteUser,
   GoogleAuthProvider,
   signInWithPopup,
+  sendEmailVerification,
+  sendPasswordResetEmail,
   User,
 } from 'firebase/auth';
 import {
@@ -105,8 +107,37 @@ export const registerUser = async (email: string, pass: string, name: string) =>
     try {
       await withTimeout(updateProfile(userCred.user, { displayName: name }), 5000, 'updateProfile');
     } catch {}
+    try {
+      await withTimeout(sendEmailVerification(userCred.user), 8000, 'sendEmailVerification');
+    } catch (e) {
+      console.warn('Không gửi được email xác minh:', e);
+    }
   }
   return userCred.user;
+};
+
+/** Gửi lại email xác minh cho người đang đăng nhập */
+export const resendVerificationEmail = async () => {
+  const u = auth.currentUser;
+  if (!u) throw new Error('Bạn chưa đăng nhập.');
+  await withTimeout(sendEmailVerification(u), 8000, 'sendEmailVerification');
+};
+
+/** Tải lại trạng thái tài khoản; trả về true nếu email đã được xác minh (và làm mới token cho Firestore rules) */
+export const refreshEmailVerified = async (): Promise<boolean> => {
+  const u = auth.currentUser;
+  if (!u) return false;
+  await withTimeout(u.reload(), 8000, 'reloadUser');
+  if (auth.currentUser?.emailVerified) {
+    await auth.currentUser.getIdToken(true);
+    return true;
+  }
+  return false;
+};
+
+/** Gửi email đặt lại mật khẩu */
+export const sendResetPassword = async (email: string) => {
+  await withTimeout(sendPasswordResetEmail(auth, email), 10000, 'sendPasswordResetEmail');
 };
 
 export const loginUser = async (email: string, pass: string) => {
