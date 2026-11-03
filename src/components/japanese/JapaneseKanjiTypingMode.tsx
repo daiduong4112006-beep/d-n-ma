@@ -110,6 +110,59 @@ function matchReadingGroup(inputs: string[], parts: string[]): boolean[] {
   });
 }
 
+/**
+ * Đọc tiếng Nhật rồi đọc nghĩa tiếng Việt nối tiếp nhau; gọi onDone khi đọc xong
+ * (hoặc khi trình duyệt không hỗ trợ / bị lỗi, có hẹn giờ dự phòng).
+ */
+function speakJaThenVi(ja: string, vi: string, onDone: () => void): void {
+  let finished = false;
+  const done = () => {
+    if (finished) return;
+    finished = true;
+    onDone();
+  };
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    setTimeout(done, 2500);
+    return;
+  }
+  try {
+    const synth = window.speechSynthesis;
+    synth.cancel();
+    const clean = (t: string) =>
+      t
+        .replace(/[\(（].*?[\)）]/g, '')
+        .replace(/[~～〜^]/g, '')
+        .replace(/[/／]+/g, '、 ')
+        .trim();
+    const voices = synth.getVoices();
+    const jaText = clean(ja);
+    const viText = clean(vi);
+
+    const jaU = new SpeechSynthesisUtterance(jaText);
+    jaU.lang = 'ja-JP';
+    jaU.rate = 0.9;
+    const jaVoice = voices.find((v) => v.lang.toLowerCase().startsWith('ja'));
+    if (jaVoice) jaU.voice = jaVoice;
+
+    const viU = new SpeechSynthesisUtterance(viText);
+    viU.lang = 'vi-VN';
+    viU.rate = 1;
+    const viVoice = voices.find((v) => v.lang.toLowerCase().startsWith('vi'));
+    if (viVoice) viU.voice = viVoice;
+    viU.onend = done;
+    viU.onerror = done;
+
+    if (jaText) synth.speak(jaU);
+    if (viText) synth.speak(viU);
+    else jaU.onend = done;
+    // Dự phòng: một số trình duyệt không bắn sự kiện onend
+    setTimeout(done, 9000);
+  } catch (err) {
+    console.warn('Speech synthesis error:', err);
+    setTimeout(done, 2500);
+  }
+}
+
 export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = ({
   mode,
   kanjiCards = [],
@@ -189,6 +242,17 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
   const advanceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const currentCard = cards[currentIndex];
+  // Tăng mỗi lần chuyển thẻ / kết thúc, để bỏ các lượt đọc & tự chuyển đã lỗi thời
+  const stepTokenRef = useRef(0);
+
+  // Dừng đọc khi rời màn luyện gõ
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   // Helper properties for current card in core mode
   const currentKanji = mode === 'core' ? (currentCard as JapaneseKanjiCard | undefined) : undefined;
@@ -283,7 +347,8 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
 
   // Toggle Sound FX
   const handleToggleSound = () => {
-    const next = sound.toggle();
+    const next = !sound.isEnabled();
+    sound.setEnabled(next);
     setSoundEnabled(next);
   };
 
@@ -403,12 +468,29 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
       if (matched) {
         sound.playCorrect();
         setScore((s) => s + 1);
+        // Gõ đúng → hiện nghĩa, đọc tiếng Nhật rồi đọc nghĩa tiếng Việt, đọc xong mới sang thẻ
+        const tokenAtCheck = stepTokenRef.current;
+        const goNextIfStill = () => {
+          // Chỉ tự sang thẻ nếu người dùng chưa tự bấm Tiếp tục
+          if (stepTokenRef.current !== tokenAtCheck) return;
+          advanceTimerRef.current = setTimeout(() => {
+            if (stepTokenRef.current === tokenAtCheck) handleNextCard();
+          }, 600);
+        };
         if (autoSpeechEnabled && currentVocab) {
-          speakJapanese(currentVocab.reading || currentVocab.term);
+          setTimeout(() => {
+            if (stepTokenRef.current !== tokenAtCheck) return;
+            speakJaThenVi(
+              currentVocab.reading || currentVocab.term,
+              currentVocab.definition || '',
+              goNextIfStill
+            );
+          }, 350);
+        } else {
+          advanceTimerRef.current = setTimeout(() => {
+            handleNextCard();
+          }, 2200);
         }
-        advanceTimerRef.current = setTimeout(() => {
-          handleNextCard();
-        }, 1200);
       } else {
         sound.playWrong();
         setWrongCardIds((prev) => new Set(prev).add(currentCard.id));
@@ -420,6 +502,10 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
   };
 
   const handleNextCard = () => {
+    stepTokenRef.current += 1;
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
     if (advanceTimerRef.current) {
       clearTimeout(advanceTimerRef.current);
       advanceTimerRef.current = null;
@@ -838,12 +924,18 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
                 </button>
               </div>
 
-              {/* Vietnamese Meaning (Nghĩa tiếng Việt) */}
-              <p className="text-lg sm:text-xl font-bold text-cyan-300 max-w-lg mx-auto">
-                {currentVocab.definition}
-              </p>
+              {/* Vietnamese Meaning (Nghĩa tiếng Việt) — chỉ hiện sau khi gõ đúng */}
+              {isAnswerChecked && isOverallCorrect ? (
+                <p className="text-lg sm:text-xl font-bold text-cyan-300 max-w-lg mx-auto animate-fade-in">
+                  {currentVocab.definition}
+                </p>
+              ) : (
+                <p className="text-sm font-semibold text-slate-500 max-w-lg mx-auto">
+                  Gõ đúng cách đọc để xem nghĩa
+                </p>
+              )}
 
-              {currentVocab.example && (
+              {isAnswerChecked && isOverallCorrect && currentVocab.example && (
                 <div className="pt-2 text-xs text-slate-400 bg-slate-800/40 p-2.5 rounded-xl border border-slate-800 text-left">
                   <span className="font-bold text-slate-300">Ví dụ: </span>
                   <span className="text-slate-200">{currentVocab.example}</span>
