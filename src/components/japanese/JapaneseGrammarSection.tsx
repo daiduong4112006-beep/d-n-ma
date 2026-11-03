@@ -1,3 +1,4 @@
+import { SectionHeader, ToneButton } from './courseUi';
 import React, { useState, useRef } from 'react';
 import {
   Search,
@@ -21,6 +22,8 @@ import {
   XCircle,
   RefreshCw,
   Keyboard,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { JapaneseGrammarPoint, AttachedFile } from '../../types/japanese';
 import { JPD123_GRAMMAR_POINTS } from '../../data/jpd123Grammar';
@@ -309,14 +312,23 @@ const parseStructureLines = (raw: string): ParsedStructureLine[] => {
 interface Props {
   grammarPoints: JapaneseGrammarPoint[];
   onUpdateGrammarPoints: (updated: JapaneseGrammarPoint[]) => void;
+  /** Điều khiển bộ lọc Bài 4–7 từ thanh bên trái của khóa học */
+  lessonFilter?: string;
+  onLessonFilterChange?: (v: string) => void;
 }
 
 export const JapaneseGrammarSection: React.FC<Props> = ({
   grammarPoints,
   onUpdateGrammarPoints,
+  lessonFilter,
+  onLessonFilterChange,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedLessonFilter, setSelectedLessonFilter] = useState<string>('ALL');
+  const [localFilter, setLocalFilter] = useState<string>('ALL');
+  const selectedLessonFilter = lessonFilter ?? localFilter;
+  const setSelectedLessonFilter = (v: string) => (onLessonFilterChange ? onLessonFilterChange(v) : setLocalFilter(v));
+  const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [editingPoint, setEditingPoint] = useState<JapaneseGrammarPoint | null>(null);
   const [pointToDelete, setPointToDelete] = useState<JapaneseGrammarPoint | null>(null);
@@ -620,46 +632,23 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-lg bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 font-extrabold text-[11px]">
-              📝 NGỮ PHÁP / 文法
-            </span>
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-bold">
-              {grammarPoints.length} chủ điểm ngữ pháp
-            </span>
-          </div>
-          <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-            Tổng hợp Ngữ Pháp & Tài liệu đính kèm
-          </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Bạn có thể ghi chép cấu trúc ngữ pháp và <strong>nhét các file tài liệu</strong> (PDF, Word, hình ảnh, slide) vào đây để ôn luyện bất cứ lúc nào.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={handleSyncDefaultGrammar}
-            title="Đồng bộ lại toàn bộ mẫu ngữ pháp chuẩn theo cấu trúc mới nhất"
-            className="px-3.5 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
-          >
-            <RefreshCw className="w-4 h-4 text-indigo-500" />
-            <span className="hidden sm:inline">Đồng bộ mẫu chuẩn</span>
-            <span className="sm:hidden">Đồng bộ</span>
-          </button>
-          <button
-            type="button"
-            onClick={openAddModal}
-            className="px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-black shadow-md shadow-indigo-600/30 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Thêm mục ngữ pháp</span>
-          </button>
-        </div>
-      </div>
+      <SectionHeader
+        tone="indigo"
+        icon={<span className="font-japanese">文</span>}
+        eyebrow="Mục 3 · Ngữ pháp"
+        title="Mẫu câu & tài liệu đính kèm"
+        desc={`${grammarPoints.length} chủ điểm ngữ pháp kèm ví dụ song ngữ. Có thể đính kèm PDF, Word, hình ảnh, slide để ôn bất cứ lúc nào.`}
+        actions={
+          <>
+            <ToneButton tone="indigo" variant="ghost" onClick={handleSyncDefaultGrammar} title="Đồng bộ lại toàn bộ mẫu ngữ pháp chuẩn theo cấu trúc mới nhất">
+              <RefreshCw className="w-4 h-4 text-indigo-500" /> Đồng bộ mẫu chuẩn
+            </ToneButton>
+            <ToneButton tone="indigo" onClick={openAddModal}>
+              <Plus className="w-4 h-4" /> Thêm mục ngữ pháp
+            </ToneButton>
+          </>
+        }
+      />
 
       {syncNotice && (
         <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs font-bold flex items-center justify-between">
@@ -677,66 +666,16 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Filter and Search */}
-      <div className="space-y-3">
-        {/* Lesson Filter Pills */}
-        <div className="flex flex-wrap items-center gap-2">
-          {[
-            { id: 'ALL', label: 'Tất cả bài', count: grammarPoints.length },
-            { id: 'Bài 4', label: 'Bài 4', count: grammarPoints.filter((g) => g.lessonTag === 'Bài 4').length },
-            { id: 'Bài 5', label: 'Bài 5', count: grammarPoints.filter((g) => g.lessonTag === 'Bài 5').length },
-            { id: 'Bài 6', label: 'Bài 6', count: grammarPoints.filter((g) => g.lessonTag === 'Bài 6').length },
-            { id: 'Bài 7', label: 'Bài 7', count: grammarPoints.filter((g) => g.lessonTag === 'Bài 7').length },
-          ].map((tab) => {
-            const isSelected = selectedLessonFilter === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => {
-                  setSelectedLessonFilter(tab.id);
-                  sound.playClick();
-                }}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                  isSelected
-                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30'
-                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
-                }`}
-              >
-                <span>{tab.label}</span>
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                    isSelected
-                      ? 'bg-indigo-700/80 text-white'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
-                  }`}
-                >
-                  {tab.count}
-                </span>
-              </button>
-            );
-          })}
-
-          <button
-            type="button"
-            onClick={handleStartPracticeBatch}
-            className="sm:ml-auto px-3.5 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-indigo-600 dark:hover:bg-indigo-600 text-white text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95"
-            title={`Luyện gõ các câu ví dụ ngữ pháp (${selectedLessonFilter === 'ALL' ? 'Tất cả' : selectedLessonFilter})`}
-          >
-            <Keyboard className="w-3.5 h-3.5 text-indigo-400 group-hover:text-white" />
-            <span>Luyện gõ {selectedLessonFilter === 'ALL' ? 'tất cả' : selectedLessonFilter}</span>
-          </button>
-        </div>
-
-        {/* Search bar */}
-        <div className="relative">
+      {/* ===== Thanh công cụ: tìm kiếm + luyện gõ ===== */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
           <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Tìm kiếm mẫu câu, cấu trúc, ý nghĩa ngữ pháp..."
-            className="w-full pl-11 pr-4 py-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/50 shadow-xs"
+            placeholder="Tìm mẫu câu, cấu trúc, ý nghĩa…"
+            className="w-full pl-11 pr-10 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
           />
           {searchTerm && (
             <button
@@ -748,80 +687,114 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
             </button>
           )}
         </div>
+        <ToneButton
+          tone="indigo"
+          variant="ghost"
+          onClick={handleStartPracticeBatch}
+          title={`Luyện gõ các câu ví dụ ngữ pháp (${selectedLessonFilter === 'ALL' ? 'Tất cả' : selectedLessonFilter})`}
+        >
+          <Keyboard className="w-4 h-4 text-indigo-500" />
+          Luyện gõ {selectedLessonFilter === 'ALL' ? 'tất cả' : selectedLessonFilter}
+        </ToneButton>
       </div>
 
-      {/* List of Grammar Points */}
       {filtered.length === 0 ? (
-        <div className="text-center py-16 px-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
+        <div className="text-center py-16 px-4 rounded-3xl bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-700 space-y-4">
           <BookOpen className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto" />
           <div className="space-y-1">
             <h3 className="text-base font-black text-slate-800 dark:text-slate-200">
               {searchTerm ? 'Không tìm thấy ngữ pháp phù hợp' : 'Chưa có ngữ pháp nào'}
             </h3>
             <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
-              Hãy bấm nút bên dưới để tạo chủ điểm ngữ pháp và nhét các file tài liệu ghi nhớ vào đây.
+              Bấm nút bên dưới để tạo chủ điểm ngữ pháp và đính kèm tài liệu.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={openAddModal}
-            className="px-5 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs inline-flex items-center gap-2 cursor-pointer shadow-md shadow-indigo-600/30"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Thêm mục ngữ pháp đầu tiên</span>
-          </button>
+          <ToneButton tone="indigo" onClick={openAddModal}>
+            <Plus className="w-4 h-4" /> Thêm mục ngữ pháp đầu tiên
+          </ToneButton>
         </div>
       ) : (
-        <div className="space-y-4">
-          {filtered.map((gp) => {
-            const hasFiles = gp.attachedFiles && gp.attachedFiles.length > 0;
-            return (
-              <div
-                key={gp.id}
-                className="p-4 sm:p-6 rounded-2xl sm:rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-900/80 shadow-xs hover:shadow-md transition-all space-y-4 group"
-              >
-                {/* Header of card */}
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                  <div className="flex flex-wrap items-center gap-2 min-w-0">
-                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shrink-0"></span>
-                    <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white leading-snug">
-                      {gp.title}
-                    </h3>
-                    {gp.lessonTag && (
-                      <span className="px-2.5 py-0.5 rounded-lg bg-indigo-100 dark:bg-indigo-950/90 text-indigo-700 dark:text-indigo-300 font-extrabold text-[11px] border border-indigo-200/60 dark:border-indigo-800 shrink-0">
-                        {gp.lessonTag}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap self-end sm:self-start">
+        (() => {
+          const gp = filtered.find((g) => g.id === selectedPointId) || filtered[0];
+          const curIdx = filtered.indexOf(gp);
+          const hasFiles = gp.attachedFiles && gp.attachedFiles.length > 0;
+          const shortTitle = (t: string) => t.replace(/^\d+\.\s*/, '');
+          const pick = (id: string) => {
+            setSelectedPointId(id);
+            sound.playClick();
+            if (window.innerWidth < 1024) setTimeout(() => detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30);
+          };
+          return (
+            <div className="grid lg:grid-cols-[300px_minmax(0,1fr)] gap-5 items-start">
+              {/* ----- Mục lục mẫu câu ----- */}
+              <div className="lg:sticky lg:top-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2 max-h-[70vh] lg:max-h-[calc(100vh-3rem)] overflow-y-auto">
+                <div className="px-3 pt-2 pb-2 flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Mục lục</span>
+                  <span className="text-[11px] font-bold text-slate-400">{filtered.length} mẫu</span>
+                </div>
+                {filtered.map((g, i) => {
+                  const active = g.id === gp.id;
+                  return (
                     <button
+                      key={g.id}
                       type="button"
-                      onClick={() => handleStartPracticePoint(gp)}
-                      className="px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/70 hover:bg-indigo-600 text-indigo-600 dark:text-indigo-300 hover:text-white border border-indigo-200/80 dark:border-indigo-800/80 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95 group/btn"
-                      title={`Luyện gõ ${gp.examples?.length || 0} câu ví dụ của cấu trúc này`}
+                      onClick={() => pick(g.id)}
+                      className={`w-full flex items-start gap-3 p-2.5 rounded-2xl text-left transition-all cursor-pointer ${
+                        active
+                          ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/25'
+                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/70'
+                      }`}
                     >
-                      <Keyboard className="w-3.5 h-3.5 text-indigo-500 group-hover/btn:text-white" />
-                      <span>Luyện tập</span>
-                      {gp.examples && gp.examples.length > 0 && (
-                        <span className="px-1.5 py-0.2 rounded-md bg-indigo-200/80 dark:bg-indigo-800 text-indigo-800 dark:text-indigo-200 text-[10px] font-black group-hover/btn:bg-white/20 group-hover/btn:text-white">
-                          {gp.examples.length}
+                      <span
+                        className={`w-7 h-7 rounded-lg text-[11px] font-black flex items-center justify-center shrink-0 ${
+                          active ? 'bg-white/20' : 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500'
+                        }`}
+                      >
+                        {i + 1}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[13px] font-bold leading-snug line-clamp-2">{shortTitle(g.title)}</span>
+                        <span className={`block text-[11px] font-semibold mt-0.5 ${active ? 'text-white/70' : 'text-slate-400'}`}>
+                          {g.lessonTag || '—'} · {g.examples?.length || 0} ví dụ
+                          {g.attachedFiles && g.attachedFiles.length > 0 ? ` · ${g.attachedFiles.length} file` : ''}
                         </span>
-                      )}
+                      </span>
                     </button>
+                  );
+                })}
+              </div>
+
+              {/* ----- Chi tiết mẫu câu đang chọn ----- */}
+              <article
+                ref={detailRef}
+                className="scroll-mt-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden"
+              >
+                <div className="p-5 sm:p-6 bg-linear-to-br from-indigo-500/10 via-transparent to-transparent border-b border-slate-100 dark:border-slate-800 space-y-3">
+                  <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-indigo-500">
+                    <span>Mẫu {curIdx + 1}/{filtered.length}</span>
+                    {gp.lessonTag && <span className="px-2 py-0.5 rounded-md bg-indigo-500/10">{gp.lessonTag}</span>}
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white leading-snug">{shortTitle(gp.title)}</h3>
+                  <p className="text-sm font-bold text-slate-600 dark:text-slate-300">
+                    <span className="text-slate-400 font-black text-[11px] uppercase tracking-wider mr-2">Ý nghĩa</span>
+                    {gp.meaning}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <ToneButton tone="indigo" onClick={() => handleStartPracticePoint(gp)}>
+                      <Keyboard className="w-4 h-4" /> Luyện tập{gp.examples?.length ? ` (${gp.examples.length})` : ''}
+                    </ToneButton>
                     <button
                       type="button"
                       onClick={() => handleOpenAiGrammar(gp)}
-                      className="px-3 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-950/70 hover:bg-purple-600 text-purple-600 dark:text-purple-300 hover:text-white border border-purple-200/80 dark:border-purple-800/80 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95 group/btn"
-                      title={`Trợ lý AI giải thích chuyên sâu & hỏi đáp cấu trúc: ${gp.title}`}
+                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-300 text-xs font-black cursor-pointer hover:bg-purple-500/20"
                     >
-                      <Sparkles className="w-3.5 h-3.5 text-purple-500 group-hover/btn:text-white" />
-                      <span>Hỏi đáp AI</span>
+                      <Sparkles className="w-4 h-4" /> Hỏi đáp AI
                     </button>
+                    <span className="flex-1" />
                     <button
                       type="button"
                       onClick={() => openEditModal(gp)}
-                      className="p-2 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                      className="p-2 rounded-xl text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
                       title="Chỉnh sửa ngữ pháp"
                     >
                       <Edit3 className="w-4 h-4" />
@@ -829,7 +802,7 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
                     <button
                       type="button"
                       onClick={() => setPointToDelete(gp)}
-                      className="p-2 rounded-xl text-rose-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors cursor-pointer"
+                      className="p-2 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 cursor-pointer"
                       title="Xóa ngữ pháp"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -837,220 +810,179 @@ export const JapaneseGrammarSection: React.FC<Props> = ({
                   </div>
                 </div>
 
-                {/* Structured Formula Lines with Badges - Full Width for Mobile & Desktop */}
-                <div className="space-y-2 pt-1">
-                  {parseStructureLines(gp.structure).map((line, lIdx) => (
-                    <div
-                      key={lIdx}
-                      className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 rounded-2xl bg-slate-50/90 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 transition-all hover:bg-white dark:hover:bg-slate-800 shadow-2xs"
-                    >
-                      <span
-                        className={`px-3 py-1 rounded-xl text-xs font-black tracking-wide shrink-0 inline-flex items-center gap-1.5 border shadow-2xs self-start sm:self-center ${line.badgeClass}`}
-                      >
-                        {line.badge}
-                      </span>
-                      <span className="font-mono font-bold text-xs sm:text-base text-slate-900 dark:text-white leading-relaxed select-all break-words">
-                        {line.text}
-                      </span>
+                <div className="p-5 sm:p-6 space-y-6">
+                  {/* Cấu trúc */}
+                  <section className="space-y-2">
+                    <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">Cấu trúc</h4>
+                    <div className="rounded-2xl bg-slate-950 dark:bg-slate-950 border border-slate-800 divide-y divide-slate-800/80 overflow-hidden">
+                      {parseStructureLines(gp.structure).map((line, lIdx) => (
+                        <div key={lIdx} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-lg text-[11px] font-black shrink-0 inline-flex items-center gap-1 border self-start sm:self-center sm:min-w-[104px] justify-center ${line.badgeClass}`}
+                          >
+                            {line.badge}
+                          </span>
+                          <span className="font-japanese font-bold text-sm sm:text-base text-slate-100 leading-relaxed break-words select-all">
+                            {line.text}
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                    {gp.explanation && (
+                      <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-500/5 border border-amber-200/70 dark:border-amber-500/20">
+                        <b className="text-amber-600 dark:text-amber-400">Ghi chú: </b>
+                        {gp.explanation}
+                      </p>
+                    )}
+                  </section>
 
-                {/* Meaning & Explanation */}
-                <div className="text-xs sm:text-sm space-y-2">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider">
-                      Ý nghĩa:
-                    </span>
-                    <span className="font-extrabold text-slate-800 dark:text-slate-200">
-                      {gp.meaning}
-                    </span>
-                  </div>
-                  {gp.explanation && (
-                    <p className="text-slate-600 dark:text-slate-400 leading-relaxed bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 text-xs">
-                      {gp.explanation}
-                    </p>
-                  )}
-                </div>
-
-                {/* Examples */}
-                {gp.examples && gp.examples.length > 0 && (
-                  <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider">
-                        Ví dụ minh họa ({gp.examples.length}):
-                      </span>
-                    </div>
-                    <div className="space-y-2">
-                      {gp.examples.map((ex, idx) => {
-                        const isDialogue =
-                          ex.japanese.includes('A：') ||
-                          ex.japanese.includes('A:') ||
-                          ex.japanese.includes('/ B：') ||
-                          ex.japanese.includes('/ B:');
-
-                        if (isDialogue) {
-                          const parts = ex.japanese.split(/\s*\/\s*(?=B[：:])/);
+                  {/* Ví dụ */}
+                  {gp.examples && gp.examples.length > 0 && (
+                    <section className="space-y-2">
+                      <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                        Ví dụ ({gp.examples.length})
+                      </h4>
+                      <ol className="space-y-2">
+                        {gp.examples.map((ex, idx) => {
+                          const isDialogue = /(^|\s)A[：:]/.test(ex.japanese) && /\/\s*B[：:]/.test(ex.japanese);
+                          const parts = isDialogue ? ex.japanese.split(/\s*\/\s*(?=B[：:])/) : [ex.japanese];
                           return (
-                            <div
+                            <li
                               key={idx}
-                              className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 text-xs space-y-2"
+                              className="flex gap-3 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-500/30 transition-colors"
                             >
-                              <div className="space-y-1.5">
+                              <span className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500 text-[11px] font-black flex items-center justify-center shrink-0 mt-0.5">
+                                {idx + 1}
+                              </span>
+                              <div className="flex-1 min-w-0 space-y-1">
                                 {parts.map((p, pIdx) => {
-                                  const speaker = p.startsWith('A') ? 'A' : 'B';
-                                  const cleanP = p.replace(/^[AB][：:]\s*/, '');
+                                  const speaker = isDialogue ? (p.trim().startsWith('A') ? 'A' : 'B') : null;
+                                  const clean = isDialogue ? p.replace(/^\s*[AB][：:]\s*/, '') : p;
                                   return (
                                     <div key={pIdx} className="flex items-start gap-2">
-                                      <span
-                                        className={`w-5 h-5 rounded-full flex items-center justify-center font-black text-[10px] shrink-0 mt-0.5 ${
-                                          speaker === 'A'
-                                            ? 'bg-indigo-600 text-white'
-                                            : 'bg-emerald-600 text-white'
-                                        }`}
-                                      >
-                                        {speaker}
-                                      </span>
-                                      <div className="flex-1 flex items-center justify-between gap-2">
-                                        <span className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm">
-                                          {cleanP}
-                                        </span>
-                                        <button
-                                          type="button"
-                                          onClick={() => speakJapanese(cleanP)}
-                                          className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0"
-                                          title="Nghe phát âm"
+                                      {speaker && (
+                                        <span
+                                          className={`w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5 text-white ${
+                                            speaker === 'A' ? 'bg-indigo-500' : 'bg-emerald-500'
+                                          }`}
                                         >
-                                          <Volume2 className="w-3.5 h-3.5" />
-                                        </button>
-                                      </div>
+                                          {speaker}
+                                        </span>
+                                      )}
+                                      <span className="flex-1 font-japanese font-bold text-slate-900 dark:text-white text-sm sm:text-[15px] leading-relaxed">
+                                        {clean}
+                                        {!isDialogue && ex.reading && (
+                                          <span className="ml-2 text-indigo-500 font-medium text-xs">({ex.reading})</span>
+                                        )}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => speakJapanese(clean)}
+                                        className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer shrink-0"
+                                        title="Nghe phát âm"
+                                      >
+                                        <Volume2 className="w-4 h-4" />
+                                      </button>
                                     </div>
                                   );
                                 })}
+                                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">{ex.vietnamese}</p>
                               </div>
-                              <div className="text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-200/50 dark:border-slate-700/50 pl-7 text-[11px] sm:text-xs">
-                                → {ex.vietnamese}
-                              </div>
-                            </div>
+                            </li>
                           );
-                        }
+                        })}
+                      </ol>
+                    </section>
+                  )}
 
-                        return (
+                  {/* Tài liệu */}
+                  <section className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <Paperclip className="w-3.5 h-3.5" /> Tài liệu đính kèm ({gp.attachedFiles?.length || 0})
+                      </h4>
+                      <label className="text-xs font-bold text-indigo-500 hover:underline cursor-pointer inline-flex items-center gap-1">
+                        <Upload className="w-3.5 h-3.5" /> Thêm file
+                        <input type="file" multiple className="hidden" onChange={(e) => handleDirectAttach(gp.id, e)} />
+                      </label>
+                    </div>
+                    {hasFiles ? (
+                      <div className="grid sm:grid-cols-2 gap-2">
+                        {gp.attachedFiles?.map((file) => (
                           <div
-                            key={idx}
-                            className="p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 text-xs flex items-start justify-between gap-3"
+                            key={file.id}
+                            onClick={() => {
+                              if (file.dataUrl) {
+                                setPreviewFile(file);
+                                sound.playClick();
+                              }
+                            }}
+                            className="flex items-center gap-3 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-500/40 cursor-pointer transition-all"
+                            title="Bấm để xem file"
                           >
-                            <div className="space-y-1 flex-1">
-                              <div className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm flex items-center gap-2 flex-wrap">
-                                <span>{ex.japanese}</span>
-                                {ex.reading && (
-                                  <span className="text-indigo-500 font-medium text-xs">
-                                    ({ex.reading})
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-slate-500 dark:text-slate-400 text-[11px] sm:text-xs">
-                                → {ex.vietnamese}
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => speakJapanese(ex.japanese)}
-                              className="p-1.5 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0"
-                              title="Nghe phát âm"
-                            >
-                              <Volume2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* ATTACHED FILES SECTION ("nhét file vào đó") */}
-                <div className="pt-3 border-t border-dashed border-slate-200 dark:border-slate-800">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <Paperclip className="w-3.5 h-3.5 text-indigo-500" />
-                      <span className="text-xs font-black text-slate-700 dark:text-slate-300">
-                        File đính kèm ({gp.attachedFiles?.length || 0})
-                      </span>
-                    </div>
-
-                    {/* Quick attach button */}
-                    <label className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer inline-flex items-center gap-1">
-                      <Upload className="w-3 h-3" />
-                      <span>+ Nhét thêm file</span>
-                      <input
-                        type="file"
-                        multiple
-                        className="hidden"
-                        onChange={(e) => handleDirectAttach(gp.id, e)}
-                      />
-                    </label>
-                  </div>
-
-                  {hasFiles ? (
-                    <div className="flex flex-wrap gap-2">
-                      {gp.attachedFiles?.map((file) => (
-                        <div
-                          key={file.id}
-                          onClick={() => {
-                            if (file.dataUrl) {
-                              setPreviewFile(file);
-                              sound.playClick();
-                            }
-                          }}
-                          className="flex items-center gap-2 p-2 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-900/60 text-xs text-slate-700 dark:text-slate-300 hover:border-indigo-400 hover:bg-indigo-100/50 dark:hover:bg-indigo-900/50 cursor-pointer transition-all"
-                          title="Bấm để xem file"
-                        >
-                          <FileText className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                          <span className="font-bold truncate max-w-[180px]" title={file.name}>
-                            {file.name}
-                          </span>
-                          <span className="text-[10px] text-slate-400">
-                            ({formatFileSize(file.size)})
-                          </span>
-
-                          <div className="flex items-center gap-1 ml-1" onClick={(e) => e.stopPropagation()}>
+                            <span className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
+                              <FileText className="w-4 h-4" />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-xs font-bold text-slate-800 dark:text-slate-100 truncate" title={file.name}>
+                                {file.name}
+                              </span>
+                              <span className="block text-[11px] text-slate-400">{formatFileSize(file.size)}</span>
+                            </span>
                             {file.dataUrl && (
-                              <>
+                              <span className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
                                 <button
                                   type="button"
                                   onClick={() => {
                                     setPreviewFile(file);
                                     sound.playClick();
                                   }}
-                                  className="p-1 rounded-md text-slate-500 hover:text-indigo-600 cursor-pointer"
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 cursor-pointer"
                                   title="Xem file"
                                 >
-                                  <Eye className="w-3.5 h-3.5" />
+                                  <Eye className="w-4 h-4" />
                                 </button>
                                 <a
                                   href={file.dataUrl}
                                   download={file.name}
-                                  className="p-1 rounded-md text-slate-500 hover:text-indigo-600 cursor-pointer"
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500"
                                   title="Tải về máy"
                                 >
-                                  <Download className="w-3.5 h-3.5" />
+                                  <Download className="w-4 h-4" />
                                 </a>
-                              </>
+                              </span>
                             )}
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-[11px] text-slate-400 italic">
-                      Chưa có file nào được đính kèm. Bạn có thể bấm &quot;+ Nhét thêm file&quot; để tải tài liệu lên.
-                    </p>
-                  )}
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic p-3 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                        Chưa có tài liệu. Bấm “Thêm file” để đính kèm PDF, Word, hình ảnh hoặc slide.
+                      </p>
+                    )}
+                  </section>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+
+                {/* Mẫu trước / sau */}
+                <div className="flex items-center justify-between gap-2 px-5 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40">
+                  <ToneButton tone="indigo" variant="ghost" disabled={curIdx <= 0} onClick={() => pick(filtered[curIdx - 1].id)}>
+                    <ChevronLeft className="w-4 h-4" /> Mẫu trước
+                  </ToneButton>
+                  <span className="text-xs font-bold text-slate-400">
+                    {curIdx + 1} / {filtered.length}
+                  </span>
+                  <ToneButton
+                    tone="indigo"
+                    disabled={curIdx >= filtered.length - 1}
+                    onClick={() => pick(filtered[curIdx + 1].id)}
+                  >
+                    Mẫu sau <ChevronRight className="w-4 h-4" />
+                  </ToneButton>
+                </div>
+              </article>
+            </div>
+          );
+        })()
       )}
 
       {/* MODAL: ADD / EDIT GRAMMAR POINT */}

@@ -11,6 +11,8 @@ import {
   Search,
   Sparkles,
   AlertTriangle,
+  Mic,
+  FileStack,
 } from 'lucide-react';
 import {
   JapaneseCourse,
@@ -28,23 +30,32 @@ import { JapaneseFlashcardMode } from '../components/japanese/JapaneseFlashcardM
 import { JapaneseTypingMode } from '../components/japanese/JapaneseTypingMode';
 import { JapaneseMultiChoiceMode } from '../components/japanese/JapaneseMultiChoiceMode';
 import { JapaneseKanjiStudyMode } from '../components/japanese/JapaneseKanjiStudyMode';
+import { JapaneseSpeakingSection, SPK_GROUPS } from '../components/japanese/JapaneseSpeakingSection';
+import { JapaneseExamBankSection, ExamBankStats } from '../components/japanese/JapaneseExamBankSection';
+import { SectionHeader, FilterChip, ToneButton, ProgressRing, TONE, CourseTone } from '../components/japanese/courseUi';
 import { sound } from '../utils/audio';
 
 interface Props {
   course: JapaneseCourse;
   onBackToCourses: () => void;
   onUpdateCourse: (updated: JapaneseCourse) => void;
+  /** Chỉ dùng cho bản demo một file: HTML Ôn SPK nhúng sẵn */
+  speakingSrcDoc?: string;
 }
 
-type CourseTab = 'vocabulary' | 'kanji' | 'grammar';
+type CourseTab = 'vocabulary' | 'kanji' | 'grammar' | 'speaking' | 'exam-bank';
 type ActiveSubView = 'tabs' | 'lesson-detail' | 'lesson-editor' | 'typing' | 'typing-example' | 'flashcard' | 'multichoice' | 'kanji-flashcard' | 'kanji-study';
 
 export const JapaneseCourseDetail: React.FC<Props> = ({
   course,
   onBackToCourses,
   onUpdateCourse,
+  speakingSrcDoc,
 }) => {
   const [activeTab, setActiveTab] = useState<CourseTab>('vocabulary');
+  // Ôn SPK & Source FE chỉ có trong khóa JPD123
+  const isJpd123 =
+    course.id === 'course-jpd123' || (course.code || '').toLowerCase().replace(/\s+/g, '') === 'jpd123';
   const [activeSubView, setActiveSubView] = useState<ActiveSubView>('tabs');
 
   // Selected Lesson State
@@ -53,6 +64,13 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
   const [lessonToDelete, setLessonToDelete] = useState<JapaneseLesson | null>(null);
   const [vocabSearch, setVocabSearch] = useState('');
   const [vocabLessonFilter, setVocabLessonFilter] = useState<string>('ALL');
+  // Mục con đang chọn của từng mục (điều khiển từ thanh bên trái)
+  const [kanjiFolder, setKanjiFolder] = useState<string | null>(null);
+  const [grammarFilter, setGrammarFilter] = useState<string>('ALL');
+  const [spkRoute, setSpkRoute] = useState<string>('home');
+  const [spkCounts, setSpkCounts] = useState<Record<string, string>>({});
+  const [feCat, setFeCat] = useState<string>('');
+  const [feStats, setFeStats] = useState<ExamBankStats | null>(null);
   const [typingFilter, setTypingFilter] = useState<'original' | 'mastered' | 'all'>('original');
 
   // Keep selectedLesson in sync when course prop updates from cloud or other devices
@@ -371,302 +389,368 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
     );
   });
 
+  // ---- Tiến độ từng mục (hiển thị ở thanh điều hướng bên trái) ----
+  const allCards = (course.lessons || []).flatMap((l) => l.cards || []);
+  const vocabMastered = allCards.filter((c) => c.mastered).length;
+  const kanjiTotal = (course.kanjiList || []).length;
+  const kanjiMastered = (course.kanjiList || []).filter((k) => k.mastered).length;
+  const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
+  const readLS = (key: string) => {
+    try {
+      return JSON.parse(localStorage.getItem(key) || 'null');
+    } catch {
+      return null;
+    }
+  };
+  const spkState = readLS('jpd123_v1');
+  const spkLearned = spkState?.learned ? Object.keys(spkState.learned).length : 0;
+  const fePicks = readLS('jpd-bank-picks') || {};
+  const feDone = Object.keys(fePicks).length;
+  const overall = pct(vocabMastered + kanjiMastered, allCards.length + kanjiTotal);
+
+  type SubItem = { key: string; label: string; count?: string | number; group?: string };
+  const lessonCount = (n: string) =>
+    (course.lessons || []).filter((l) => l.title.includes(`Bài ${n}`) || l.title.startsWith(`${n}-`) || l.lessonCode?.includes(`${n}-`)).length;
+  const kanjiCount = (tag: string) => (course.kanjiList || []).filter((k) => (k.lessonTag || 'L4') === tag).length;
+  const grammarCount = (tag: string) => (course.grammarPoints || []).filter((g) => g.lessonTag === tag).length;
+  const KANJI_FOLDER_TITLES: Record<string, string> = {
+    L4: 'Địa điểm & Phương hướng',
+    L5: 'Hành động & Nghỉ ngơi',
+    L6: 'Giao tiếp & Sinh hoạt',
+    L7: 'Tự nhiên & Cơ bản',
+  };
+  const SUBS: Record<CourseTab, { items: SubItem[]; value: string; set: (k: string) => void }> = {
+    vocabulary: {
+      items: [{ key: 'ALL', label: 'Tất cả bài', count: (course.lessons || []).length }, ...['4', '5', '6', '7'].map((n) => ({ key: `Bài ${n}`, label: `Bài ${n}`, count: lessonCount(n) }))],
+      value: vocabLessonFilter,
+      set: setVocabLessonFilter,
+    },
+    kanji: {
+      items: [
+        { key: '', label: 'Tổng quan 4 thư mục' },
+        ...['L4', 'L5', 'L6', 'L7'].map((t) => ({ key: t, label: `Bài ${t.slice(1)} · ${KANJI_FOLDER_TITLES[t]}`, count: kanjiCount(t) })),
+        { key: 'ALL', label: 'Toàn bộ chữ Hán', count: kanjiTotal },
+      ],
+      value: kanjiFolder ?? '',
+      set: (k) => setKanjiFolder(k || null),
+    },
+    grammar: {
+      items: [{ key: 'ALL', label: 'Tất cả bài', count: (course.grammarPoints || []).length }, ...['4', '5', '6', '7'].map((n) => ({ key: `Bài ${n}`, label: `Bài ${n}`, count: grammarCount(`Bài ${n}`) }))],
+      value: grammarFilter,
+      set: setGrammarFilter,
+    },
+    speaking: {
+      items: SPK_GROUPS.flatMap((g) => g.items.map((it) => ({ key: it.k, label: it.label, group: g.label, count: spkCounts[it.k] }))),
+      value: spkRoute,
+      set: setSpkRoute,
+    },
+    'exam-bank': {
+      items: [
+        { key: '', label: 'Tất cả dạng', count: feStats?.total ?? 880 },
+        ...Object.entries(feStats?.categories || {}).map(([c, n]) => ({ key: c, label: c, count: n })),
+      ],
+      value: feCat,
+      set: setFeCat,
+    },
+  };
+
+  const NAV: {
+    id: CourseTab;
+    tone: CourseTone;
+    icon: React.ReactNode;
+    label: string;
+    sub: string;
+    progress?: number;
+  }[] = [
+    { id: 'vocabulary', tone: 'orange', icon: <BookOpen className="w-5 h-5" />, label: 'Từ vựng', sub: `${course.lessons?.length || 0} bài · ${allCards.length} từ`, progress: pct(vocabMastered, allCards.length) },
+    { id: 'kanji', tone: 'rose', icon: <span className="font-japanese font-black text-lg leading-none">漢</span>, label: 'Chữ Hán', sub: `${kanjiTotal} chữ · ${(course.kanjiVocabList || []).length} từ ghép`, progress: pct(kanjiMastered, kanjiTotal) },
+    { id: 'grammar', tone: 'indigo', icon: <FileText className="w-5 h-5" />, label: 'Ngữ pháp', sub: `${course.grammarPoints?.length || 0} mẫu câu` },
+    ...(isJpd123
+      ? ([
+          { id: 'speaking', tone: 'emerald', icon: <Mic className="w-5 h-5" />, label: 'Ôn SPK', sub: 'Thi nói · 48 câu · 24 tranh', progress: pct(spkLearned, 48) },
+          { id: 'exam-bank', tone: 'sky', icon: <FileStack className="w-5 h-5" />, label: 'Source FE', sub: `Đề cuối kỳ · ${feStats?.done ?? feDone}/880 đã làm`, progress: pct(feStats?.done ?? feDone, 880) },
+        ] as const)
+      : []),
+  ];
+
+  const lessonNumOf = (l: JapaneseLesson) => {
+    const m = (l.lessonCode || l.title).match(/(\d+)/);
+    return m ? m[1] : '';
+  };
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-200">
-      {/* Top Breadcrumb & Course Header */}
-      <div className="p-6 rounded-3xl bg-linear-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-xl relative overflow-hidden border border-slate-800">
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
-          <div className="space-y-2">
+    <div className="animate-in fade-in duration-200">
+      <div className="grid lg:grid-cols-[288px_minmax(0,1fr)] gap-6 items-start">
+        {/* ================= THANH KHÓA HỌC BÊN TRÁI ================= */}
+        <aside className="lg:sticky lg:top-6 space-y-4 min-w-0">
+          {/* Thẻ khóa học */}
+          <div className="relative overflow-hidden rounded-3xl p-5 bg-slate-900 text-white border border-slate-800">
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute -right-4 -bottom-10 font-japanese font-black text-[140px] leading-none text-white/[0.04] select-none"
+            >
+              日本
+            </span>
             <button
               type="button"
               onClick={onBackToCourses}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white transition-colors cursor-pointer"
+              className="relative inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span>Quay lại danh sách khóa học</span>
+              <span>Tất cả khóa học</span>
             </button>
-
-            <div className="flex flex-wrap items-center gap-2.5">
-              <span className="px-3 py-1 rounded-xl bg-orange-500 text-white font-black text-xs tracking-wider shadow-sm">
-                {course.code || 'JPD 123'}
-              </span>
-              <span className="text-xs text-indigo-300 font-bold">
-                Level: {course.level || 'Cơ bản'}
-              </span>
+            <div className="relative mt-4 flex items-center gap-4">
+              <ProgressRing value={overall} size={68} stroke={6} className="text-orange-500">
+                <span className="text-base font-black leading-none">{overall}%</span>
+                <span className="text-[8px] font-bold text-slate-400 uppercase mt-0.5">đã nhớ</span>
+              </ProgressRing>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="px-2 py-0.5 rounded-md bg-orange-500 text-white font-black text-[10px] tracking-wider">
+                    {course.code || 'JPD 123'}
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-400">{course.level || 'Cơ bản'}</span>
+                </div>
+                <h1 className="mt-1.5 text-lg font-black leading-snug tracking-tight">
+                  {course.title || 'Tiếng Nhật JPD 123'}
+                </h1>
+              </div>
             </div>
-
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
-              {course.title || 'Tiếng Nhật JPD 123'}
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
+            <p className="relative mt-3 text-xs text-slate-400 leading-relaxed hidden lg:block">
               {course.description || 'Khóa học tiếng Nhật tổng hợp bao gồm Từ vựng, Chữ Hán và Ngữ pháp.'}
             </p>
           </div>
 
-          {/* Quick Info Badges */}
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <div className="px-3.5 py-2 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/10 text-center">
-              <span className="text-lg font-black block text-sky-400">
-                {course.lessons?.length || 0}
-              </span>
-              <span className="text-[10px] font-bold text-slate-300 uppercase">Bài học</span>
-            </div>
-            <div className="px-3.5 py-2 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/10 text-center">
-              <span className="text-lg font-black block text-rose-400">
-                {course.kanjiList?.length || 0}
-              </span>
-              <span className="text-[10px] font-bold text-slate-300 uppercase">Chữ Hán</span>
-            </div>
-            <div className="px-3.5 py-2 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/10 text-center">
-              <span className="text-lg font-black block text-indigo-400">
-                {course.grammarPoints?.length || 0}
-              </span>
-              <span className="text-[10px] font-bold text-slate-300 uppercase">Ngữ pháp</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 3 MAIN TABS NAVIGATION (Từ vựng, Chữ Hán, Ngữ pháp) */}
-      <div className="p-1.5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-2 overflow-x-auto">
-        {/* Tab 1: Từ vựng */}
-        <button
-          type="button"
-          onClick={() => {
-            setActiveTab('vocabulary');
-            sound.playClick();
-          }}
-          className={`flex-1 min-w-[140px] py-3 px-4 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
-            activeTab === 'vocabulary'
-              ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800'
-          }`}
-        >
-          <BookOpen className="w-4 h-4" />
-          <span>Từ vựng ({course.lessons?.length || 0})</span>
-        </button>
-
-        {/* Tab 2: Chữ Hán */}
-        <button
-          type="button"
-          onClick={() => {
-            setActiveTab('kanji');
-            sound.playClick();
-          }}
-          className={`flex-1 min-w-[140px] py-3 px-4 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
-            activeTab === 'kanji'
-              ? 'bg-red-600 text-white shadow-md shadow-red-600/30'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800'
-          }`}
-        >
-          <span className="text-sm font-serif leading-none">🈲</span>
-          <span>Chữ Hán ({course.kanjiList?.length || 0})</span>
-        </button>
-
-        {/* Tab 3: Ngữ pháp */}
-        <button
-          type="button"
-          onClick={() => {
-            setActiveTab('grammar');
-            sound.playClick();
-          }}
-          className={`flex-1 min-w-[140px] py-3 px-4 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
-            activeTab === 'grammar'
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800'
-          }`}
-        >
-          <FileText className="w-4 h-4" />
-          <span>Ngữ pháp ({course.grammarPoints?.length || 0})</span>
-        </button>
-      </div>
-
-      {/* TAB 1: TỪ VỰNG (VOCABULARY LESSONS) */}
-      {activeTab === 'vocabulary' && (
-        <div className="space-y-6">
-          {/* Action header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider">
-                SELECT A LESSON TO BEGIN
-              </span>
-              <h2 className="text-xl font-black text-slate-900 dark:text-white">
-                Các bài học từ vựng
-              </h2>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="relative w-full sm:w-64">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={vocabSearch}
-                  onChange={(e) => setVocabSearch(e.target.value)}
-                  placeholder="Tìm kiếm bài học..."
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-xs"
-                />
-              </div>
-
-              <button
-                type="button"
-                onClick={handleCreateNewLesson}
-                className="px-4 py-2.5 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black shadow-md shadow-orange-500/30 flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Tạo bài học</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Quick Lesson Filter Tabs */}
-          <div className="flex flex-wrap items-center gap-2">
-            {[
-              { id: 'ALL', label: 'Tất cả bài', count: (course.lessons || []).length },
-              {
-                id: 'Bài 4',
-                label: 'Bài 4',
-                count: (course.lessons || []).filter(
-                  (l) => l.title.includes('Bài 4') || l.title.startsWith('4-') || l.lessonCode?.includes('4-')
-                ).length,
-              },
-              {
-                id: 'Bài 5',
-                label: 'Bài 5',
-                count: (course.lessons || []).filter(
-                  (l) => l.title.includes('Bài 5') || l.title.startsWith('5-') || l.lessonCode?.includes('5-')
-                ).length,
-              },
-              {
-                id: 'Bài 6',
-                label: 'Bài 6',
-                count: (course.lessons || []).filter(
-                  (l) => l.title.includes('Bài 6') || l.title.startsWith('6-') || l.lessonCode?.includes('6-')
-                ).length,
-              },
-              {
-                id: 'Bài 7',
-                label: 'Bài 7',
-                count: (course.lessons || []).filter(
-                  (l) => l.title.includes('Bài 7') || l.title.startsWith('7-') || l.lessonCode?.includes('7-')
-                ).length,
-              },
-            ].map((pill) => {
-              const isSelected = vocabLessonFilter === pill.id;
+          {/* Điều hướng 5 mục */}
+          <nav
+            aria-label="Các mục của khóa học"
+            className="flex lg:flex-col gap-2 overflow-x-auto pb-1 lg:pb-0 lg:p-2 lg:rounded-3xl lg:bg-white lg:dark:bg-slate-900 lg:border lg:border-slate-200 lg:dark:border-slate-800"
+          >
+            {NAV.map((n) => {
+              const active = activeTab === n.id;
+              const sub = SUBS[n.id];
               return (
+                <div key={n.id} className="shrink-0 lg:shrink">
                 <button
-                  key={pill.id}
                   type="button"
+                  aria-current={active ? 'page' : undefined}
                   onClick={() => {
-                    setVocabLessonFilter(pill.id);
+                    setActiveTab(n.id);
                     sound.playClick();
                   }}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                    isSelected
-                      ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/30'
-                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  className={`group relative shrink-0 lg:w-full flex items-center gap-3 p-2.5 pr-3 rounded-2xl text-left transition-all cursor-pointer ${
+                    active
+                      ? `bg-slate-900 dark:bg-slate-800 text-white shadow-lg ring-1 ${TONE[n.tone].ring}`
+                      : 'bg-white dark:bg-slate-900 lg:bg-transparent lg:dark:bg-transparent border border-slate-200 dark:border-slate-800 lg:border-transparent text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60'
                   }`}
                 >
-                  <span>{pill.label}</span>
                   <span
-                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                      isSelected
-                        ? 'bg-orange-600/80 text-white'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                      active ? `${TONE[n.tone].bar} text-white` : `${TONE[n.tone].soft} ${TONE[n.tone].text}`
                     }`}
                   >
-                    {pill.count}
+                    {n.icon}
                   </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-black leading-tight">{n.label}</span>
+                    <span className={`block text-[11px] font-semibold truncate ${active ? 'text-slate-300' : 'text-slate-400'}`}>
+                      {n.sub}
+                    </span>
+                    {n.progress !== undefined && (
+                      <span className="hidden lg:block mt-1.5 h-1 rounded-full bg-slate-200 dark:bg-slate-700/70 overflow-hidden">
+                        <span className={`block h-full rounded-full ${TONE[n.tone].bar}`} style={{ width: `${n.progress}%` }} />
+                      </span>
+                    )}
+                  </span>
+                  {n.progress !== undefined && (
+                    <span className={`hidden lg:block text-[10px] font-black ${active ? 'text-white' : 'text-slate-400'}`}>
+                      {n.progress}%
+                    </span>
+                  )}
                 </button>
+                {/* Mục con của mục đang mở (máy tính) */}
+                {active && sub && sub.items.length > 1 && (
+                  <div className="hidden lg:block mt-1 mb-2 ml-7 pl-3 border-l-2 border-slate-200 dark:border-slate-800 space-y-0.5">
+                    {sub.items.map((it, i) => {
+                      const on = sub.value === it.key;
+                      const showGroup = it.group && it.group !== sub.items[i - 1]?.group;
+                      return (
+                        <React.Fragment key={it.key || '_'}>
+                          {showGroup && (
+                            <span className="block pt-2 pb-0.5 pl-2.5 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                              {it.group}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              sub.set(it.key);
+                              sound.playClick();
+                            }}
+                            className={`relative w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-left text-[13px] transition-all cursor-pointer ${
+                              on
+                                ? `${TONE[n.tone].soft} ${TONE[n.tone].text} font-black`
+                                : 'text-slate-500 dark:text-slate-400 font-semibold hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                            }`}
+                          >
+                            {on && <span className={`absolute -left-[15px] top-1.5 bottom-1.5 w-[3px] rounded-full ${TONE[n.tone].bar}`} />}
+                            <span className="flex-1 truncate">{it.label}</span>
+                            {it.count !== undefined && it.count !== '' && (
+                              <span className="text-[10px] font-black opacity-70">{it.count}</span>
+                            )}
+                          </button>
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+                )}
+                </div>
               );
             })}
-          </div>
+          </nav>
 
-          {/* Lessons Grid */}
+          {/* Mục con trên điện thoại / máy tính bảng: một hàng vuốt ngang */}
+          {SUBS[activeTab] && SUBS[activeTab].items.length > 1 && (
+            <div className="lg:hidden flex gap-2 overflow-x-auto pb-1">
+              {SUBS[activeTab].items.map((it) => {
+                const tone = NAV.find((x) => x.id === activeTab)?.tone || 'orange';
+                return (
+                  <FilterChip
+                    key={it.key || '_'}
+                    tone={tone}
+                    active={SUBS[activeTab].value === it.key}
+                    label={it.label}
+                    count={typeof it.count === 'number' ? it.count : undefined}
+                    onClick={() => SUBS[activeTab].set(it.key)}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </aside>
+
+        {/* ================= NỘI DUNG MỤC ĐANG CHỌN ================= */}
+        <main className="min-w-0 space-y-6">
+      {/* TAB 1: TỪ VỰNG (VOCABULARY LESSONS) */}
+      {activeTab === 'vocabulary' && (
+        <div className="space-y-5">
+          <SectionHeader
+            tone="orange"
+            icon={<BookOpen className="w-6 h-6" />}
+            eyebrow="Mục 1 · Từ vựng"
+            title="Các bài học từ vựng"
+            desc={`Chọn một bài để học bằng Flashcard, Luyện gõ, Gõ ví dụ hoặc Trắc nghiệm. Đã nhớ ${vocabMastered}/${allCards.length} từ.`}
+            actions={
+              <>
+                <div className="relative w-full sm:w-60">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={vocabSearch}
+                    onChange={(e) => setVocabSearch(e.target.value)}
+                    placeholder="Tìm bài, từ vựng, nghĩa…"
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-orange-500/40"
+                  />
+                </div>
+                <ToneButton tone="orange" onClick={handleCreateNewLesson}>
+                  <Plus className="w-4 h-4" /> Tạo bài học
+                </ToneButton>
+              </>
+            }
+          />
+
           {filteredLessons.length === 0 ? (
-            <div className="text-center py-16 px-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="text-center py-16 px-4 rounded-3xl bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-700 space-y-4">
               <BookOpen className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto" />
               <div className="space-y-1">
                 <h3 className="text-base font-black text-slate-800 dark:text-slate-200">
                   {vocabSearch ? 'Không tìm thấy bài học phù hợp' : 'Chưa có bài học từ vựng nào trong khóa học này'}
                 </h3>
                 <p className="text-xs sm:text-sm text-slate-500 max-w-sm mx-auto">
-                  Hãy bấm nút &quot;Tạo bài học&quot; để thêm các bài từ vựng mới cho khóa học {course.code}.
+                  Bấm &quot;Tạo bài học&quot; để thêm bài từ vựng mới cho khóa {course.code}.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={handleCreateNewLesson}
-                className="px-5 py-2.5 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black shadow-md shadow-orange-500/30 inline-flex items-center gap-2 cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Tạo bài học mới</span>
-              </button>
+              <ToneButton tone="orange" onClick={handleCreateNewLesson}>
+                <Plus className="w-4 h-4" /> Tạo bài học mới
+              </ToneButton>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredLessons.map((lesson) => (
-                <div
-                  key={lesson.id}
-                  onClick={() => handleSelectLesson(lesson)}
-                  className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-orange-300 dark:hover:border-orange-900/60 shadow-xs hover:shadow-md transition-all cursor-pointer flex items-center justify-between group"
-                >
-                  <div className="flex items-center gap-3.5 min-w-0">
-                    <div className="w-14 h-14 rounded-2xl bg-linear-to-br from-sky-400 via-blue-500 to-indigo-600 text-white flex flex-col items-center justify-center shrink-0 shadow-xs relative overflow-hidden select-none">
-                      <span className="text-[12px] leading-none mb-0.5">🌸</span>
-                      <span className="text-[9px] font-black tracking-wider leading-none">
-                        TỪ VỰNG
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {filteredLessons.map((lesson) => {
+                const total = lesson.cards.length;
+                const mem = lesson.cards.filter((c) => c.mastered).length;
+                const p = pct(mem, total);
+                const num = lessonNumOf(lesson);
+                const [head, ...rest] = lesson.title.split(':');
+                const jpTitle = rest.length ? rest.join(':').replace(/\(.*\)\s*$/, '').trim() : lesson.title;
+                const viTitle = (lesson.title.match(/\(([^)]*)\)\s*$/) || [])[1] || lesson.description || '';
+                return (
+                  <div
+                    key={lesson.id}
+                    onClick={() => handleSelectLesson(lesson)}
+                    className="group relative overflow-hidden p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-orange-300 dark:hover:border-orange-500/40 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-orange-500/5 transition-all cursor-pointer flex flex-col gap-3"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute -right-2 -top-6 text-[96px] font-black leading-none text-slate-100 dark:text-slate-800/60 select-none"
+                    >
+                      {num}
+                    </span>
+                    <div className="relative flex items-center justify-between gap-2">
+                      <span className="px-2 py-0.5 rounded-md bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 text-[10px] font-black tracking-wider uppercase">
+                        {lesson.lessonCode || head || 'LESSON'}
+                      </span>
+                      <span className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          onClick={(e) => handleEditLesson(lesson, e)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                          title="Chỉnh sửa bài học"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLessonToDelete(lesson);
+                          }}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 cursor-pointer"
+                          title="Xóa bài học"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </span>
                     </div>
-
-                    <div className="min-w-0 space-y-0.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                          {lesson.lessonCode || 'LESSON'}
+                    <div className="relative min-w-0">
+                      <h4 className="text-lg font-black text-slate-900 dark:text-white font-japanese truncate group-hover:text-orange-500 transition-colors">
+                        {jpTitle}
+                      </h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{viTitle}</p>
+                    </div>
+                    <div className="relative mt-auto space-y-1.5">
+                      <div className="flex items-center justify-between text-[11px] font-bold">
+                        <span className="text-slate-500 dark:text-slate-400">{total} từ vựng</span>
+                        <span className={p >= 80 ? 'text-emerald-500' : 'text-slate-400'}>
+                          {mem ? `${mem}/${total} đã nhớ` : 'Chưa học'}
                         </span>
                       </div>
-                      <h4 className="text-sm font-black text-slate-900 dark:text-white truncate group-hover:text-orange-500 transition-colors">
-                        {lesson.title}
-                      </h4>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                        {lesson.cards.length} từ vựng
-                      </p>
+                      <div className="h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${p >= 80 ? 'bg-emerald-500' : 'bg-orange-500'}`}
+                          style={{ width: `${p}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="relative flex items-center justify-between pt-1">
+                      <span className="text-[11px] font-bold text-slate-400">Flashcard · Gõ · Trắc nghiệm</span>
+                      <span className="w-9 h-9 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-md shadow-orange-500/30 group-hover:scale-110 transition-transform">
+                        <Play className="w-4 h-4 fill-white ml-0.5" />
+                      </span>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-1.5 ml-2">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSelectLesson(lesson);
-                      }}
-                      className="w-9 h-9 rounded-xl bg-linear-to-r from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-md shadow-orange-500/30 group-hover:scale-105 active:scale-95 cursor-pointer"
-                      title="Mở bài học"
-                    >
-                      <Play className="w-4 h-4 fill-white ml-0.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => handleEditLesson(lesson, e)}
-                      className="p-2 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                      title="Chỉnh sửa bài học"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setLessonToDelete(lesson);
-                      }}
-                      className="p-2 rounded-xl text-rose-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors cursor-pointer"
-                      title="Xóa bài học"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -681,6 +765,8 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
           onBackToCourse={onBackToCourses}
           onUpdateKanjiList={handleUpdateKanjiList}
           onUpdateKanjiVocabList={handleUpdateKanjiVocabList}
+          folder={kanjiFolder}
+          onFolderChange={setKanjiFolder}
         />
       )}
 
@@ -689,8 +775,23 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
         <JapaneseGrammarSection
           grammarPoints={course.grammarPoints || []}
           onUpdateGrammarPoints={handleUpdateGrammar}
+          lessonFilter={grammarFilter}
+          onLessonFilterChange={setGrammarFilter}
         />
       )}
+
+      {/* TAB 4: ÔN SPK */}
+      {isJpd123 && activeTab === 'speaking' && (
+        <JapaneseSpeakingSection srcDoc={speakingSrcDoc} route={spkRoute} onRouteChange={setSpkRoute} onCounts={setSpkCounts} />
+      )}
+
+      {/* TAB 5: SOURCE FE */}
+      {isJpd123 && activeTab === 'exam-bank' && (
+        <JapaneseExamBankSection category={feCat} onCategoryChange={setFeCat} onStats={setFeStats} />
+      )}
+
+        </main>
+      </div>
 
       {/* CONFIRM DELETE LESSON MODAL */}
       {lessonToDelete && (

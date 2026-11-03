@@ -157,3 +157,26 @@ html.dark, html.dark body, html.dark #root {
   background-color: rgba(30, 41, 59, 0.35);
 }
 
+
+/* ---------- Source FE (ngân hàng đề JPD123) ---------- */
+.fe-question { line-height: 1.75; overflow-wrap: anywhere; }
+.fe-question .q-block { margin: 0 0 12px; }
+.fe-question .q-options { display: block; margin: 8px 0; }
+.fe-question .q-option { display: flex; align-items: baseline; gap: 12px; padding: 10px 14px; border: 1.5px solid #e2e8f0; border-radius: 14px; transition: all .15s; }
+.dark .fe-question .q-option { border-color: #1e293b; background: rgba(2, 6, 23, .4); }
+.fe-question .q-option b { flex: 0 0 26px; height: 26px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; background: #e0f2fe; color: #0369a1; font-size: 13px; }
+.dark .fe-question .q-option b { background: rgba(14, 165, 233, .15); color: #7dd3fc; }
+.fe-question .q-option.is-pickable { cursor: pointer; }
+.fe-question .q-option.is-pickable:hover { border-color: #38bdf8; background: rgba(56, 189, 248, .08); }
+.fe-question .q-option.is-ok { border-color: #10b981 !important; background: rgba(16, 185, 129, .12) !important; }
+.fe-question .q-option.is-ok b { background: #10b981; color: #fff; }
+.fe-question .q-option.is-no { border-color: #f43f5e !important; background: rgba(244, 63, 94, .1) !important; }
+.fe-question .q-option.is-no b { background: #f43f5e; color: #fff; }
+.fe-question table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+.fe-question td, .fe-question th { border: 1px solid #e2e8f0; padding: 8px 10px; text-align: left; }
+.dark .fe-question td, .dark .fe-question th { border-color: #1e293b; }
+.fe-question table td:empty, .fe-question table th:empty { display: none; }
+.fe-question .table__scroll-container { overflow-x: auto; }
+.fe-question ol { list-style: decimal; padding-left: 20px; }
+.fe-question img { max-width: 100%; border-radius: 12px; }
+.fe-question .katex-html, .fe-question annotation { display: none; }

@@ -1,3 +1,4 @@
+import { SectionHeader } from './courseUi';
 import React, { useState } from 'react';
 import {
   Search,
@@ -36,6 +37,9 @@ interface Props {
   onBackToCourse?: () => void;
   onUpdateKanjiList: (updated: JapaneseKanjiCard[]) => void;
   onUpdateKanjiVocabList?: (updated: JapaneseVocabCard[]) => void;
+  /** Điều khiển thư mục đang mở từ bên ngoài (thanh bên trái của khóa học) */
+  folder?: string | null;
+  onFolderChange?: (folder: string | null) => void;
 }
 
 const LESSON_FOLDER_METADATA: Record<
@@ -71,8 +75,12 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
   onBackToCourse,
   onUpdateKanjiList,
   onUpdateKanjiVocabList,
+  folder,
+  onFolderChange,
 }) => {
-  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [localFolder, setLocalFolder] = useState<string | null>(null);
+  const selectedFolder = folder !== undefined ? folder : localFolder;
+  const setSelectedFolder = (v: string | null) => (onFolderChange ? onFolderChange(v) : setLocalFolder(v));
   const [kanjiSearch, setKanjiSearch] = useState('');
   const [vocabSearch, setVocabSearch] = useState('');
   const [filterKanjiChar, setFilterKanjiChar] = useState<string | null>(null);
@@ -623,33 +631,13 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
   if (!selectedFolder) {
     return (
       <div className="space-y-6 animate-in fade-in duration-200">
-        {/* HEADER BAR (MATCHING SCREENSHOT) */}
-        <div className="flex items-center justify-between gap-4 p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl border-2 border-sky-300 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/50 flex items-center justify-center text-sky-600 dark:text-sky-400 font-serif font-black text-2xl shadow-xs select-none">
-              漢
-            </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
-                HÁN TỰ
-              </h1>
-              <p className="text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400">
-                Học và luyện tập hán tự theo chủ đề
-              </p>
-            </div>
-          </div>
-
-          {onBackToCourse && (
-            <button
-              type="button"
-              onClick={onBackToCourse}
-              className="px-3.5 py-1.5 rounded-full border border-sky-200 dark:border-sky-800 bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 text-xs font-bold shadow-2xs hover:bg-sky-50 dark:hover:bg-slate-700/60 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>{(courseCode || 'JPD123').toUpperCase()}</span>
-            </button>
-          )}
-        </div>
+        <SectionHeader
+          tone="rose"
+          icon={<span className="font-japanese">漢</span>}
+          eyebrow="Mục 2 · Chữ Hán"
+          title="Hán tự theo chủ đề"
+          desc={`${kanjiList.length} chữ Hán cốt lõi và ${kanjiVocabList.length} từ ghép, chia theo Bài 4 – 7. Chọn một thư mục để học Flashcard, luyện gõ âm Kun/On hoặc trắc nghiệm.`}
+        />
 
         {/* 2X2 GRID OF 4 FOLDERS (MATCHING USER SCREENSHOT) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
@@ -675,18 +663,18 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
                   setFilterKanjiChar(null);
                   sound.playClick();
                 }}
-                className="relative overflow-hidden bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-sky-300 dark:hover:border-sky-800 transition-all p-5 sm:p-7 flex items-center justify-between cursor-pointer group select-none"
+                className="relative overflow-hidden bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-rose-300 dark:hover:border-rose-500/40 transition-all p-5 sm:p-7 flex items-center justify-between cursor-pointer group select-none"
               >
                 {/* Left vertical blue stripe accent */}
-                <div className="absolute left-0 top-3.5 bottom-3.5 w-1.5 bg-blue-600 rounded-r-full" />
+                <div className="absolute left-0 top-3.5 bottom-3.5 w-1.5 bg-rose-500 rounded-r-full" />
 
                 <div className="flex items-center gap-4 sm:gap-5 min-w-0">
                   {/* App-like kanji icon badge with waves and cherry blossoms */}
-                  <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-linear-to-b from-sky-400 via-blue-500 to-blue-600 text-white flex items-center justify-center shadow-md shrink-0 overflow-hidden group-hover:scale-105 transition-transform select-none">
-                    <span className="absolute top-1 right-1.5 text-[11px] opacity-85 select-none">🌸</span>
-                    <span className="absolute bottom-1 left-1.5 text-[11px] opacity-85 select-none">🌸</span>
+                  <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-linear-to-br from-rose-400 via-rose-500 to-red-600 text-white flex items-center justify-center shadow-md shrink-0 overflow-hidden group-hover:scale-105 transition-transform select-none">
+                    
+                    
                     <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white to-transparent pointer-events-none" />
-                    <span className="text-3xl sm:text-4xl font-serif font-black drop-shadow-sm select-none relative z-10">
+                    <span className="text-3xl sm:text-4xl font-japanese font-black drop-shadow-sm select-none relative z-10">
                       漢
                     </span>
                   </div>
@@ -694,17 +682,17 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
                   {/* Folder Details */}
                   <div className="space-y-1.5 min-w-0">
                     <div>
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-100/80 text-blue-600 dark:bg-blue-950/80 dark:text-blue-400 inline-block">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-100/80 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 inline-block">
                         LESSON {lessonNum}
                       </span>
                     </div>
 
-                    <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white truncate group-hover:text-rose-500 dark:group-hover:text-rose-400 transition-colors">
                       {meta.title}
                     </h3>
 
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-300 border border-blue-200/70 dark:border-blue-800/70 flex items-center gap-1.5">
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-300 border border-rose-200/70 dark:border-rose-500/20 flex items-center gap-1.5">
                         <BookOpen className="w-3.5 h-3.5 stroke-[2.5]" />
                         <span>{kCount} KANJI</span>
                       </span>
@@ -720,7 +708,7 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
                 </div>
 
                 {/* Circular Chevron Right Button */}
-                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all shadow-xs shrink-0 ml-3">
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center group-hover:bg-rose-500 group-hover:text-white transition-all shadow-xs shrink-0 ml-3">
                   <ChevronRight className="w-5 h-5 stroke-[2.5] group-hover:translate-x-0.5 transition-transform" />
                 </div>
               </div>
@@ -746,7 +734,7 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
           <button
             type="button"
             onClick={openAddModal}
-            className="px-4 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black shadow-sm flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+            className="px-4 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-400 text-white text-xs font-black shadow-md shadow-rose-500/30 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
           >
             <Plus className="w-4 h-4" />
             <span>Thêm Hán tự</span>
@@ -764,7 +752,8 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* TOP NAVIGATION IN FOLDER DETAIL */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      {/* Thanh bên trái của khóa học đã có danh sách thư mục → trên máy tính chỉ giữ nút thêm */}
+      <div className={`flex items-center justify-between gap-3 flex-wrap ${folder !== undefined ? 'lg:justify-end' : ''}`}>
         <button
           type="button"
           onClick={() => {
@@ -772,7 +761,7 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
             setFilterKanjiChar(null);
             sound.playClick();
           }}
-          className="px-4 py-2 rounded-2xl bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800 text-sky-700 dark:text-sky-300 text-xs font-black hover:bg-sky-100 dark:hover:bg-sky-900/60 flex items-center gap-2 shadow-2xs cursor-pointer transition-all active:scale-95"
+          className="lg:hidden px-4 py-2 rounded-2xl bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800 text-sky-700 dark:text-sky-300 text-xs font-black hover:bg-sky-100 dark:hover:bg-sky-900/60 flex items-center gap-2 shadow-2xs cursor-pointer transition-all active:scale-95"
         >
           <ArrowLeft className="w-4 h-4 text-sky-600 dark:text-sky-400" />
           <span>Quay lại 4 Thư mục Hán tự</span>
@@ -791,7 +780,7 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
                   setFilterKanjiChar(null);
                   sound.playClick();
                 }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border ${
+                className={`${folder !== undefined ? 'lg:hidden' : ''} px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border ${
                   isSelected
                     ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
                     : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
@@ -809,7 +798,7 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
               setFilterKanjiChar(null);
               sound.playClick();
             }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border ${
+            className={`${folder !== undefined ? 'lg:hidden' : ''} px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border ${
               selectedFolder === 'ALL'
                 ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-transparent'
                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
@@ -821,7 +810,7 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
           <button
             type="button"
             onClick={openAddModal}
-            className="ml-auto px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black shadow-sm flex items-center gap-1.5 cursor-pointer"
+            className="ml-auto px-3.5 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-400 text-white text-xs font-black shadow-md shadow-rose-500/30 flex items-center gap-1.5 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Thêm Hán tự</span>
@@ -865,11 +854,11 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
       {/* =================================================================== */}
       {/* 2-COLUMN SPLIT LAYOUT (KANJI CORE ON LEFT, VOCABULARY ON RIGHT)      */}
       {/* =================================================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 2xl:grid-cols-12 gap-6 items-start">
         {/* ================================================================= */}
         {/* LEFT COLUMN: KANJI CORE                                           */}
         {/* ================================================================= */}
-        <div className="lg:col-span-6 xl:col-span-7 space-y-4">
+        <div className="2xl:col-span-7 space-y-4">
           {/* Kanji Header Row */}
           <div className="flex items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs">
             <div className="flex items-center gap-2">
@@ -1079,7 +1068,7 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
         {/* ================================================================= */}
         {/* RIGHT COLUMN: DANH SÁCH TỪ VỰNG CHỮ HÁN                           */}
         {/* ================================================================= */}
-        <div className="lg:col-span-6 xl:col-span-5 space-y-4">
+        <div className="2xl:col-span-5 space-y-4">
           {/* Header Row */}
           <div className="flex items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs">
             <div className="flex items-center gap-2">
