@@ -898,6 +898,17 @@ export function updateJapaneseCardMastery(lessonId: string, cardId: string, mast
 // Japanese Courses Management (e.g. JPD123)
 // ---------------------------------------------------------------------------
 
+// Chữ Hán đã bỏ khỏi giáo trình: 南 (L4), 肉 料 理 野 半 (L7)
+export const REMOVED_JPD123_KANJI_IDS: string[] = [
+  'k-l4-6',
+  'k-minami',
+  'k-l7-7',
+  'k-l7-8',
+  'k-l7-9',
+  'k-l7-10',
+  'k-l7-11',
+];
+
 export const JPD123_GRAMMAR_VERSION = '20261018_v4_fix_atm';
 
 export const DEFAULT_JPD123_COURSE: JapaneseCourse = {
@@ -981,6 +992,15 @@ export function ensureJpdCourseUpToDate(course: JapaneseCourse): { course: Japan
   if (hasOldKanjiLessons) {
     updated.lessons = JPD123_VOCAB_LESSONS;
     changed = true;
+  }
+
+  // Chữ Hán đã bị bỏ khỏi giáo trình JPD123 → xóa luôn khỏi dữ liệu đã lưu (local + cloud)
+  if (Array.isArray(updated.kanjiList)) {
+    const before = updated.kanjiList.length;
+    updated.kanjiList = updated.kanjiList.filter(
+      (k: JapaneseKanjiCard) => !REMOVED_JPD123_KANJI_IDS.includes(k.id)
+    );
+    if (updated.kanjiList.length !== before) changed = true;
   }
 
   if (!updated.kanjiList || updated.kanjiList.length < ALL_KANJI_CORE_LIST.length) {

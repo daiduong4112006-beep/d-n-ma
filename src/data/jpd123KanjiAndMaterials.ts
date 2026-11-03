@@ -19,21 +19,6 @@ export const JPD123_KANJI_LIST: JapaneseKanjiCard[] = [
     createdAt: new Date().toISOString(),
   },
   {
-    id: 'k-minami',
-    kanji: '南',
-    hanViet: 'NAM',
-    onyomi: 'ナン',
-    kunyomi: 'みなみ',
-    meaning: 'Phía nam',
-    strokeCount: 9,
-    examples: [
-      { word: '南', reading: 'みなみ', meaning: 'Phía nam' },
-      { word: '東南アジア', reading: 'とうなんアジア', meaning: 'Đông Nam Á' },
-    ],
-    mastered: false,
-    createdAt: new Date().toISOString(),
-  },
-  {
     id: 'k-higashi',
     kanji: '東',
     hanViet: 'ĐÔNG',
