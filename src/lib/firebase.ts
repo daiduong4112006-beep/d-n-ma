@@ -29,6 +29,7 @@ import {
   deleteField,
   updateDoc,
   persistentLocalCache,
+  increment,
   persistentMultipleTabManager,
   memoryLocalCache,
   Firestore,
@@ -1324,6 +1325,28 @@ export interface SharedQuizDoc {
   sourceQuizId: string;
   createdAt: string;
   updatedAt: string;
+  /** Hạn dùng link (ms); null = không hạn */
+  expiresAtMs?: number | null;
+  /** Chế độ lớp học: người làm bài gửi điểm về cho người chia sẻ */
+  classMode?: boolean;
+  views?: number;
+  saves?: number;
+}
+
+export interface ShareOptions {
+  expiresAtMs?: number | null;
+  classMode?: boolean;
+}
+
+export interface SharedResult {
+  email: string;
+  name: string;
+  score: number;
+  total: number;
+  percent: number;
+  bestPercent: number;
+  attempts: number;
+  lastAt: string;
 }
 
 const SHARE_IDS_KEY = 'mcq_share_ids';
@@ -1364,7 +1387,7 @@ const toShareableQuiz = (quiz: Quiz): Quiz => {
  * Tạo (hoặc cập nhật) link chia sẻ cho một bộ đề. Mỗi bộ đề giữ một mã cố định
  * trên máy này để link cũ vẫn dùng được và luôn mở ra nội dung mới nhất.
  */
-export const createOrUpdateSharedQuiz = async (quiz: Quiz, ownerName?: string): Promise<string> => {
+export const createOrUpdateSharedQuiz = async (quiz: Quiz, ownerName?: string, opts: ShareOptions = {}): Promise<string> => {
   if (!isFirestoreAvailable()) throw new Error('offline');
   let map: Record<string, string> = {};
   try {
@@ -1372,23 +1395,76 @@ export const createOrUpdateSharedQuiz = async (quiz: Quiz, ownerName?: string): 
   } catch {}
   const shareId = map[quiz.id] || newShareId();
   const now = new Date().toISOString();
-  const payload: SharedQuizDoc = {
+  const isNew = !map[quiz.id];
+  const payload: Partial<SharedQuizDoc> = {
     shareId,
     quiz: toShareableQuiz(await offloadQuizImages(quiz)),
     ownerName: ownerName || '',
     ownerEmail: currentEmail(),
     sourceQuizId: quiz.id,
-    createdAt: now,
     updatedAt: now,
+    ...(isNew ? { createdAt: now } : {}),
+    ...('expiresAtMs' in opts ? { expiresAtMs: opts.expiresAtMs ?? null } : {}),
+    ...('classMode' in opts ? { classMode: !!opts.classMode } : {}),
   };
   const size = new Blob([JSON.stringify(payload)]).size;
   if (size > 950_000) throw new Error('too-large');
-  await withTimeout(setDoc(doc(db, 'shared_quizzes', shareId), payload), 12000, 'Chia sẻ bộ đề');
+  // merge: giữ nguyên lượt xem / lượt lưu / cài đặt cũ
+  await withTimeout(setDoc(doc(db, 'shared_quizzes', shareId), payload, { merge: true }), 12000, 'Chia sẻ bộ đề');
   map[quiz.id] = shareId;
   try {
     localStorage.setItem(SHARE_IDS_KEY, JSON.stringify(map));
   } catch {}
   return shareId;
+};
+
+/** Thông tin link chia sẻ (cho người tạo): lượt xem, lượt lưu, hạn dùng, chế độ lớp */
+export const getSharedQuizMeta = async (shareId: string): Promise<SharedQuizDoc | null> => {
+  const snap = await withTimeout(getDoc(doc(db, 'shared_quizzes', shareId)), 10000, 'getSharedQuizMeta');
+  return snap.exists() ? (snap.data() as SharedQuizDoc) : null;
+};
+
+/** Đếm lượt xem (mỗi máy 1 lần) hoặc lượt lưu */
+export const bumpSharedCounter = async (shareId: string, field: 'views' | 'saves') => {
+  const flag = `mcq_share_${field}_${shareId}`;
+  try {
+    if (localStorage.getItem(flag)) return;
+    localStorage.setItem(flag, '1');
+  } catch {}
+  try {
+    await updateDoc(doc(db, 'shared_quizzes', shareId), { [field]: increment(1) });
+  } catch {}
+};
+
+/** Chế độ lớp học: gửi điểm của mình về cho người chia sẻ */
+export const submitSharedResult = async (shareId: string, r: { score: number; total: number; name?: string }) => {
+  const email = (auth.currentUser?.email || '').toLowerCase();
+  if (!email || !shareId) return false;
+  const ref = doc(db, 'shared_quizzes', shareId, 'results', email);
+  const percent = r.total ? Math.round((r.score / r.total) * 100) : 0;
+  let prev: SharedResult | null = null;
+  try {
+    const s = await getDoc(ref);
+    prev = s.exists() ? (s.data() as SharedResult) : null;
+  } catch {}
+  const data: SharedResult = {
+    email,
+    name: r.name || auth.currentUser?.displayName || email.split('@')[0],
+    score: r.score,
+    total: r.total,
+    percent,
+    bestPercent: Math.max(percent, prev?.bestPercent || 0),
+    attempts: (prev?.attempts || 0) + 1,
+    lastAt: new Date().toISOString(),
+  };
+  await withTimeout(setDoc(ref, data), 10000, 'submitSharedResult');
+  return true;
+};
+
+/** Người chia sẻ xem điểm của cả lớp */
+export const getSharedResults = async (shareId: string): Promise<SharedResult[]> => {
+  const snap = await withTimeout(getDocs(collection(db, 'shared_quizzes', shareId, 'results')), 10000, 'getSharedResults');
+  return snap.docs.map((d) => d.data() as SharedResult).sort((a, b) => b.bestPercent - a.bestPercent);
 };
 
 export const getSharedQuiz = async (shareId: string): Promise<SharedQuizDoc | null> => {

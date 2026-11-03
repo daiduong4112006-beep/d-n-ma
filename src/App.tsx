@@ -42,6 +42,7 @@ import {
   saveUserSettingsToFirestore,
   getUserSettingsFromFirestore,
   syncJapaneseCourseToFirestore,
+  submitSharedResult,
 } from './lib/firebase';
 import { sound } from './utils/audio';
 import { updateStarredWordsFromCloud } from './utils/vocabulary';
@@ -556,6 +557,15 @@ export default function App() {
 
   const handleQuizCompleted = (attempt: QuizAttempt) => {
     saveAttempt(attempt);
+    // Bộ đề từ link chia sẻ ở chế độ lớp học → gửi điểm cho người chia sẻ
+    const src = quizzes.find((q) => q.id === attempt.quizId);
+    if (src?.sharedFrom && src.sharedClassMode && (attempt.mode || 'normal') === 'normal') {
+      submitSharedResult(src.sharedFrom, {
+        score: attempt.correctAnswers,
+        total: attempt.totalQuestions,
+        name: currentUser?.name,
+      }).catch(() => {});
+    }
     setCurrentAttempt(attempt);
     refreshData();
     navigateTo('quiz-result', { attempt });

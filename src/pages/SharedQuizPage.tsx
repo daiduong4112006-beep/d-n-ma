@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Share2, Loader2, AlertTriangle, BookOpen, Download, CheckCircle2, ArrowLeft, Eye } from 'lucide-react';
 import { Quiz } from '../types/quiz';
-import { getSharedQuiz, SharedQuizDoc } from '../lib/firebase';
+import { getSharedQuiz, SharedQuizDoc, bumpSharedCounter } from '../lib/firebase';
 
 interface Props {
   /** Bộ đề hiện có trên máy – để biết link này đã được lưu chưa */
@@ -21,7 +21,7 @@ const readShareId = () => {
 /** Trang mở từ link chia sẻ: #shared?id=... */
 export const SharedQuizPage: React.FC<Props> = ({ quizzes, onSaveCopy, onOpenQuiz, onBack }) => {
   const [shareId] = useState(readShareId);
-  const [state, setState] = useState<'loading' | 'ready' | 'notfound' | 'error'>('loading');
+  const [state, setState] = useState<'loading' | 'ready' | 'notfound' | 'error' | 'expired'>('loading');
   const [doc, setDoc] = useState<SharedQuizDoc | null>(null);
   const [showAll, setShowAll] = useState(false);
 
@@ -35,12 +35,14 @@ export const SharedQuizPage: React.FC<Props> = ({ quizzes, onSaveCopy, onOpenQui
       .then((d) => {
         if (!alive) return;
         if (!d || !d.quiz) setState('notfound');
+        else if (d.expiresAtMs && d.expiresAtMs < Date.now()) setState('expired');
         else {
           setDoc(d);
           setState('ready');
+          bumpSharedCounter(shareId, 'views');
         }
       })
-      .catch(() => alive && setState('error'));
+      .catch((e) => alive && setState(String(e?.code || '').includes('permission') ? 'expired' : 'error'));
     return () => {
       alive = false;
     };
@@ -56,10 +58,12 @@ export const SharedQuizPage: React.FC<Props> = ({ quizzes, onSaveCopy, onOpenQui
     }
     const now = new Date().toISOString();
     const stamp = Date.now();
+    bumpSharedCounter(shareId, 'saves');
     const copy: Quiz = {
       ...doc.quiz,
       id: `quiz-shared-${stamp}`,
       sharedFrom: shareId,
+      sharedClassMode: !!doc.classMode,
       createdAt: now,
       updatedAt: now,
       timesCompleted: 0,
@@ -95,11 +99,13 @@ export const SharedQuizPage: React.FC<Props> = ({ quizzes, onSaveCopy, onOpenQui
           <AlertTriangle className="w-7 h-7" />
         </div>
         <h2 className="text-lg font-black text-slate-900 dark:text-white">
-          {state === 'notfound' ? 'Không tìm thấy bộ đề' : 'Không mở được bộ đề'}
+          {state === 'notfound' ? 'Không tìm thấy bộ đề' : state === 'expired' ? 'Link đã hết hạn' : 'Không mở được bộ đề'}
         </h2>
         <p className="text-sm text-slate-500 dark:text-slate-400">
           {state === 'notfound'
             ? 'Link chia sẻ không đúng hoặc bộ đề đã bị xóa. Hãy nhờ người gửi tạo lại link.'
+            : state === 'expired'
+            ? 'Người chia sẻ đã đặt hạn dùng cho link này. Hãy nhờ họ gia hạn hoặc gửi link mới.'
             : 'Không kết nối được máy chủ. Kiểm tra mạng rồi tải lại trang.'}
         </p>
         <button
@@ -150,6 +156,14 @@ export const SharedQuizPage: React.FC<Props> = ({ quizzes, onSaveCopy, onOpenQui
               {existing ? 'Mở bộ đề đã lưu' : 'Lưu vào bộ đề của tôi'}
             </button>
           </div>
+          {doc.classMode && (
+            <p className="text-xs font-semibold text-amber-200">
+              Chế độ lớp học: khi bạn đăng nhập và làm bài, điểm sẽ được gửi cho người chia sẻ{doc.ownerName ? ` (${doc.ownerName})` : ''}.
+            </p>
+          )}
+          {doc.expiresAtMs ? (
+            <p className="text-xs font-semibold text-indigo-200">Link dùng được đến {new Date(doc.expiresAtMs).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' })}.</p>
+          ) : null}
           {existing && (
             <p className="flex items-center gap-1.5 text-xs font-semibold text-emerald-200">
               <CheckCircle2 className="w-4 h-4" /> Bạn đã lưu bộ đề này rồi.

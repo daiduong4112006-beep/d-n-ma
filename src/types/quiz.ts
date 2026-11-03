@@ -31,6 +31,8 @@ export interface Quiz {
   timesCompleted: number;
   /** Mã chia sẻ gốc nếu bộ đề được lưu từ link chia sẻ */
   sharedFrom?: string;
+  /** Bộ đề lưu từ link ở chế độ lớp học → gửi điểm về cho người chia sẻ */
+  sharedClassMode?: boolean;
 }
 
 export interface QuestionResult {

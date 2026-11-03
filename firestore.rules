@@ -93,14 +93,36 @@ service cloud.firestore {
 
     // ---- Bộ đề chia sẻ: ai có link cũng đọc được, chỉ người tạo được sửa / xóa ----
     match /shared_quizzes/{shareId} {
-      allow read: if true;
+      function notExpired() {
+        return resource == null || !('expiresAtMs' in resource.data) || resource.data.expiresAtMs == null
+          || request.time.toMillis() < resource.data.expiresAtMs;
+      }
+      function bumpOnly(field) {
+        return request.resource.data.get(field, 0) == resource.data.get(field, 0) + 1;
+      }
+      // Ai có link cũng xem được (trừ khi đã hết hạn); người tạo luôn xem được
+      allow read: if notExpired() || ownsExisting('ownerEmail');
       allow create: if ownsIncoming('ownerEmail')
-        && request.resource.data.quiz is map
-        && request.resource.size() < 1000000;
-      allow update: if ownsIncoming('ownerEmail') && (
-        ownsExisting('ownerEmail') || !('ownerEmail' in resource.data)
-      );
+        && request.resource.data.quiz is map;
+      allow update: if (ownsIncoming('ownerEmail') && (
+          ownsExisting('ownerEmail') || !('ownerEmail' in resource.data)
+        ))
+        // Người xem chỉ được tăng lượt xem / lượt lưu thêm 1
+        || (notExpired() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views']) && bumpOnly('views'))
+        || (notExpired() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['saves']) && bumpOnly('saves'));
       allow delete: if ownsExisting('ownerEmail');
+
+      // Chế độ lớp học: mỗi người gửi điểm của mình, người chia sẻ xem được cả lớp
+      match /results/{email} {
+        function parent() {
+          return get(/databases/$(database)/documents/shared_quizzes/$(shareId)).data;
+        }
+        allow read: if signedIn() && (myEmail() == email || parent().get('ownerEmail', '') == myEmail());
+        allow create, update: if signedIn() && myEmail() == email
+          && request.resource.data.email == myEmail()
+          && parent().get('classMode', false) == true;
+        allow delete: if signedIn() && parent().get('ownerEmail', '') == myEmail();
+      }
     }
 
     // ---- Dữ liệu cũ dùng chung: chỉ quản trị viên ----
