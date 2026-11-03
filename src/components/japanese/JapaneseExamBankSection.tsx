@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { sound } from '../../utils/audio';
 import { SectionHeader, FilterChip } from './courseUi';
+import { FeMockExam } from './FeMockExam';
 
 /* ----------------------------------------------------------------------------
  * Source FE – Ngân hàng câu hỏi thi cuối kỳ JPD123 (880 mục, 10 nhóm, 35 bộ đề)
@@ -233,7 +234,7 @@ export const JapaneseExamBankSection: React.FC<{
   const [data, setData] = useState<BankData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [view, setView] = useState<'practice' | 'list'>('practice');
+  const [view, setView] = useState<'practice' | 'list' | 'exam'>('practice');
   const [term, setTerm] = useState('');
   const [localCat, setLocalCat] = useState('');
   const cat = category ?? localCat;
@@ -425,6 +426,7 @@ export const JapaneseExamBankSection: React.FC<{
               [
                 ['practice', 'Luyện từng câu'],
                 ['list', 'Xem danh sách'],
+                ['exam', 'Thi thử'],
               ] as const
             ).map(([v, l]) => (
               <button
@@ -442,6 +444,7 @@ export const JapaneseExamBankSection: React.FC<{
               </button>
             ))}
           </div>
+          {view !== 'exam' && (<>
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
@@ -465,7 +468,14 @@ export const JapaneseExamBankSection: React.FC<{
               </option>
             ))}
           </select>
+          </>)}
+          {view === 'exam' && (
+            <p className="flex-1 self-center text-xs font-semibold text-slate-500 dark:text-slate-400">
+              Bốc ngẫu nhiên theo tỉ lệ các dạng, tính giờ như thi thật, chấm điểm thang 10 và lưu lịch sử.
+            </p>
+          )}
         </div>
+        {view !== 'exam' && (
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => setOnlyTodo((v) => !v)} className={toggleCls(onlyTodo, 'bg-sky-500/10 border-sky-500/40 text-sky-600 dark:text-sky-300')}>
             Chưa làm
@@ -499,9 +509,24 @@ export const JapaneseExamBankSection: React.FC<{
             </button>
           )}
         </div>
+        )}
       </div>
 
-      {filtered.length === 0 ? (
+      {view === 'exam' ? (
+        <FeMockExam
+          questions={data.questions}
+          onMarkForReview={(ids) => {
+            setMarked((prev) => {
+              const next = new Set(prev);
+              ids.forEach((id) => next.add(id));
+              try {
+                localStorage.setItem(MARK_KEY, JSON.stringify([...next]));
+              } catch {}
+              return next;
+            });
+          }}
+        />
+      ) : filtered.length === 0 ? (
         <div className="p-10 rounded-3xl bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-700 text-center text-sm text-slate-500">
           Không có câu phù hợp với bộ lọc.
         </div>
