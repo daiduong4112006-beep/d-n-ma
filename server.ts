@@ -9,7 +9,7 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '25mb' }));
 
 // Giới hạn số lượt gọi AI theo IP để tránh bị lạm dụng khóa Gemini của server
 const AI_RATE_LIMIT = Number(process.env.AI_RATE_LIMIT_PER_MIN || 20);
@@ -290,6 +290,40 @@ Yêu cầu thêm từ học sinh (nếu có): ${userPrompt || 'Giải thích ng�
       ];
     }
 
+    // Chế độ stream: gửi chữ dần về trình duyệt trong lúc AI đang viết
+    if (req.query.stream === '1') {
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('X-Accel-Buffering', 'no');
+      const clean = (t: string) => t.replace(/\\text\{([^}]+)\}/g, '$1').replace(/\$([^$\n]+)\$/g, '$1');
+      let sent = 0;
+      try {
+        const stream = await ai.models.generateContentStream({
+          model: 'gemini-2.5-flash',
+          contents,
+          config: { systemInstruction, temperature: 0.5 },
+        });
+        for await (const chunk of stream) {
+          const t = chunk.text || '';
+          if (t) {
+            res.write(clean(t));
+            sent += t.length;
+          }
+        }
+        if (sent) return res.end();
+      } catch (err) {
+        console.warn('[AI stream] falling back to normal call:', String((err as any)?.message || err));
+        if (sent) return res.end();
+      }
+      try {
+        const text = await generateGeminiContentWithFallback(ai, contents, { systemInstruction, temperature: 0.5 }, 18000);
+        res.write(clean(text));
+      } catch {
+        res.write('⚠️ Chưa thể kết nối với server AI lúc này. Bạn vui lòng bấm nút "Phân tích lại" nhé!');
+      }
+      return res.end();
+    }
+
     let responseText = '';
     try {
       responseText = await generateGeminiContentWithFallback(
@@ -385,7 +419,16 @@ Quy định trình bày:
     const prompt = `Học sinh đang hỏi về cấu trúc ngữ pháp tiếng Nhật:
 [NGỮ PHÁP]: ${grammarTitle}
 [CẤU TRÚC / KẾT NỐI]: ${formation || 'Không có'}
-[Ý NGHĨA]: ${meaning || 'Không có'}
+[Ý NGHĨA]: ${meaning || 'Không có'}${
+      explanation ? `\n[TÀI LIỆU BÀI HỌC – nội dung chính thức của giáo trình JPD123, hãy bám sát]:\n${String(explanation).slice(0, 6000)}` : ''
+    }${
+      Array.isArray(examples) && examples.length
+        ? `\n[VÍ DỤ TRONG BÀI]:\n${examples
+            .slice(0, 12)
+            .map((e: any) => `- ${e.japanese || e.jp || ''}${e.reading ? ` (${e.reading})` : ''} → ${e.vietnamese || e.vi || ''}`)
+            .join('\n')}`
+        : ''
+    }
 [CÂU HỎI CỦA HỌC SINH]: ${questionText}
 
 YÊU CẦU TRẢ LỜI:
@@ -394,7 +437,8 @@ YÊU CẦU TRẢ LỜI:
   + Chữ Nhật chuẩn (Kanji tự nhiên)
   + Cách đọc Hiragana
   + Bản dịch nghĩa Tiếng Việt sát nghĩa và tự nhiên.
-- Dùng Markdown đẹp mắt, in đậm từ khóa quan trọng, gạch đầu dòng gọn gàng.`;
+- Dùng Markdown đẹp mắt, in đậm từ khóa quan trọng, gạch đầu dòng gọn gàng.
+- Nếu có [TÀI LIỆU BÀI HỌC], giải thích đúng theo tài liệu đó (cùng thuật ngữ, cùng cách chia), chỉ bổ sung khi cần.`;
 
     let contents: any[] = [];
     if (conversationHistory && Array.isArray(conversationHistory) && conversationHistory.length > 0) {
@@ -614,8 +658,15 @@ Cấu trúc từng phần tử:
 // AI Endpoint to parse raw messy text into structured quiz questions
 app.post('/api/parse-quiz-ai', async (req, res) => {
   try {
-    const { rawText } = req.body;
-    if (!rawText || !rawText.trim()) {
+    const { rawText = '', files } = req.body;
+    // Ảnh chụp đề / file PDF gửi kèm (base64): Gemini đọc trực tiếp
+    const fileParts: any[] = Array.isArray(files)
+      ? files
+          .filter((f: any) => f && typeof f.data === 'string' && /^(image\/(png|jpe?g|webp|heic|heif)|application\/pdf)$/.test(String(f.mimeType)))
+          .slice(0, 10)
+          .map((f: any) => ({ inlineData: { mimeType: f.mimeType, data: f.data } }))
+      : [];
+    if ((!rawText || !String(rawText).trim()) && fileParts.length === 0) {
       return res.status(400).json({ error: 'Nội dung văn bản không được để trống' });
     }
 
@@ -668,19 +719,19 @@ Cấu trúc JSON từng phần tử:
   "difficulty": "Medium"
 }
 
-Văn bản thô cần phân tích:
-${rawText.slice(0, 50000)}`;
+${fileParts.length ? `Đề bài nằm trong ${fileParts.length} ảnh chụp / file PDF đính kèm: đọc kỹ toàn bộ chữ trong đó (kể cả chữ viết tay, bảng, công thức) rồi trích câu hỏi.\n` : ''}Văn bản thô cần phân tích:
+${String(rawText).slice(0, 50000) || '(xem file đính kèm)'}`;
 
     let responseText = '';
     try {
       responseText = await generateGeminiContentWithFallback(
         ai,
-        systemPrompt,
+        fileParts.length ? [{ role: 'user', parts: [{ text: systemPrompt }, ...fileParts] }] : systemPrompt,
         {
           temperature: 0.2,
           responseMimeType: 'application/json',
         },
-        60000
+        fileParts.length ? 90000 : 60000
       );
     } catch (err: any) {
       console.error('All AI models failed in /api/parse-quiz-ai:', err);

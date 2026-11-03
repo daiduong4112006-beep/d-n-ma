@@ -38,6 +38,34 @@ const QUICK_PROMPTS = [
   '🔄 Phân biệt cấu trúc này với các cấu trúc tương tự',
 ];
 
+/** Nội dung bài học của mẫu ngữ pháp (để gia sư AI giải thích đúng theo giáo trình) */
+const grammarLessonText = (g: any): string => {
+  const out: string[] = [];
+  if (g.usage) out.push(`Dùng khi: ${g.usage}`);
+  if (g.explanation) out.push(g.explanation);
+  (g.notes || []).forEach((n: string) => out.push(`Lưu ý: ${n}`));
+  (g.sections || []).forEach((sec: any) => {
+    const parts = [sec.title && `■ ${sec.title}`, sec.structure && `Cấu trúc: ${sec.structure}`, sec.usage && `Dùng khi: ${sec.usage}`]
+      .concat((sec.notes || []).map((n: string) => `Lưu ý: ${n}`))
+      .concat(
+        (sec.columns || []).map(
+          (c: any) => `${c.title || ''}: ${(c.lines || []).join(' / ')}`
+        )
+      )
+      .filter(Boolean);
+    if (parts.length) out.push(parts.join('\n'));
+  });
+  return out.join('\n\n');
+};
+const grammarLessonExamples = (g: any) =>
+  [
+    ...(g.examples || []),
+    ...(g.sections || []).flatMap((sec: any) => [...(sec.examples || []), ...(sec.columns || []).flatMap((c: any) => c.examples || [])]),
+  ]
+    .filter((e: any) => e && e.japanese)
+    .slice(0, 12)
+    .map((e: any) => ({ japanese: e.japanese, reading: e.reading, vietnamese: e.vietnamese }));
+
 export const JapaneseGrammarAiModal: React.FC<JapaneseGrammarAiModalProps> = ({
   grammarPoint,
   isOpen,
@@ -133,6 +161,8 @@ export const JapaneseGrammarAiModal: React.FC<JapaneseGrammarAiModalProps> = ({
           grammarTitle: grammarPoint.title,
           formation: grammarPoint.structure,
           meaning: grammarPoint.meaning,
+          explanation: grammarLessonText(grammarPoint),
+          examples: grammarLessonExamples(grammarPoint),
           mode: 'chat',
           userPrompt: text,
           conversationHistory,

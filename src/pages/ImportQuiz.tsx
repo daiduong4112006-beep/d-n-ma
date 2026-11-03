@@ -27,6 +27,36 @@ export const ImportQuiz: React.FC<ImportQuizProps> = ({
   const [hasParsed, setHasParsed] = useState(false);
   const [isAiParsing, setIsAiParsing] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  // Ảnh chụp đề / PDF gửi cho AI đọc trực tiếp
+  const [aiFiles, setAiFiles] = useState<{ name: string; mimeType: string; data: string; size: number }[]>([]);
+  const aiFileInputRef = useRef<HTMLInputElement>(null);
+
+  const addAiFiles = async (list: FileList | File[] | null) => {
+    if (!list) return;
+    const next: typeof aiFiles = [];
+    for (const f of Array.from(list)) {
+      if (f.type === 'application/pdf') {
+        if (f.size > 15 * 1024 * 1024) {
+          setAiError(`File ${f.name} lớn hơn 15 MB, hãy tách nhỏ.`);
+          continue;
+        }
+        const dataUrl: string = await new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(String(r.result));
+          r.onerror = rej;
+          r.readAsDataURL(f);
+        });
+        next.push({ name: f.name, mimeType: 'application/pdf', data: dataUrl.split(',')[1] || '', size: f.size });
+      } else if (f.type.startsWith('image/')) {
+        // Thu nhỏ ảnh (vẫn đủ nét để đọc chữ) cho nhẹ
+        const dataUrl = await compressImage(f, 1800, 1800, 0.85);
+        const m = dataUrl.match(/^data:([^;]+);base64,(.*)$/);
+        if (m) next.push({ name: f.name, mimeType: m[1], data: m[2], size: Math.round((m[2].length * 3) / 4) });
+      }
+    }
+    setAiFiles((p) => [...p, ...next].slice(0, 10));
+    setHasParsed(false);
+  };
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Sample template formatted according to user requested syntax
@@ -276,8 +306,8 @@ D. PHP
   };
 
   const handleAiParse = async () => {
-    if (!rawContent.trim()) {
-      alert('Vui lòng dán văn bản hoặc tải file .txt trước!');
+    if (!rawContent.trim() && aiFiles.length === 0) {
+      alert('Vui lòng dán văn bản, tải file .txt hoặc thêm ảnh chụp / PDF đề trước!');
       return;
     }
 
@@ -287,7 +317,7 @@ D. PHP
     try {
       const data = await callAiApi({
         endpoint: '/api/parse-quiz-ai',
-        payload: { rawText: rawContent },
+        payload: { rawText: rawContent, files: aiFiles.map((f) => ({ mimeType: f.mimeType, data: f.data })) },
         systemPromptFallback: 'Bạn là chuyên gia phân tích và chuẩn hóa đề thi trắc nghiệm.',
         userPromptFallback: `Văn bản cần trích xuất câu hỏi: ${rawContent.slice(0, 10000)}`,
       });
@@ -640,6 +670,59 @@ D. PHP
           className="w-full p-4 font-mono text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none leading-relaxed"
         />
 
+        {/* Tạo đề từ ảnh chụp / PDF bằng AI */}
+        <div
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            addAiFiles(e.dataTransfer.files);
+          }}
+          onPaste={(e) => {
+            const files = Array.from(e.clipboardData?.files || []);
+            if (files.length) addAiFiles(files);
+          }}
+          className="p-3 rounded-xl border border-dashed border-purple-300 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/20 space-y-2"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <Image className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+            <span className="text-xs font-bold text-purple-900 dark:text-purple-200 flex-1 min-w-[200px]">
+              Tạo đề từ ảnh chụp hoặc file PDF: AI đọc chữ trong ảnh/PDF và tự soạn câu hỏi
+            </span>
+            <button
+              type="button"
+              onClick={() => aiFileInputRef.current?.click()}
+              className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold cursor-pointer"
+            >
+              + Thêm ảnh / PDF
+            </button>
+            <input
+              ref={aiFileInputRef}
+              type="file"
+              accept="image/*,application/pdf"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                addAiFiles(e.target.files);
+                e.target.value = '';
+              }}
+            />
+          </div>
+          {aiFiles.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {aiFiles.map((f, i) => (
+                <span key={i} className="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-lg bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-800 text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+                  {f.mimeType === 'application/pdf' ? '📄' : '🖼️'} {f.name} · {(f.size / 1024).toFixed(0)} KB
+                  <button type="button" onClick={() => setAiFiles((p) => p.filter((_, j) => j !== i))} className="p-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">Kéo thả, dán (Ctrl+V) hoặc chọn tối đa 10 ảnh / PDF, rồi bấm “Dùng AI trích xuất”.</p>
+          )}
+        </div>
+
         {aiError && (
           <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-xs font-semibold text-rose-700 dark:text-rose-300 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
@@ -652,7 +735,7 @@ D. PHP
           <button
             type="button"
             onClick={handleAiParse}
-            disabled={!rawContent.trim() || isAiParsing}
+            disabled={(!rawContent.trim() && aiFiles.length === 0) || isAiParsing}
             className="py-3.5 px-4 font-bold text-xs text-white bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 disabled:opacity-50 rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
           >
             {isAiParsing ? (

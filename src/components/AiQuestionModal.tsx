@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import { Question } from '../types/quiz';
 import { Bot, Sparkles, Send, X, RefreshCw, Copy, Check, MessageSquare, Key } from 'lucide-react';
 import { cleanLatexText } from '../utils/textCleaner';
-import { callAiApi } from '../utils/aiClient';
+import { callAiApi, callAiApiStream } from '../utils/aiClient';
 import { AiApiKeyModal } from './AiApiKeyModal';
 
 interface AiQuestionModalProps {
@@ -54,7 +54,7 @@ export const AiQuestionModal: React.FC<AiQuestionModalProps> = ({
     .map((i) => `[${letters[i] || i}] ${question.options[i] || ''}`)
     .join('; ');
 
-  const fetchExplanationForOption = async (optionIdx: number | null) => {
+  const fetchExplanationForOption = async (optionIdx: number | null, force = false) => {
     if (activeControllerRef.current) {
       activeControllerRef.current.abort();
     }
@@ -83,10 +83,13 @@ export const AiQuestionModal: React.FC<AiQuestionModalProps> = ({
       ? `Tôi đã bấm vào phương án [${optionLetter}]: "${optionText}". Phương án này là ${isOptionCorrect ? 'ĐÚNG' : 'SAI'}. Hãy giải thích cặn kẽ vì sao phương án [${optionLetter}] lại ${isOptionCorrect ? 'chính xác' : 'chưa chính xác'}, phân tích bản chất kiến thức và so sánh với các đáp án khác.`
       : 'Hãy giải thích cặn kẽ vì sao đáp án đúng lại là đáp án đó, và tại sao các phương án khác chưa chính xác. Đưa ra mẹo ghi nhớ nếu có.';
 
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
+    const streamId = `msg-ai-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const streamTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     try {
-      const data = await callAiApi({
+      const data = await callAiApiStream({
+        noCache: force,
         endpoint: '/api/ai/explain',
         payload: {
           questionText: question.question,
@@ -103,18 +106,26 @@ export const AiQuestionModal: React.FC<AiQuestionModalProps> = ({
         signal: controller.signal,
         systemPromptFallback: 'Bạn là gia sư AI dạy trắc nghiệm thông minh. Trả lời bằng Tiếng Việt súc tích, dễ hiểu.',
         userPromptFallback: `Câu hỏi: ${question.question}. Đáp án đúng: ${correctAnswerText}. Yêu cầu: ${userPrompt}`,
+      }, (textSoFar) => {
+        if (controller.signal.aborted) return;
+        // Hiện chữ dần trong lúc AI đang viết
+        setIsLoading(false);
+        setMessages((prev) => [
+          ...prev.filter((m) => m.id !== 'msg-welcome' && m.id !== streamId),
+          { id: streamId, sender: 'ai', text: textSoFar, timestamp: streamTime },
+        ]);
       });
       clearTimeout(timeoutId);
 
       if (controller.signal.aborted) return;
 
       const aiReplyMsg: Message = {
-        id: `msg-ai-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        id: streamId,
         sender: 'ai',
         text: data.reply || 'Dưới đây là giải thích chi tiết cho phương án này.',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: streamTime,
       };
-      setMessages((prev) => [...prev.filter((m) => m.id !== 'msg-welcome'), aiReplyMsg]);
+      setMessages((prev) => [...prev.filter((m) => m.id !== 'msg-welcome' && m.id !== streamId), aiReplyMsg]);
     } catch (err: any) {
       clearTimeout(timeoutId);
       if (controller.signal.aborted || err.name === 'AbortError') {
@@ -283,7 +294,7 @@ export const AiQuestionModal: React.FC<AiQuestionModalProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => fetchExplanationForOption(activeOptionIndex)}
+              onClick={() => fetchExplanationForOption(activeOptionIndex, true)}
               disabled={isLoading}
               title="Phân tích lại"
               className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
@@ -388,7 +399,7 @@ export const AiQuestionModal: React.FC<AiQuestionModalProps> = ({
                         <div className="pt-2.5 mt-2 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => fetchExplanationForOption(activeOptionIndex)}
+                            onClick={() => fetchExplanationForOption(activeOptionIndex, true)}
                             disabled={isLoading}
                             className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all cursor-pointer active:scale-95 disabled:opacity-50"
                           >

@@ -100,7 +100,119 @@ export interface AiRequestOptions {
   userPromptFallback?: string;
 }
 
-export async function callAiApi<T = any>(options: AiRequestOptions): Promise<T> {
+// ---------------- Lưu lại câu trả lời AI đã sinh ----------------
+// Cùng một câu hỏi + cùng yêu cầu → dùng lại lời giải thích cũ, không gọi AI lần nữa
+// (nhanh hơn và đỡ tốn lượt gọi). Chỉ áp dụng cho giải thích / gia sư ngữ pháp.
+const AI_CACHE_KEY = 'dun_ai_cache_v1';
+const AI_CACHE_MAX = 200;
+const AI_CACHE_DAYS = 30;
+const CACHEABLE = new Set(['/api/ai/explain', '/api/ai/grammar-tutor']);
+
+const cacheKeyOf = (endpoint: string, payload: Record<string, any>) => {
+  const { apiKey, ...rest } = payload || {};
+  const str = endpoint + '|' + JSON.stringify(rest);
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+  return `${(h >>> 0).toString(36)}_${str.length}`;
+};
+
+type CacheEntry = { t: number; v: any };
+const readCache = (): Record<string, CacheEntry> => {
+  try {
+    return JSON.parse(localStorage.getItem(AI_CACHE_KEY) || '{}');
+  } catch {
+    return {};
+  }
+};
+
+export function getCachedAiReply(endpoint: string, payload: Record<string, any>): any | null {
+  if (!CACHEABLE.has(endpoint)) return null;
+  const e = readCache()[cacheKeyOf(endpoint, payload)];
+  if (!e || Date.now() - e.t > AI_CACHE_DAYS * 86400000) return null;
+  return e.v;
+}
+
+function putCachedAiReply(endpoint: string, payload: Record<string, any>, value: any) {
+  if (!CACHEABLE.has(endpoint) || !value || value.isError || !value.reply) return;
+  try {
+    const c = readCache();
+    c[cacheKeyOf(endpoint, payload)] = { t: Date.now(), v: value };
+    const keys = Object.keys(c);
+    if (keys.length > AI_CACHE_MAX) {
+      keys.sort((a, b) => c[a].t - c[b].t).slice(0, keys.length - AI_CACHE_MAX).forEach((k) => delete c[k]);
+    }
+    localStorage.setItem(AI_CACHE_KEY, JSON.stringify(c));
+  } catch {}
+}
+
+export function clearAiCache() {
+  try {
+    localStorage.removeItem(AI_CACHE_KEY);
+  } catch {}
+}
+
+/**
+ * Gọi AI và hiện chữ dần trong lúc AI đang viết (stream). Máy chủ không hỗ trợ stream
+ * hoặc lỗi → tự chuyển sang cách gọi thường.
+ */
+export async function callAiApiStream(
+  options: AiRequestOptions & { noCache?: boolean },
+  onText: (textSoFar: string) => void
+): Promise<{ reply: string; isError?: boolean; cached?: boolean }> {
+  if (!options.noCache) {
+    const hit = getCachedAiReply(options.endpoint, options.payload);
+    if (hit) {
+      onText(hit.reply);
+      return { ...hit, cached: true };
+    }
+  }
+  const customKey = getCustomGeminiApiKey();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (customKey) headers['x-gemini-api-key'] = customKey;
+  try {
+    const res = await fetch(`${options.endpoint}?stream=1`, {
+      method: 'POST',
+      headers,
+      signal: options.signal,
+      body: JSON.stringify({ ...options.payload, ...(customKey ? { apiKey: customKey } : {}) }),
+    });
+    const type = res.headers.get('content-type') || '';
+    if (res.ok && res.body && type.startsWith('text/plain')) {
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let acc = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        acc += dec.decode(value, { stream: true });
+        onText(acc);
+      }
+      acc += dec.decode();
+      const isError = acc.startsWith('⚠️');
+      const out = { reply: acc.trim(), isError };
+      if (!options.noCache) putCachedAiReply(options.endpoint, options.payload, out);
+      return out;
+    }
+  } catch (e: any) {
+    if (e?.name === 'AbortError') throw e;
+  }
+  const data = await callAiApi<any>({ ...options, noCache: true } as any);
+  if (data?.reply) onText(data.reply);
+  if (!options.noCache) putCachedAiReply(options.endpoint, options.payload, data);
+  return data;
+}
+
+export async function callAiApi<T = any>(options: AiRequestOptions & { noCache?: boolean }): Promise<T> {
+  if (!options.noCache) {
+    const hit = getCachedAiReply(options.endpoint, options.payload);
+    if (hit) return hit as T;
+  }
+  const data = await callAiApiRaw<T>(options);
+  if (!options.noCache) putCachedAiReply(options.endpoint, options.payload, data);
+  return data;
+}
+
+async function callAiApiRaw<T = any>(options: AiRequestOptions): Promise<T> {
   const customKey = getCustomGeminiApiKey();
 
   const headers: Record<string, string> = {
