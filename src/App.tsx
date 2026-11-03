@@ -40,7 +40,6 @@ import {
   logoutUser,
   deleteCurrentUserAccount,
   deleteUserFromFirestore,
-  wipeAllServerCollections,
   saveUserSettingsToFirestore,
   getUserSettingsFromFirestore,
   syncJapaneseCourseToFirestore,
@@ -604,13 +603,14 @@ export default function App() {
 
     if (
       window.confirm(
-        'XÁC NHẬN XÓA TOÀN BỘ TÀI KHOẢN VÀ DỮ LIỆU SERVER:\n\nBạn có chắc chắn muốn xóa tất cả tài khoản và toàn bộ dữ liệu bộ đề trên hệ thống? Sau khi xóa, tất cả dữ liệu sẽ được đưa về trạng thái trống hoàn toàn.'
+        'XÁC NHẬN XÓA TÀI KHOẢN VÀ DỮ LIỆU CỦA BẠN:\n\nToàn bộ bộ đề, lượt làm bài, cài đặt của tài khoản này trên máy chủ và trên máy sẽ bị xóa, tài khoản sẽ bị đăng xuất. (Dữ liệu của người dùng khác không bị ảnh hưởng – muốn reset cả hệ thống hãy dùng Firebase Console.)'
       )
     ) {
       if (currentUser?.email) {
         await deleteUserFromFirestore(currentUser.email);
       }
-      await wipeAllServerCollections();
+      // Xóa toàn bộ máy chủ từ trình duyệt đã bị gỡ vì lý do bảo mật (quy tắc Firestore mới chặn).
+      // Chỉ xóa dữ liệu của chính tài khoản này; muốn reset cả hệ thống hãy dùng Firebase Console.
       try {
         await deleteCurrentUserAccount();
       } catch (e) {
@@ -636,7 +636,7 @@ export default function App() {
         quizzesCompleted: 0,
       });
       navigateTo('dashboard', { quizDetail: null });
-      alert('Đã xóa sạch toàn bộ tài khoản trên máy chủ và dữ liệu hệ thống thành công!');
+      alert('Đã xóa tài khoản và toàn bộ dữ liệu của bạn.');
     }
   };
 

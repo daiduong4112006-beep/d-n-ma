@@ -189,7 +189,6 @@ export const JapaneseMultiChoiceMode: React.FC<JapaneseMultiChoiceModeProps> = (
         isRemoteUpdateRef.current = true;
         setCurrentIndex(payload.currentIndex);
         setSelectedOption(null);
-        setIsAnswerChecked(false);
         if (typeof payload.data?.score === 'number') setScore(payload.data.score);
         if (typeof payload.data?.streak === 'number') setStreak(payload.data.streak);
       }

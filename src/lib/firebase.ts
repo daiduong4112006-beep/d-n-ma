@@ -24,6 +24,8 @@ import {
   where,
   or,
   getDocs,
+  deleteField,
+  updateDoc,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { Quiz, QuizAttempt } from '../types/quiz';
@@ -152,6 +154,19 @@ export const deleteCurrentUserAccount = async () => {
   }
 };
 
+/** Email của người đang đăng nhập (ưu tiên Firebase Auth) – dùng làm khóa sở hữu dữ liệu trên Firestore */
+export const currentEmail = (): string => {
+  const fromAuth = auth.currentUser?.email;
+  if (fromAuth) return fromAuth.trim().toLowerCase();
+  try {
+    const saved = localStorage.getItem('mcq_user');
+    const e = saved ? JSON.parse(saved)?.email : '';
+    return e ? String(e).trim().toLowerCase() : '';
+  } catch {
+    return '';
+  }
+};
+
 export const getPossibleUserIds = (userId: string): string[] => {
   const set = new Set<string>();
 
@@ -191,6 +206,31 @@ export const getPossibleUserIds = (userId: string): string[] => {
   return Array.from(set).filter(Boolean);
 };
 
+/**
+ * Chuyển dữ liệu cũ sang khóa sở hữu theo email: bộ đề / lượt làm bài trước đây chỉ có `userId`
+ * → thêm `userEmail` để vẫn đọc được sau khi siết quy tắc Firestore. Chạy một lần mỗi máy.
+ */
+const migrateLegacyOwnership = async (col: 'quizzes' | 'attempts', userIds: string[], email: string) => {
+  const key = `mcq_owner_migrated_v1_${col}_${email}`;
+  try {
+    if (localStorage.getItem(key)) return;
+  } catch {}
+  const ids = userIds.slice(0, 10);
+  if (!ids.length) return;
+  try {
+    const snap = await withTimeout(getDocs(query(collection(db, col), where('userId', 'in', ids))), 15000, 'migrate ' + col);
+    await Promise.all(
+      snap.docs.filter((d) => !d.data().userEmail).map((d) => updateDoc(d.ref, { userEmail: email }))
+    );
+    try {
+      localStorage.setItem(key, '1');
+    } catch {}
+  } catch (err) {
+    // Sau khi đã siết quy tắc, truy vấn cũ theo userId bị chặn → bỏ qua
+    handleFirestoreError('migrateLegacyOwnership ' + col, err);
+  }
+};
+
 // Real-time Firestore sync for Quizzes
 export const subscribeQuizzes = (
   userId: string,
@@ -213,17 +253,12 @@ export const subscribeQuizzes = (
     }
     const cleanEmail = email ? email.trim().toLowerCase() : '';
 
-    const conditions = [];
-    if (userIds.length > 0) {
-      conditions.push(where('userId', 'in', userIds.slice(0, 10)));
-    }
-    if (cleanEmail) {
-      conditions.push(where('userEmail', '==', cleanEmail));
-    }
-
-    const q = conditions.length > 1
-      ? query(collection(db, 'quizzes'), or(...conditions))
-      : query(collection(db, 'quizzes'), conditions[0] || where('userId', '==', userId));
+    // Đã đăng nhập: chỉ truy vấn theo userEmail (khớp quy tắc bảo mật Firestore mới).
+    // Bộ đề cũ chưa có userEmail được bổ sung một lần bằng migrateLegacyOwnership.
+    if (cleanEmail) migrateLegacyOwnership('quizzes', userIds, cleanEmail);
+    const q = cleanEmail
+      ? query(collection(db, 'quizzes'), where('userEmail', '==', cleanEmail))
+      : query(collection(db, 'quizzes'), where('userId', 'in', userIds.slice(0, 10).length ? userIds.slice(0, 10) : [userId]));
 
     return onSnapshot(
       q,
@@ -322,8 +357,12 @@ export const subscribeAttempts = (
   }
   try {
     const userIds = getPossibleUserIds(userId);
-    const q = userIds.length > 1
-      ? query(collection(db, 'attempts'), where('userId', 'in', userIds))
+    const email = currentEmail();
+    if (email) migrateLegacyOwnership('attempts', userIds, email);
+    const q = email
+      ? query(collection(db, 'attempts'), where('userEmail', '==', email))
+      : userIds.length > 1
+      ? query(collection(db, 'attempts'), where('userId', 'in', userIds.slice(0, 10)))
       : query(collection(db, 'attempts'), where('userId', '==', userIds[0] || userId));
 
     return onSnapshot(
@@ -366,9 +405,11 @@ export const syncAttemptToFirestore = async (userId: string, attempt: QuizAttemp
   try {
     const attemptRef = doc(db, 'attempts', attempt.id);
     const cleanAttempt = JSON.parse(JSON.stringify(attempt));
+    const email = currentEmail();
     await setDoc(attemptRef, {
       ...cleanAttempt,
       userId,
+      ...(email ? { userEmail: email } : {}),
     });
   } catch (err) {
     handleFirestoreError('syncAttemptToFirestore', err);
@@ -384,7 +425,11 @@ export interface FirestoreUserRecord {
   updatedAt: string;
 }
 
-export const saveUserToFirestore = async (email: string, name: string, password?: string): Promise<void> => {
+/**
+ * Lưu hồ sơ người dùng (email + tên). KHÔNG lưu mật khẩu – mật khẩu do Firebase Auth quản lý.
+ * Đồng thời xóa trường `password` cũ (bản trước lưu mật khẩu dạng chữ) nếu còn.
+ */
+export const saveUserToFirestore = async (email: string, name: string): Promise<void> => {
   if (!isFirestoreAvailable()) return;
   try {
     const cleanEmail = email.trim().toLowerCase();
@@ -395,13 +440,12 @@ export const saveUserToFirestore = async (email: string, name: string, password?
         {
           email: cleanEmail,
           name: name.trim(),
-          password: password || '',
-          createdAt: new Date().toISOString(),
+          password: deleteField(),
           updatedAt: new Date().toISOString(),
         },
         { merge: true }
       ),
-      2500,
+      4000,
       'saveUserToFirestore'
     );
   } catch (err) {
@@ -484,24 +528,6 @@ export const deleteUserFromFirestore = async (email: string): Promise<void> => {
   }
 };
 
-// Clear ALL collections on server
-export const wipeAllServerCollections = async (): Promise<void> => {
-  if (!isFirestoreAvailable()) return;
-  try {
-    const collectionsToClear = ['users', 'quizzes', 'attempts', 'settings', 'japanese_courses'];
-    for (const colName of collectionsToClear) {
-      const snap = await getDocs(collection(db, colName));
-      const deletes = snap.docs.map((d) => deleteDoc(d.ref));
-      await Promise.all(deletes);
-    }
-  } catch (err) {
-    handleFirestoreError('wipeAllServerCollections', err);
-  }
-};
-
-// ---------------------------------------------------------------------------
-// Cloud Firestore Real-time Sync for Japanese Courses across devices per User
-// ---------------------------------------------------------------------------
 export const syncJapaneseCourseToFirestore = async (course: any, email?: string): Promise<void> => {
   if (!isFirestoreAvailable() || !course?.id) return;
   try {
@@ -565,7 +591,7 @@ export const subscribeJapaneseCourses = (
   } else {
     email = typeof emailOrOnUpdate === 'string' ? emailOrOnUpdate : (auth.currentUser?.email || '');
     if (typeof maybeOnUpdate === 'function') {
-      onUpdate = maybeOnUpdate;
+      onUpdate = maybeOnUpdate as (courses: any[]) => void;
     }
     onError = maybeOnError;
   }
@@ -1191,6 +1217,7 @@ export interface SharedQuizDoc {
   shareId: string;
   quiz: Quiz;
   ownerName?: string;
+  ownerEmail?: string;
   sourceQuizId: string;
   createdAt: string;
   updatedAt: string;
@@ -1246,6 +1273,7 @@ export const createOrUpdateSharedQuiz = async (quiz: Quiz, ownerName?: string): 
     shareId,
     quiz: toShareableQuiz(quiz),
     ownerName: ownerName || '',
+    ownerEmail: currentEmail(),
     sourceQuizId: quiz.id,
     createdAt: now,
     updatedAt: now,

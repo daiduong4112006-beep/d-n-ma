@@ -28,12 +28,36 @@ const isFirebaseUnconfiguredError = (err: any) => {
   return (
     code.includes('api-key') ||
     msg.includes('api-key') ||
+    msg.includes('timed out') ||
     code === 'auth/operation-not-allowed' ||
     code === 'auth/network-request-failed' ||
     code === 'auth/internal-error' ||
     code === 'auth/invalid-api-key' ||
     code === 'auth/api-key-not-valid.-please-pass-a-valid-api-key.'
   );
+};
+
+/** Tài khoản dự phòng khi mất mạng – chỉ lưu MÃ BĂM mật khẩu trên máy, không lưu mật khẩu */
+type LocalAccount = { email: string; name: string; passwordHash?: string; password?: string };
+const LOCAL_ACCOUNTS_KEY = 'mcq_registered_users';
+const readLocalAccounts = (): Record<string, LocalAccount> => {
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_ACCOUNTS_KEY) || '{}');
+  } catch {
+    return {};
+  }
+};
+const writeLocalAccounts = (a: Record<string, LocalAccount>) => {
+  try {
+    localStorage.setItem(LOCAL_ACCOUNTS_KEY, JSON.stringify(a));
+  } catch {}
+};
+const hashPassword = async (email: string, password: string): Promise<string> => {
+  const data = new TextEncoder().encode(`dunmaster:${email}:${password}`);
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 };
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -72,42 +96,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     try {
       if (mode === 'register') {
-        let userObj = {
-          email: email.trim(),
-          name: displayName,
-        };
-
-        // Check if user already exists in Firestore globally
-        const existingFirestoreUser = await getUserFromFirestore(cleanEmail);
-        if (existingFirestoreUser) {
-          throw { code: 'auth/email-already-in-use' };
-        }
-
+        let userObj = { email: email.trim(), name: displayName };
         try {
           const u = await registerUser(email.trim(), password, displayName);
-          userObj = {
-            email: u.email || email.trim(),
-            name: u.displayName || displayName,
-          };
+          userObj = { email: u.email || email.trim(), name: u.displayName || displayName };
         } catch (firebaseErr: any) {
-          if (firebaseErr?.code === 'auth/email-already-in-use') {
-            throw firebaseErr;
-          }
-          // Fallback to local dictionary for offline/timeout/unconfigured Firebase
-          const accounts = JSON.parse(localStorage.getItem('mcq_registered_users') || '{}');
-          if (accounts[cleanEmail]) {
-            throw { code: 'auth/email-already-in-use' };
-          }
-          accounts[cleanEmail] = {
-            email: email.trim(),
-            password,
-            name: displayName,
-          };
-          localStorage.setItem('mcq_registered_users', JSON.stringify(accounts));
+          // Chỉ dùng tài khoản trên máy khi KHÔNG kết nối được Firebase (mất mạng / chưa cấu hình)
+          if (!isFirebaseUnconfiguredError(firebaseErr)) throw firebaseErr;
+          const accounts = readLocalAccounts();
+          if (accounts[cleanEmail]) throw { code: 'auth/email-already-in-use' };
+          accounts[cleanEmail] = { email: email.trim(), name: displayName, passwordHash: await hashPassword(cleanEmail, password) };
+          writeLocalAccounts(accounts);
         }
 
-        // Save account record to Firestore so other browsers can authenticate
-        await saveUserToFirestore(cleanEmail, displayName, password);
+        // Hồ sơ trên Firestore chỉ còn email + tên (KHÔNG lưu mật khẩu)
+        await saveUserToFirestore(cleanEmail, displayName);
 
         sound.playCorrect();
         localStorage.setItem('mcq_user', JSON.stringify(userObj));
@@ -115,57 +118,53 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         onLoginSuccess(userObj);
         onClose();
       } else {
-        let userObj = {
-          email: email.trim(),
-          name: displayName,
-        };
-
-        let loggedIn = false;
+        let userObj = { email: email.trim(), name: displayName };
 
         try {
           const u = await loginUser(email.trim(), password);
-          userObj = {
-            email: u.email || email.trim(),
-            name: u.displayName || displayName,
-          };
-          loggedIn = true;
+          userObj = { email: u.email || email.trim(), name: u.displayName || displayName };
         } catch (firebaseErr: any) {
-          // If Firebase Auth fails, check global Firestore user records
-          const firestoreUser = await getUserFromFirestore(cleanEmail);
-          if (firestoreUser) {
-            if (firestoreUser.password && firestoreUser.password !== password) {
-              throw { code: 'auth/wrong-password' };
-            }
-            userObj = {
-              email: firestoreUser.email,
-              name: firestoreUser.name || displayName,
-            };
-            loggedIn = true;
-          } else {
-            // Check local registered accounts fallback
-            const accounts = JSON.parse(localStorage.getItem('mcq_registered_users') || '{}');
+          if (isFirebaseUnconfiguredError(firebaseErr)) {
+            // Mất mạng / chưa cấu hình Firebase → tài khoản lưu trên máy này
+            const accounts = readLocalAccounts();
             const localAcc = accounts[cleanEmail];
-            if (localAcc) {
-              if (localAcc.password !== password) {
-                throw { code: 'auth/wrong-password' };
-              }
-              userObj.name = localAcc.name || userObj.name;
-              loggedIn = true;
-            } else {
-              // Account does NOT exist!
-              throw { code: 'auth/user-not-found' };
+            if (!localAcc) throw { code: 'auth/user-not-found' };
+            const ok = localAcc.passwordHash
+              ? localAcc.passwordHash === (await hashPassword(cleanEmail, password))
+              : localAcc.password === password;
+            if (!ok) throw { code: 'auth/wrong-password' };
+            if (!localAcc.passwordHash) {
+              // nâng cấp bản cũ lưu mật khẩu dạng chữ → mã băm
+              accounts[cleanEmail] = { email: localAcc.email, name: localAcc.name, passwordHash: await hashPassword(cleanEmail, password) };
+              writeLocalAccounts(accounts);
+            }
+            userObj.name = localAcc.name || userObj.name;
+          } else {
+            // Tài khoản cũ chỉ có trên Firestore (đăng ký khi Firebase Auth lỗi, mật khẩu lưu dạng chữ):
+            // nếu đúng mật khẩu → tạo tài khoản Firebase Auth thật rồi xóa mật khẩu khỏi Firestore.
+            const legacy = await getUserFromFirestore(cleanEmail);
+            const legacyPass = legacy?.password && legacy.password !== 'google_auth' ? legacy.password : '';
+            if (!legacyPass) {
+              throw firebaseErr?.code ? firebaseErr : { code: 'auth/wrong-password' };
+            }
+            if (legacyPass !== password) throw { code: 'auth/wrong-password' };
+            try {
+              const u = await registerUser(email.trim(), password, legacy?.name || displayName);
+              userObj = { email: u.email || email.trim(), name: u.displayName || legacy?.name || displayName };
+            } catch (createErr: any) {
+              // Đã có tài khoản Firebase Auth với mật khẩu khác → mật khẩu cũ không còn hiệu lực
+              if (createErr?.code === 'auth/email-already-in-use') throw { code: 'auth/wrong-password' };
+              throw createErr;
             }
           }
         }
 
-        if (loggedIn) {
-          saveUserToFirestore(cleanEmail, userObj.name, password).catch(() => {});
-          sound.playCorrect();
-          localStorage.setItem('mcq_user', JSON.stringify(userObj));
-          transferGuestDataToUser(userObj.email);
-          onLoginSuccess(userObj);
-          onClose();
-        }
+        saveUserToFirestore(cleanEmail, userObj.name).catch(() => {});
+        sound.playCorrect();
+        localStorage.setItem('mcq_user', JSON.stringify(userObj));
+        transferGuestDataToUser(userObj.email);
+        onLoginSuccess(userObj);
+        onClose();
       }
     } catch (err: any) {
       sound.playWrong();
@@ -206,7 +205,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         email: u.email.trim(),
         name: u.displayName || u.email.split('@')[0],
       };
-      await saveUserToFirestore(userObj.email, userObj.name, 'google_auth').catch(() => {});
+      await saveUserToFirestore(userObj.email, userObj.name).catch(() => {});
       sound.playCorrect();
       localStorage.setItem('mcq_user', JSON.stringify(userObj));
       transferGuestDataToUser(userObj.email);

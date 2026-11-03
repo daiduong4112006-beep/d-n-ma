@@ -147,6 +147,10 @@ class SoundEngine {
     }
   }
 
+  // Bí danh cho các nơi gọi cũ
+  public playSuccess(): void { this.playCorrect(); }
+  public playMistake(): void { this.playWrong(); }
+
   // Play a celebratory finish fanfare
   public playFinish(): void {
     if (!this.isEnabled()) return;

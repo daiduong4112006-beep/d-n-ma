@@ -11,6 +11,26 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '10mb' }));
 
+// Giới hạn số lượt gọi AI theo IP để tránh bị lạm dụng khóa Gemini của server
+const AI_RATE_LIMIT = Number(process.env.AI_RATE_LIMIT_PER_MIN || 20);
+const aiHits = new Map<string, number[]>();
+app.use(['/api/ai', '/api/parse-quiz-ai'], (req, res, next) => {
+  // Người dùng tự nhập khóa Gemini riêng thì không giới hạn
+  const ownKey = req.headers['x-gemini-api-key'] || (req.body && req.body.apiKey);
+  if (ownKey) return next();
+  const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
+  const now = Date.now();
+  const hits = (aiHits.get(ip) || []).filter((t) => now - t < 60_000);
+  if (hits.length >= AI_RATE_LIMIT) {
+    res.status(429).json({ error: 'Bạn gọi AI quá nhiều lần trong 1 phút. Vui lòng thử lại sau ít phút.' });
+    return;
+  }
+  hits.push(now);
+  aiHits.set(ip, hits);
+  if (aiHits.size > 5000) aiHits.clear();
+  next();
+});
+
 // Health check endpoint
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -44,16 +64,8 @@ function resolveGeminiApiKey(req: express.Request): string {
     }
   }
 
-  try {
-    const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-    if (fs.existsSync(configPath)) {
-      const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      if (cfg.apiKey && typeof cfg.apiKey === 'string' && cfg.apiKey.startsWith('AIzaSy')) {
-        return cfg.apiKey;
-      }
-    }
-  } catch (e) {}
-  
+  // (Đã bỏ: dùng apiKey của Firebase làm khóa Gemini. Khóa Firebase là khóa công khai của web app,
+  //  không được dùng để gọi Gemini – hãy đặt GEMINI_API_KEY trong biến môi trường.)
   return '';
 }
 
@@ -742,7 +754,7 @@ async function startServer() {
     app.use(vite.middlewares);
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  app.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`Server listening on http://0.0.0.0:${PORT}`);
   });
 }
