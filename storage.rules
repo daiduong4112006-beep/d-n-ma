@@ -1,0 +1,20 @@
+rules_version = '2';
+
+// DUN MASTER – Firebase Storage: ảnh câu hỏi của từng người
+// quiz-images/{email}/{file}: ai có link cũng xem được (để bộ đề chia sẻ hiện ảnh),
+// chỉ chủ tài khoản (đã xác minh email) mới tải lên / xóa; tối đa 2 MB, chỉ file ảnh.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /quiz-images/{email}/{file} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower() == email
+        && (request.resource == null || (request.resource.size < 2 * 1024 * 1024
+            && request.resource.contentType.matches('image/.*')));
+    }
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

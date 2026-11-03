@@ -28,13 +28,82 @@ import {
   getDocs,
   deleteField,
   updateDoc,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  memoryLocalCache,
+  Firestore,
 } from 'firebase/firestore';
+import { getStorage, ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { Quiz, QuizAttempt } from '../types/quiz';
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = initializeFirestore(app, { ignoreUndefinedProperties: true }, firebaseConfig.firestoreDatabaseId);
+// Bộ nhớ đệm offline của Firestore (IndexedDB, dùng chung nhiều tab): mất mạng vẫn đọc được dữ liệu
+// đã tải và ghi được, có mạng lại sẽ tự đẩy lên. Trình duyệt không có IndexedDB → dùng bộ nhớ tạm.
+const createDb = (): Firestore => {
+  try {
+    return initializeFirestore(
+      app,
+      { ignoreUndefinedProperties: true, localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) },
+      firebaseConfig.firestoreDatabaseId
+    );
+  } catch (e) {
+    console.warn('Firestore offline cache unavailable, using memory cache:', e);
+    return initializeFirestore(app, { ignoreUndefinedProperties: true, localCache: memoryLocalCache() }, firebaseConfig.firestoreDatabaseId);
+  }
+};
+export const db = createDb();
+
+// ---------------- Ảnh câu hỏi → Firebase Storage ----------------
+// Ảnh dán/tải lên được lưu dạng data URL (base64) ngay trong bộ đề, dễ vượt giới hạn 1 MB của
+// Firestore. Trước khi lưu lên đám mây, ảnh được tải lên Storage và thay bằng đường link.
+// Nếu dự án chưa bật Storage (hoặc mất mạng) thì giữ nguyên data URL như trước.
+let storageDisabled = false;
+const uploadedCache = new Map<string, string>();
+
+const hashString = async (str: string): Promise<string> => {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf))
+    .slice(0, 16)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+};
+
+export const uploadImageDataUrl = async (dataUrl: string): Promise<string> => {
+  if (!dataUrl?.startsWith('data:image/') || storageDisabled) return dataUrl;
+  const email = (auth.currentUser?.email || '').toLowerCase();
+  if (!email || !(firebaseConfig as any).storageBucket) return dataUrl;
+  try {
+    const hash = await hashString(dataUrl);
+    const hit = uploadedCache.get(hash);
+    if (hit) return hit;
+    const ext = (dataUrl.match(/^data:image\/([a-z0-9+]+)/i)?.[1] || 'png').replace('jpeg', 'jpg').replace('svg+xml', 'svg');
+    const r = storageRef(getStorage(app), `quiz-images/${email}/${hash}.${ext}`);
+    await withTimeout(uploadString(r, dataUrl, 'data_url', { cacheControl: 'public, max-age=31536000' }), 20000, 'uploadImage');
+    const url = await withTimeout(getDownloadURL(r), 10000, 'getDownloadURL');
+    uploadedCache.set(hash, url);
+    return url;
+  } catch (e: any) {
+    const code = String(e?.code || '');
+    // Chưa bật Storage / không có quyền → thôi thử trong phiên này
+    if (code.includes('unauthorized') || code.includes('unknown') || code.includes('bucket') || code.includes('project-not-found')) {
+      storageDisabled = true;
+    }
+    console.warn('Không tải ảnh lên Storage được, giữ ảnh trong bộ đề:', e);
+    return dataUrl;
+  }
+};
+
+/** Thay mọi ảnh data URL trong bộ đề bằng link Storage (giữ nguyên nếu không tải lên được) */
+export const offloadQuizImages = async <T extends { questions?: { imageUrl?: string }[] }>(quiz: T): Promise<T> => {
+  const qs = quiz.questions || [];
+  if (!qs.some((q) => q.imageUrl?.startsWith('data:image/'))) return quiz;
+  const questions = await Promise.all(
+    qs.map(async (q) => (q.imageUrl?.startsWith('data:image/') ? { ...q, imageUrl: await uploadImageDataUrl(q.imageUrl) } : q))
+  );
+  return { ...quiz, questions };
+};
 
 export { onAuthStateChanged };
 
@@ -331,7 +400,7 @@ export const syncQuizToFirestore = async (userId: string, quiz: Quiz): Promise<v
 
   try {
     const quizRef = doc(db, 'quizzes', quiz.id);
-    const cleanQuiz = JSON.parse(JSON.stringify(quiz));
+    const cleanQuiz = JSON.parse(JSON.stringify(await offloadQuizImages(quiz)));
     let email = '';
     try {
       const savedUser = localStorage.getItem('mcq_user');
@@ -568,7 +637,10 @@ export const syncJapaneseCourseToFirestore = async (course: any, email?: string)
     // Isolate by user email so each user has their own independent cloud documents
     const docId = `${cleanEmail}_${course.id}`;
     const courseRef = doc(db, 'user_japanese_courses', docId);
-    const clean = JSON.parse(JSON.stringify(course));
+    const lessons = await Promise.all(
+      (course.lessons || []).map(async (l: any) => ({ ...l, cards: (await offloadQuizImages({ questions: l.cards || [] })).questions }))
+    );
+    const clean = JSON.parse(JSON.stringify(course.lessons ? { ...course, lessons } : course));
 
     await setDoc(courseRef, {
       email: cleanEmail,
@@ -1302,7 +1374,7 @@ export const createOrUpdateSharedQuiz = async (quiz: Quiz, ownerName?: string): 
   const now = new Date().toISOString();
   const payload: SharedQuizDoc = {
     shareId,
-    quiz: toShareableQuiz(quiz),
+    quiz: toShareableQuiz(await offloadQuizImages(quiz)),
     ownerName: ownerName || '',
     ownerEmail: currentEmail(),
     sourceQuizId: quiz.id,
