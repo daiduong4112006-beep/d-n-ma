@@ -34,6 +34,8 @@ interface Props {
 }
 
 type SpkWindow = Window & {
+  zoom?: (src: string) => void;
+  __IMG?: Record<string, string>;
   go?: (k: string, arg?: unknown) => void;
   counts?: () => Record<string, string>;
   __dmPatched?: boolean;
@@ -96,17 +98,25 @@ export const JapaneseSpeakingSection: React.FC<Props> = ({
   setRouteRef.current = setRoute;
   const [counts, setCounts] = useState<Record<string, string>>({});
   const [height, setHeight] = useState(900);
+  const [zoomSrc, setZoomSrc] = useState<string | null>(null);
   const frameRef = useRef<HTMLIFrameElement>(null);
   const routeRef = useRef('home');
   routeRef.current = route;
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!full) return;
+    if (!zoomSrc) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setZoomSrc(null);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [zoomSrc]);
+
+  useEffect(() => {
+    if (!full || zoomSrc) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setFull(false);
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [full]);
+  }, [full, zoomSrc]);
 
   const win = () => frameRef.current?.contentWindow as SpkWindow | null;
 
@@ -132,6 +142,14 @@ export const JapaneseSpeakingSection: React.FC<Props> = ({
           orig(k, arg);
           setRouteRef.current(k);
           setTimeout(refreshCounts, 0);
+        };
+        // Phóng to tranh bằng lớp phủ của app (khung tự giãn nên lớp phủ bên trong sẽ lệch)
+        w.zoom = (src: string) => {
+          try {
+            setZoomSrc(w.__IMG?.[src] || new URL(src, w.location.href).href);
+          } catch {
+            setZoomSrc(src);
+          }
         };
         w.__dmPatched = true;
       }
@@ -253,6 +271,16 @@ export const JapaneseSpeakingSection: React.FC<Props> = ({
           style={full ? { overflow: 'auto' } : { height }}
         />
       </div>
+      {zoomSrc && (
+        <div
+          role="dialog"
+          aria-label="Phóng to tranh"
+          onClick={() => setZoomSrc(null)}
+          className="fixed inset-0 z-[70] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 cursor-zoom-out"
+        >
+          <img src={zoomSrc} alt="" className="max-w-full max-h-full rounded-2xl shadow-2xl bg-white" />
+        </div>
+      )}
     </div>
   );
 };

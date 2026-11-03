@@ -156,6 +156,9 @@ body{font-family:'Plus Jakarta Sans','Be Vietnam Pro',system-ui,sans-serif}
 :root[data-embed] .rail,:root[data-embed] .bottom{display:none!important}
 :root[data-embed] .shell{display:block!important;min-height:0}
 :root[data-embed] #app{padding:0!important;max-width:none!important;margin:0!important}
+/* Tranh không phóng quá to khi nhúng (bấm vào tranh để xem lớn) */
+:root[data-embed] img.pic,:root[data-embed] .stage-pic img{max-height:360px;width:auto;max-width:100%;margin:0 auto;object-fit:contain;cursor:zoom-in}
+:root[data-embed] .stage-pic{padding:14px}
 </style>
 </head>
 <body>
