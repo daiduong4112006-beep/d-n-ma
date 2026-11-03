@@ -1,3 +1,4 @@
+import { subscribeStorageKeys } from './utils/storageEvents';
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Lock } from 'lucide-react';
 import { Quiz, QuizAttempt, Question, WrongQuestionDetail, GlobalStatistics, StudyOptions } from './types/quiz';
@@ -43,7 +44,7 @@ import {
   submitSharedResult,
 } from './lib/firebase';
 import { updateStarredWordsFromCloud } from './utils/vocabulary';
-import { saveJapaneseCourses, getJapaneseCourses, saveAllowedJpd123Emails, canAccessJpd123, DEFAULT_JPD123_COURSE, getCleanDefaultJpdCourse } from './utils/japaneseStorage';
+import { reconcileJapaneseCoursesFromCloud, saveJapaneseCourses, getJapaneseCourses, saveAllowedJpd123Emails, canAccessJpd123, DEFAULT_JPD123_COURSE, getCleanDefaultJpdCourse } from './utils/japaneseStorage';
 import { updateStudyProgressFromCloud } from './utils/studyProgressStorage';
 
 // Components
@@ -139,6 +140,11 @@ export default function App() {
     setWrongQuestions(getWrongQuestionsList());
     setStats(getGlobalStatistics());
   };
+
+  useEffect(()=>subscribeStorageKeys(
+    key=>key.startsWith('mcq_master_quizzes_v1')||key.startsWith('mcq_master_attempts_v1'),
+    ()=>{refreshData();setSelectedQuizDetail(prev=>prev?getQuizzes().find(q=>q.id===prev.id)||null:null);}
+  ),[currentUser?.email]);
 
   // Browser History Navigation Manager (supports Back/Forward buttons in browser)
   const navigateTo = (
@@ -382,21 +388,8 @@ export default function App() {
 
     // Real-time sync for Japanese Courses across PC and Phone (regardless of active tab)
     if (email) {
-      unSubCourses = subscribeJapaneseCourses(email, (cloudCourses) => {
-        if (Array.isArray(cloudCourses)) {
-          let toSave = cloudCourses;
-          if (canAccessJpd123(email)) {
-            const hasJpd = toSave.some((c) => c && (c.id === 'course-jpd123' || c.code?.toLowerCase().replace(/\s+/g, '') === 'jpd123'));
-            if (!hasJpd) {
-              const currentLocal = getJapaneseCourses(email);
-              const localJpd = currentLocal.find((c) => c && (c.id === 'course-jpd123' || c.code?.toLowerCase().replace(/\s+/g, '') === 'jpd123'));
-              const initialJpd = localJpd || getCleanDefaultJpdCourse();
-              toSave = [initialJpd, ...toSave];
-              syncJapaneseCourseToFirestore(initialJpd, email).catch(() => {});
-            }
-          }
-          saveJapaneseCourses(toSave, email, true);
-        }
+      unSubCourses = subscribeJapaneseCourses(email, cloud=>{
+        if(Array.isArray(cloud))reconcileJapaneseCoursesFromCloud(cloud,email);
       });
     }
 

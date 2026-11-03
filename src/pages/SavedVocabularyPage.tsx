@@ -1,3 +1,4 @@
+import { subscribeStorageKeys } from '../utils/storageEvents';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   StarredWord,
@@ -76,8 +77,10 @@ export const SavedVocabularyPage: React.FC<SavedVocabularyPageProps> = ({ onBack
       loadWords();
     };
 
+    const stopStorage=subscribeStorageKeys(key=>key.startsWith('mcq_starred_vocabulary_v1'),handleUpdate);
     window.addEventListener('mcq_vocabulary_updated', handleUpdate);
     return () => {
+      stopStorage();
       window.removeEventListener('mcq_vocabulary_updated', handleUpdate);
     };
   }, []);

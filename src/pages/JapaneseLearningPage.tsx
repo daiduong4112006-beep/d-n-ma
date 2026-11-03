@@ -1,3 +1,4 @@
+import { subscribeStorageKeys } from '../utils/storageEvents';
 import React, { useState, useEffect } from 'react';
 import {
   FolderOpen,
@@ -17,6 +18,8 @@ import {
 import { JapaneseCourse } from '../types/japanese';
 import {
   getJapaneseCourses,
+  getCoursesStorageKey,
+  reconcileJapaneseCoursesFromCloud,
   saveJapaneseCourse,
   deleteJapaneseCourse,
   isJapaneseAdmin,
@@ -69,53 +72,17 @@ export const JapaneseLearningPage: React.FC<Props> = ({ currentUser, onBackToDas
     }
 
     // Subscribe to Firestore for real-time synchronization between phones, tablets, and computers FOR THIS USER
-    const unSub = subscribeJapaneseCourses(currentUser?.email, (cloudCourses) => {
-      if (Array.isArray(cloudCourses)) {
-        let allowed = cloudCourses;
-        if (!hasJpdAccess) {
-          allowed = cloudCourses.filter(
-            (c) => c && c.id !== 'course-jpd123' && c.code?.toLowerCase().replace(/\s+/g, '') !== 'jpd123'
-          );
-        } else {
-          // If authorized user/admin, guarantee JPD123 is always available even if not yet on cloud
-          const hasJpd = allowed.some((c) => c && (c.id === 'course-jpd123' || c.code?.toLowerCase().replace(/\s+/g, '') === 'jpd123'));
-          if (!hasJpd) {
-            const currentLocal = getJapaneseCourses(currentUser?.email);
-            const localJpd = currentLocal.find((c) => c && (c.id === 'course-jpd123' || c.code?.toLowerCase().replace(/\s+/g, '') === 'jpd123'));
-            const initialJpd = localJpd || getCleanDefaultJpdCourse();
-            allowed = [initialJpd, ...allowed];
-            if (currentUser?.email) {
-              syncJapaneseCourseToFirestore(initialJpd, currentUser?.email).catch(() => {});
-            }
-          }
-        }
-
-        // Guarantee all JPD123 courses have the latest grammar points and examples
-        let anyJpdChanged = false;
-        allowed = allowed.map((c) => {
-          const res = ensureJpdCourseUpToDate(c);
-          if (res.changed) anyJpdChanged = true;
-          return res.course;
-        });
-
-        setCourses(allowed);
-        saveJapaneseCourses(allowed, currentUser?.email, true);
-        if (anyJpdChanged && currentUser?.email) {
-          const jpdUpdated = allowed.find((c) => c && (c.id === 'course-jpd123' || c.code?.toLowerCase().replace(/\s+/g, '') === 'jpd123'));
-          if (jpdUpdated) {
-            syncJapaneseCourseToFirestore(jpdUpdated, currentUser?.email).catch(() => {});
-          }
-        }
-        setSelectedCourse((prev) => {
-          if (!prev) return (hasJpdAccess && allowed.length === 1 ? allowed[0] : null);
-          const updated = allowed.find((c) => c.id === prev.id);
-          return updated || null;
-        });
-      }
+    const refresh = () => {
+      const fresh=getJapaneseCourses(currentUser?.email);setCourses(fresh);
+      setSelectedCourse(prev=>prev?fresh.find(c=>c.id===prev.id)||null:(hasJpdAccess&&fresh.length===1?fresh[0]:null));
+    };
+    const stopLocal=subscribeStorageKeys(key=>key===getCoursesStorageKey(currentUser?.email),refresh);
+    const unSub = subscribeJapaneseCourses(currentUser?.email, cloud=>{
+      if(Array.isArray(cloud)){reconcileJapaneseCoursesFromCloud(cloud,currentUser?.email);refresh();}
     });
 
     return () => {
-      if (unSub) unSub();
+      stopLocal(); if (unSub) unSub();
     };
   }, [currentUser?.email, isAdmin, hasJpdAccess]);
 

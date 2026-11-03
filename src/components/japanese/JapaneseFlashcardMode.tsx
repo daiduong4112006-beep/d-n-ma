@@ -75,7 +75,7 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
   // 1. Restore previous session progress on mount
   useEffect(() => {
     const saved = getFlashcardProgress(persistenceKey);
-    if (saved && typeof saved.currentIndex === 'number' && saved.currentIndex > 0 && saved.currentIndex < initialCards.length) {
+    if (saved && typeof saved.currentIndex === 'number' && saved.currentIndex >= 0 && saved.currentIndex < initialCards.length) {
       // If saved card order exists, reorder deck
       if (saved.cardIds && saved.cardIds.length === initialCards.length) {
         const idMap = new Map<string, any>(initialCards.map((c) => [c.id, c] as [string, any]));
@@ -87,11 +87,11 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
       setCurrentIndex(saved.currentIndex);
       if (saved.direction) setDirection(saved.direction);
       if (saved.masteredIds) {
-        setMasteredSet((prev) => new Set([...prev, ...(saved.masteredIds || [])]));
+        setMasteredSet(new Set(initialCards.filter(c=>c.mastered).map(c=>c.id))); // course mastery is authoritative, including unmarks
       }
       setShowResumeBanner(true);
     }
-  }, [persistenceKey, initialCards]);
+  }, [persistenceKey]);
 
   const isRemoteUpdateRef = useRef(false);
   const isInitialMountRef = useRef(true);
@@ -136,6 +136,19 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
     });
   }, [currentIndex, deck, direction, masteredSet, persistenceKey]);
 
+  // Reflect edits/deletions/mastery arriving from another tab without reshuffling the deck.
+  useEffect(()=>{
+    const fresh=new Map<string,any>(initialCards.map(c=>[c.id,c] as [string,any]));
+    setDeck(prev=>{
+      const seen=new Set(prev.map(c=>c.id));
+      const next=[...prev.filter(c=>fresh.has(c.id)).map(c=>fresh.get(c.id)),...initialCards.filter(c=>!seen.has(c.id))];
+      return JSON.stringify(next)===JSON.stringify(prev)?prev:next;
+    });
+    const ids=initialCards.filter(c=>c.mastered).map(c=>c.id);
+    setMasteredSet(prev=>prev.size===ids.length&&ids.every(id=>prev.has(id))?prev:new Set(ids));
+    setCurrentIndex(i=>Math.max(0,Math.min(i,initialCards.length-1)));
+  },[initialCards]);
+
   const currentItem = deck[currentIndex];
 
   const handleFlip = useCallback(() => {
@@ -169,7 +182,7 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
     }
     setMasteredSet(next);
     // Update current item directly in deck so state is in sync
-    currentItem.mastered = isNowMastered;
+    // Do not mutate props: the course update owns persistent mastery.
     setDeck((prev) =>
       prev.map((c) => (c.id === currentItem.id ? { ...c, mastered: isNowMastered } : c))
     );

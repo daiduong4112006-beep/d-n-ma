@@ -1,3 +1,4 @@
+import { subscribeStorageKeys } from '../../utils/storageEvents';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarClock, Volume2, Eye, RotateCcw, Trophy, Sparkles, Settings2 } from 'lucide-react';
 import { JapaneseCourse } from '../../types/japanese';
@@ -17,6 +18,7 @@ import {
   getNewPerDay,
   setNewPerDay,
   pullSrsFromCloud,
+  subscribeSrsFromCloud,
 } from '../../utils/spacedRepetition';
 import { speakJapanese } from '../../utils/japaneseKana';
 import { sound } from '../../utils/audio';
@@ -117,8 +119,9 @@ export const JapaneseSrsSection: React.FC<Props> = ({ course, scope, onCounts })
   useEffect(() => {
     pullSrsFromCloud().then((ok) => ok && refresh());
     const h = () => refresh();
+    const stopCloud=subscribeSrsFromCloud();const stopStorage=subscribeStorageKeys(key=>key.startsWith('dun_srs_v2_'),h);
     window.addEventListener('mcq_sm2_updated', h);
-    return () => window.removeEventListener('mcq_sm2_updated', h);
+    return () => {stopCloud();stopStorage();window.removeEventListener('mcq_sm2_updated', h);};
   }, [refresh]);
 
   const allCards = useMemo(() => buildSrsCards(course, 'all'), [course]);

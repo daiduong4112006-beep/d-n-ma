@@ -1,3 +1,4 @@
+import { notifyDataChanged } from './storageEvents';
 import {
   JapaneseLesson,
   JapaneseVocabCard,
@@ -951,7 +952,7 @@ export function ensureJpdCourseUpToDate(course: JapaneseCourse): { course: Japan
   let changed = false;
   const updated: JapaneseCourse = { ...course };
 
-  if (!updated.grammarPoints || updated.grammarPoints.length <= 1) {
+  if (!Array.isArray(updated.grammarPoints)) {
     updated.grammarPoints = JPD123_GRAMMAR_POINTS;
     updated.grammarVersion = JPD123_GRAMMAR_VERSION;
     changed = true;
@@ -972,10 +973,8 @@ export function ensureJpdCourseUpToDate(course: JapaneseCourse): { course: Japan
           };
           changed = true;
         }
-      } else {
-        // Missing grammar point -> add it
-        nextGrammar.push(defGp);
-        changed = true;
+      } else if (isVersionOutdated && !(updated.deletedGrammarIds || []).includes(defGp.id)) {
+        nextGrammar.push(defGp); changed = true;
       }
     }
     updated.grammarPoints = nextGrammar;
@@ -986,8 +985,7 @@ export function ensureJpdCourseUpToDate(course: JapaneseCourse): { course: Japan
   }
 
   const hasOldKanjiLessons =
-    !updated.lessons ||
-    updated.lessons.length <= 4 ||
+    !Array.isArray(updated.lessons) ||
     updated.lessons.some((l: JapaneseLesson) => l.id.startsWith('lesson-jpd123-l'));
   if (hasOldKanjiLessons) {
     updated.lessons = JPD123_VOCAB_LESSONS;
@@ -1003,12 +1001,12 @@ export function ensureJpdCourseUpToDate(course: JapaneseCourse): { course: Japan
     if (updated.kanjiList.length !== before) changed = true;
   }
 
-  if (!updated.kanjiList || updated.kanjiList.length < ALL_KANJI_CORE_LIST.length) {
+  if (!Array.isArray(updated.kanjiList)) {
     updated.kanjiList = ALL_KANJI_CORE_LIST;
     changed = true;
   }
 
-  if (!updated.kanjiVocabList || updated.kanjiVocabList.length < ALL_KANJI_VOCAB_LIST.length) {
+  if (!Array.isArray(updated.kanjiVocabList)) {
     updated.kanjiVocabList = ALL_KANJI_VOCAB_LIST;
     changed = true;
   }
@@ -1048,11 +1046,11 @@ export function ensureJpdCourseUpToDate(course: JapaneseCourse): { course: Japan
 
         const defCard = defaultCardsMap.get(card.id) || defaultCardsMap.get(card.term);
         if (defCard) {
-          if (defCard.example && (!card.example || card.example !== defCard.example)) {
+          if (defCard.example && !card.example) {
             card.example = defCard.example;
             changed = true;
           }
-          if (defCard.exampleMeaning && (!card.exampleMeaning || card.exampleMeaning !== defCard.exampleMeaning)) {
+          if (defCard.exampleMeaning && !card.exampleMeaning) {
             card.exampleMeaning = defCard.exampleMeaning;
             changed = true;
           }
@@ -1084,7 +1082,7 @@ export function getJapaneseCourses(email?: string | null): JapaneseCourse[] {
 
       if (!raw) {
         // Brand new user gets 100% clean instance of JPD123 (never starts with someone else's progress!)
-        const initialList = [getCleanDefaultJpdCourse()];
+        const initialList = getDeletedJapaneseCourseIds(targetEmail).includes('course-jpd123') ? [] : [getCleanDefaultJpdCourse()];
         localStorage.setItem(userKey, JSON.stringify(initialList));
         return initialList;
       }
@@ -1106,8 +1104,8 @@ export function getJapaneseCourses(email?: string | null): JapaneseCourse[] {
           parsed[jpdIdx] = res.course;
           changed = true;
         }
-      } else {
-        // If course-jpd123 was missing (e.g. accidentally deleted), automatically recover it for authorized users!
+      } else if (!getDeletedJapaneseCourseIds(targetEmail).includes('course-jpd123')) {
+        // Seed only when the course was not explicitly deleted.
         parsed.unshift(DEFAULT_JPD123_COURSE);
         changed = true;
         if (isJapaneseAdmin(targetEmail)) {
@@ -1250,7 +1248,9 @@ export function saveJapaneseCourses(courses: JapaneseCourse[], email?: string | 
           c.code?.toLowerCase().replace(/\s+/g, '') !== 'jpd123'
       );
     }
-    localStorage.setItem(userKey, JSON.stringify(toSave));
+    toSave = toSave.filter(c => !c.deletedAt && !getDeletedJapaneseCourseIds(targetEmail).includes(c.id));
+    const encoded = JSON.stringify(toSave);
+    if(localStorage.getItem(userKey) !== encoded) {localStorage.setItem(userKey,encoded);notifyDataChanged(userKey);}
 
     // Also sync to Cloud Firestore in background for this specific user
     if (!skipCloudSync && targetEmail) {
@@ -1285,6 +1285,7 @@ export function restoreDefaultJpd123Course(email?: string | null): JapaneseCours
     ...getCleanDefaultJpdCourse(),
     updatedAt: new Date().toISOString(),
   };
+  clearJapaneseCourseDeletion(restoredCourse.id,targetEmail);
   const next = [restoredCourse, ...withoutJpd];
   saveJapaneseCourses(next, targetEmail, true);
   if (targetEmail) {
@@ -1302,8 +1303,12 @@ export function saveJapaneseCourse(course: JapaneseCourse, email?: string | null
 
   const formatted: JapaneseCourse = {
     ...course,
-    updatedAt: new Date().toISOString(),
+    updatedAt: new Date(Math.max(Date.now(), Date.parse(current[idx]?.updatedAt || '') + 1 || 0)).toISOString(),
+    ...(course.id === 'course-jpd123' ? {
+      deletedGrammarIds: JPD123_GRAMMAR_POINTS.filter(g=>!course.grammarPoints.some(x=>x.id===g.id)).map(g=>g.id),
+    } : {}),
   };
+  clearJapaneseCourseDeletion(course.id,targetEmail);
 
   if (idx >= 0) {
     updated = [...current];
@@ -1333,6 +1338,7 @@ export function deleteJapaneseCourse(courseId: string, email?: string | null): J
   const targetEmail = (email !== undefined ? (email || '') : getCurrentUserEmail()).toLowerCase().trim();
   const current = getJapaneseCourses(targetEmail);
   const updated = current.filter((c) => c.id !== courseId);
+  markJapaneseCourseDeleted(courseId,targetEmail);
   saveJapaneseCourses(updated, targetEmail, true);
   if (targetEmail) {
     deleteJapaneseCourseFromFirestore(courseId, targetEmail).catch(() => {});
@@ -1349,3 +1355,44 @@ export function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+
+function deletionKey(email?:string|null):string {return getCoursesStorageKey(email)+'_deleted';}
+export function getDeletedJapaneseCourseIds(email?:string|null):string[] {
+  try{return JSON.parse(localStorage.getItem(deletionKey(email)) || '[]');}catch{return [];}
+}
+function courseDeletionTimes(email?:string|null):Record<string,string> {
+  try{return JSON.parse(localStorage.getItem(deletionKey(email)+'_at')||'{}');}catch{return {};}
+}
+function markJapaneseCourseDeleted(id:string,email?:string|null,at=new Date().toISOString()):void {
+  const ids=getDeletedJapaneseCourseIds(email);if(!ids.includes(id))localStorage.setItem(deletionKey(email),JSON.stringify([...ids,id]));
+  localStorage.setItem(deletionKey(email)+'_at',JSON.stringify({...courseDeletionTimes(email),[id]:at}));
+}
+function clearJapaneseCourseDeletion(id:string,email?:string|null):void {
+  localStorage.setItem(deletionKey(email),JSON.stringify(getDeletedJapaneseCourseIds(email).filter(x=>x!==id)));
+  const times=courseDeletionTimes(email);delete times[id];localStorage.setItem(deletionKey(email)+'_at',JSON.stringify(times));
+}
+// Both App and the course page use the same reconciliation instead of reseeding independently.
+export function reconcileJapaneseCoursesFromCloud(incoming:JapaneseCourse[],email?:string|null):JapaneseCourse[] {
+  const local=getJapaneseCourses(email);const byId=new Map(local.map(c=>[c.id,c]));const next:JapaneseCourse[]=[];
+  for(const remote of incoming){
+    if(remote.deletedAt){
+      const restored=byId.get(remote.id);
+      if(restored&&Date.parse(restored.updatedAt)>Date.parse(remote.deletedAt)){next.push(restored);continue;}
+      markJapaneseCourseDeleted(remote.id,email,remote.deletedAt);continue;
+    }
+    if(getDeletedJapaneseCourseIds(email).includes(remote.id)){
+      const deletionTime=Date.parse(courseDeletionTimes(email)[remote.id]||'');
+      if(deletionTime&&Date.parse(remote.updatedAt)>deletionTime)clearJapaneseCourseDeletion(remote.id,email);
+      else continue;
+    }
+    const cached=byId.get(remote.id);
+    const newer=cached&&Date.parse(cached.updatedAt)>Date.parse(remote.updatedAt);
+    next.push(newer?cached:remote);
+    if(newer&&email)syncJapaneseCourseToFirestore(cached,email).catch(()=>{});
+  }
+  // A course not uploaded yet remains available while the first cloud snapshot is empty.
+  for(const cached of local)if(!incoming.some(c=>c.id===cached.id)&&!getDeletedJapaneseCourseIds(email).includes(cached.id)){
+    next.push(cached);if(email)syncJapaneseCourseToFirestore(cached,email).catch(()=>{});
+  }
+  saveJapaneseCourses(next,email,true);return getJapaneseCourses(email);
+}

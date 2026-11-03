@@ -1,3 +1,4 @@
+import { subscribeStorageKeys } from '../utils/storageEvents';
 import { useEffect, useState } from 'react';
 import { sound } from '../utils/audio';
 import { getUserSettingsFromFirestore, saveUserSettingsToFirestore } from '../lib/firebase';
@@ -25,6 +26,10 @@ export const useThemeAndSound = (email?: string) => {
       localStorage.setItem('mcq_theme', 'light');
     }
   }, [isDarkMode]);
+
+  useEffect(()=>subscribeStorageKeys(key=>key==='mcq_theme'||key==='mcq_sound_enabled',()=>{
+    setIsDarkMode(localStorage.getItem('mcq_theme')==='dark');setSoundEnabled(sound.isEnabled());
+  }),[]);
 
   // Load user settings from Firestore when user logs in
   useEffect(() => {

@@ -59,6 +59,10 @@ export function updateStudyProgressFromCloud(items: Record<string, any>): void {
   if (typeof window === 'undefined') return;
   try {
     Object.entries(items).forEach(([key, val]) => {
+      const raw=localStorage.getItem(key);const local=raw?JSON.parse(raw):null;
+      const localTime=Date.parse(local?.savedAt || '');const remoteTime=Date.parse(val?.savedAt || '');
+      if(localTime && (!remoteTime || localTime > remoteTime))return;
+      if(raw===JSON.stringify(val))return;
       localStorage.setItem(key, JSON.stringify(val));
 
       // Notify any currently active Japanese study component in this tab

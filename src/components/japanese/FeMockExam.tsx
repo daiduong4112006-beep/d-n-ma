@@ -1,6 +1,7 @@
+import { subscribeStorageKeys } from '../../utils/storageEvents';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Timer, Flag, Send, Trophy, RotateCcw, History, ChevronLeft, ChevronRight, Star, Play } from 'lucide-react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../../lib/firebase';
 import { sound } from '../../utils/audio';
 
@@ -132,23 +133,17 @@ export const FeMockExam: React.FC<{
   const [history, setHistory] = useState<MockAttempt[]>(loadHistory);
   const [reviewIdx, setReviewIdx] = useState(0);
 
-  // Lấy lịch sử trên đám mây (nếu có) và gộp
-  useEffect(() => {
-    const email = (auth.currentUser?.email || '').toLowerCase();
-    if (!email) return;
-    getDoc(doc(db, 'fe_mock_exams', email))
-      .then((s) => {
-        const remote: MockAttempt[] = (s.exists() && (s.data() as any).history) || [];
-        if (!remote.length) return;
-        const map = new Map([...loadHistory(), ...remote].map((a) => [a.id, a]));
-        const merged = [...map.values()].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30);
-        setHistory(merged);
-        try {
-          localStorage.setItem(HISTORY_KEY, JSON.stringify(merged));
-        } catch {}
-      })
-      .catch(() => {});
-  }, []);
+  useEffect(()=>{
+    const stopStorage=subscribeStorageKeys(key=>key===HISTORY_KEY,()=>setHistory(loadHistory()));
+    const email=(auth.currentUser?.email||'').toLowerCase();
+    const stopCloud=email?onSnapshot(doc(db,'fe_mock_exams',email),snapshot=>{
+      const remote:MockAttempt[]=snapshot.exists()?snapshot.data().history||[]:[];
+      const map=new Map([...loadHistory(),...remote].map(a=>[a.id,a]));
+      const merged=[...map.values()].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,30);
+      if(JSON.stringify(merged)!==JSON.stringify(loadHistory())){localStorage.setItem(HISTORY_KEY,JSON.stringify(merged));setHistory(merged);}
+    },error=>console.warn('FE history sync unavailable:',error)):()=>{};
+    return ()=>{stopStorage();stopCloud();};
+  },[]);
 
   const remaining = exam && !result ? Math.max(0, Math.round((endAt - now) / 1000)) : 0;
 

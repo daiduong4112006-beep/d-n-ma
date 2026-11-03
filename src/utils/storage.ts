@@ -10,6 +10,7 @@ import {
   PracticeMistakesProgressCloud,
 } from '../lib/firebase';
 import { realtimeSync } from './realtimeSync';
+import { notifyDataChanged } from './storageEvents';
 
 export const getCurrentUserEmail = (): string => {
   try {
@@ -312,6 +313,7 @@ export const getQuizzes = (): Quiz[] => {
 export const saveQuizzes = (quizzes: Quiz[]): void => {
   const key = getQuizzesKey();
   localStorage.setItem(key, JSON.stringify(quizzes));
+  notifyDataChanged(key);
 };
 
 export const getQuizById = (id: string): Quiz | undefined => {
@@ -408,6 +410,7 @@ export const saveAttempt = (attempt: QuizAttempt): void => {
   attempts.unshift(attempt);
   const key = getAttemptsKey();
   localStorage.setItem(key, JSON.stringify(attempts));
+  notifyDataChanged(key);
 
   const userId = getEffectiveUserId();
   syncAttemptToFirestore(userId, attempt).catch((err) =>

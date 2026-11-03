@@ -1,3 +1,4 @@
+import { subscribeStorageKeys } from '../utils/storageEvents';
 import React, { useState, useEffect, useRef } from 'react';
 import { Quiz, StudyOptions, Question } from '../types/quiz';
 import { ClickableText } from '../components/ClickableText';
@@ -97,6 +98,11 @@ export const QuizDetailPage: React.FC<QuizDetailPageProps> = ({
   const [selectedTargetQuestionForSimilar, setSelectedTargetQuestionForSimilar] = useState<Question | null>(null);
 
   const lastRemoteStarred = useRef<string>('');
+
+  useEffect(()=>subscribeStorageKeys(key=>key===`mcq_starred_questions_${currentQuiz.id}`,()=>{
+    try{const ids=JSON.parse(localStorage.getItem(`mcq_starred_questions_${currentQuiz.id}`)||'[]');
+      lastRemoteStarred.current=[...ids].sort().join(',');setStarredIds(new Set(ids));}catch{}
+  }),[currentQuiz.id]);
 
   // Real-time sync starredIds across phone and computer
   useEffect(() => {

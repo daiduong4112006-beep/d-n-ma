@@ -1,3 +1,4 @@
+import { subscribeStorageKeys } from '../../utils/storageEvents';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search,
@@ -250,6 +251,10 @@ export const JapaneseExamBankSection: React.FC<{
   const [marked, setMarked] = useState<Set<string>>(() => new Set(loadJSON<string[]>(MARK_KEY, [])));
   const [picks, setPicks] = useState<Record<string, string>>(() => loadJSON(PICK_KEY, {}));
   const topRef = useRef<HTMLDivElement>(null);
+  useEffect(()=>subscribeStorageKeys(key=>key===MARK_KEY||key===PICK_KEY,()=>{
+    setMarked(new Set(loadJSON<string[]>(MARK_KEY,[])));setPicks(loadJSON(PICK_KEY,{}));
+  }),[]);
+
 
   useEffect(() => {
     let alive = true;

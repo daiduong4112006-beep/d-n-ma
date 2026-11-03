@@ -1,6 +1,6 @@
 // Ôn tập ngắt quãng (SRS) – dựa trên SM-2, có bước "học lại" ngắn cho thẻ quên.
 // Lưu trên máy theo từng tài khoản và đồng bộ lên Firestore: srs_progress/{email}.
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db, auth, currentEmail } from '../lib/firebase';
 
 export type SM2Grade = 1 | 2 | 3 | 4; // 1: Quên, 2: Khó, 3: Nhớ, 4: Dễ
@@ -241,3 +241,12 @@ if (typeof window !== 'undefined') {
     }
   });
 }
+
+export const subscribeSrsFromCloud = (): (()=>void) => {
+  const email=cloudEmail();if(!email)return ()=>{};
+  return onSnapshot(doc(db,'srs_progress',email),snapshot=>{
+    if(!snapshot.exists())return;
+    const local=getSM2Records();const merged=mergeRecords(local,snapshot.data().records||{});
+    if(JSON.stringify(local)!==JSON.stringify(merged))saveSM2Records(merged,{skipCloud:true});
+  },error=>console.warn('SRS sync unavailable:',error));
+};

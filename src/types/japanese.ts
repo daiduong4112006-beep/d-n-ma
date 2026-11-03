@@ -105,6 +105,8 @@ export interface JapaneseMaterial {
 }
 
 export interface JapaneseCourse {
+  deletedAt?: string;
+  deletedGrammarIds?: string[];
   id: string;
   code: string;           // e.g. "JPD123"
   title: string;          // e.g. "Tiếng Nhật JPD123"

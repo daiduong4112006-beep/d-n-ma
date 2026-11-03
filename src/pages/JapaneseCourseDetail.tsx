@@ -89,7 +89,8 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
   useEffect(() => {
     if (selectedLesson) {
       const fresh = (course.lessons || []).find((l) => l.id === selectedLesson.id);
-      if (fresh && JSON.stringify(fresh) !== JSON.stringify(selectedLesson)) {
+      if (!fresh) {setSelectedLesson(null);setActiveSubView('tabs');return;}
+      if (JSON.stringify(fresh) !== JSON.stringify(selectedLesson)) {
         setSelectedLesson(fresh);
       }
     }

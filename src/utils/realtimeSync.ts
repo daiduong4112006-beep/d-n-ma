@@ -32,6 +32,7 @@ type SyncCallback = (payload: SyncPayload) => void;
 class RealtimeSyncBus {
   private channel: BroadcastChannel | null = null;
   private listeners: Set<SyncCallback> = new Set();
+  private seenMessageIds = new Set<string>();
   private hasBroadcastChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window;
   // Cache of latest known state for each event key to provide instant initial sync
   private latestStateMap: Map<string, SyncPayload> = new Map();
@@ -64,23 +65,6 @@ class RealtimeSyncBus {
       }
     });
 
-    // When tab regains focus or visibility, re-trigger active subscribers with latest state
-    const handleTabRevisit = () => {
-      if (document.visibilityState === 'visible') {
-        this.latestStateMap.forEach((payload) => {
-          this.listeners.forEach((callback) => {
-            try {
-              callback(payload);
-            } catch (err) {
-              console.error('[RealtimeSync] Visibility change callback error:', err);
-            }
-          });
-        });
-      }
-    };
-
-    window.addEventListener('focus', handleTabRevisit);
-    document.addEventListener('visibilitychange', handleTabRevisit);
   }
 
   private handleIncoming(payload: SyncPayload) {
@@ -88,10 +72,12 @@ class RealtimeSyncBus {
     // Ignore messages sent by this tab itself to prevent echo loops
     if (payload.senderId === TAB_INSTANCE_ID) return;
 
+    if(payload.id && this.seenMessageIds.has(payload.id))return;
+    if(payload.id){this.seenMessageIds.add(payload.id);if(this.seenMessageIds.size>512)this.seenMessageIds.delete(this.seenMessageIds.values().next().value!);}
     const cacheKey = `${payload.type}_${payload.key}`;
     const existing = this.latestStateMap.get(cacheKey);
     // Last-Write-Wins check
-    if (existing && existing.timestamp > payload.timestamp) {
+    if (existing && (existing.id === payload.id || existing.timestamp > payload.timestamp)) {
       return;
     }
     this.latestStateMap.set(cacheKey, payload);
@@ -170,7 +156,7 @@ class RealtimeSyncBus {
 
     const cacheKey = `${type}_${payload.key}`;
     const existing = this.latestStateMap.get(cacheKey);
-    if (existing && existing.timestamp > payload.timestamp) {
+    if (existing && (existing.id === payload.id || existing.timestamp > payload.timestamp)) {
       return;
     }
     this.latestStateMap.set(cacheKey, payload);

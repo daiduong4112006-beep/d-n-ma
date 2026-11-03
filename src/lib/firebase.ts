@@ -1,3 +1,4 @@
+import { orderedWrite, flushOrderedWrites } from '../utils/orderedWrites';
 import { initializeApp } from 'firebase/app';
 import {
   getAuth,
@@ -396,54 +397,26 @@ export const subscribeQuizzes = (
 };
 
 // Save single quiz to Firestore with immediate zero latency
-export const syncQuizToFirestore = async (userId: string, quiz: Quiz): Promise<void> => {
-  if (!isFirestoreAvailable() || !quiz?.id) return;
-
-  try {
-    const quizRef = doc(db, 'quizzes', quiz.id);
-    const cleanQuiz = JSON.parse(JSON.stringify(await offloadQuizImages(quiz)));
-    let email = '';
-    try {
-      const savedUser = localStorage.getItem('mcq_user');
-      if (savedUser) email = JSON.parse(savedUser)?.email || '';
-    } catch {}
-    if (!email && auth.currentUser?.email) {
-      email = auth.currentUser.email;
-    }
-
-    const cleanEmail = email ? email.trim().toLowerCase() : '';
-    const cleanUserId = cleanEmail
-      ? 'usr_' + cleanEmail.replace(/[^a-z0-9]/g, '_')
-      : (userId || 'guest_user');
-
-    const payload: any = {
-      ...cleanQuiz,
-      userId: cleanUserId,
-      updatedAt: new Date().toISOString(),
-    };
-    if (cleanEmail) {
-      payload.userEmail = cleanEmail;
-    }
-
-    await setDoc(quizRef, payload);
-  } catch (err) {
-    handleFirestoreError('syncQuizToFirestore', err);
-  }
+export const syncQuizToFirestore = async(userId:string,quiz:Quiz):Promise<void>=>{
+  if(!isFirestoreAvailable()||!quiz?.id)return;
+  const email=currentEmail();const snapshot=JSON.parse(JSON.stringify(quiz));
+  return orderedWrite(`quiz:${email}:${quiz.id}`,async()=>{
+    try{
+      const clean=JSON.parse(JSON.stringify(await offloadQuizImages(snapshot)));
+      const payload:any={...clean,userId:email?'usr_'+email.replace(/[^a-z0-9]/g,'_'):(userId||'guest_user'),updatedAt:snapshot.updatedAt||new Date().toISOString()};
+      if(email)payload.userEmail=email;
+      await setDoc(doc(db,'quizzes',snapshot.id),payload);
+    }catch(err){handleFirestoreError('syncQuizToFirestore',err);throw err;}
+  });
 };
-
-export const flushQuizWrites = async (): Promise<void> => {
-  // Direct writes are already instant
-};
-
-// Delete single quiz from Firestore immediately
-export const removeQuizFromFirestore = async (quizId: string): Promise<void> => {
-  if (!isFirestoreAvailable() || !quizId) return;
-  try {
-    const quizRef = doc(db, 'quizzes', quizId);
-    await deleteDoc(quizRef);
-  } catch (err) {
-    handleFirestoreError('removeQuizFromFirestore', err);
-  }
+export const flushQuizWrites = async():Promise<void>=>{await flushOrderedWrites();};
+export const removeQuizFromFirestore = async(quizId:string):Promise<void>=>{
+  if(!isFirestoreAvailable()||!quizId)return;
+  const email=currentEmail();
+  return orderedWrite(`quiz:${email}:${quizId}`,async()=>{
+    try{await deleteDoc(doc(db,'quizzes',quizId));}
+    catch(err){handleFirestoreError('removeQuizFromFirestore',err);throw err;}
+  });
 };
 
 // Real-time Firestore sync for Attempts
@@ -629,43 +602,26 @@ export const deleteUserFromFirestore = async (email: string): Promise<void> => {
   }
 };
 
-export const syncJapaneseCourseToFirestore = async (course: any, email?: string): Promise<void> => {
-  if (!isFirestoreAvailable() || !course?.id) return;
-  try {
-    const cleanEmail = (email || auth.currentUser?.email || '').trim().toLowerCase();
-    if (!cleanEmail) return;
-
-    // Isolate by user email so each user has their own independent cloud documents
-    const docId = `${cleanEmail}_${course.id}`;
-    const courseRef = doc(db, 'user_japanese_courses', docId);
-    const lessons = await Promise.all(
-      (course.lessons || []).map(async (l: any) => ({ ...l, cards: (await offloadQuizImages({ questions: l.cards || [] })).questions }))
-    );
-    const clean = JSON.parse(JSON.stringify(course.lessons ? { ...course, lessons } : course));
-
-    await setDoc(courseRef, {
-      email: cleanEmail,
-      courseId: course.id,
-      course: clean,
-      updatedAt: new Date().toISOString(),
-    });
-  } catch (err) {
-    handleFirestoreError('syncJapaneseCourseToFirestore', err);
-  }
+export const syncJapaneseCourseToFirestore = async (course:any,email?:string):Promise<void> => {
+  if(!isFirestoreAvailable() || !course?.id)return;
+  const cleanEmail=(email||auth.currentUser?.email||'').trim().toLowerCase();if(!cleanEmail)return;
+  const snapshot=JSON.parse(JSON.stringify(course));
+  return orderedWrite(`japanese:${cleanEmail}:${course.id}`,async()=>{
+    try {
+      const lessons=await Promise.all((snapshot.lessons||[]).map(async(l:any)=>({...l,cards:(await offloadQuizImages({questions:l.cards||[]})).questions})));
+      const clean=snapshot.lessons?{...snapshot,lessons}:snapshot;
+      await setDoc(doc(db,'user_japanese_courses',`${cleanEmail}_${snapshot.id}`),{email:cleanEmail,courseId:snapshot.id,courseJson:JSON.stringify(clean),schemaVersion:2,updatedAt:new Date().toISOString()});
+    }catch(err){handleFirestoreError('syncJapaneseCourseToFirestore',err);throw err;}
+  });
 };
-
-export const deleteJapaneseCourseFromFirestore = async (courseId: string, email?: string): Promise<void> => {
-  if (!isFirestoreAvailable() || !courseId) return;
-  try {
-    const cleanEmail = (email || auth.currentUser?.email || '').trim().toLowerCase();
-    if (!cleanEmail) return;
-
-    const docId = `${cleanEmail}_${courseId}`;
-    const courseRef = doc(db, 'user_japanese_courses', docId);
-    await deleteDoc(courseRef);
-  } catch (err) {
-    handleFirestoreError('deleteJapaneseCourseFromFirestore', err);
-  }
+export const deleteJapaneseCourseFromFirestore = async(courseId:string,email?:string):Promise<void>=>{
+  if(!isFirestoreAvailable()||!courseId)return;
+  const cleanEmail=(email||auth.currentUser?.email||'').trim().toLowerCase();if(!cleanEmail)return;
+  return orderedWrite(`japanese:${cleanEmail}:${courseId}`,async()=>{
+    const deletedAt=new Date().toISOString();
+    try{await setDoc(doc(db,'user_japanese_courses',`${cleanEmail}_${courseId}`),{email:cleanEmail,courseId,course:{id:courseId,deletedAt,updatedAt:deletedAt},updatedAt:deletedAt});}
+    catch(err){handleFirestoreError('deleteJapaneseCourseFromFirestore',err);throw err;}
+  });
 };
 
 export const subscribeJapaneseCourses = (
@@ -674,12 +630,9 @@ export const subscribeJapaneseCourses = (
   maybeOnError?: (err: Error) => void
 ): (() => void) => {
   if (!isFirestoreAvailable()) {
-    if (typeof maybeOnUpdate === 'function' && typeof emailOrOnUpdate === 'string') {
-      if (maybeOnError) maybeOnError(new Error('Firestore unavailable'));
-    } else if (typeof maybeOnUpdate === 'function') {
-      (maybeOnUpdate as any)(new Error('Firestore unavailable'));
-    }
-    return () => {};
+    const onError=typeof emailOrOnUpdate === 'function' ? maybeOnUpdate : maybeOnError;
+    if(onError)(onError as (error:Error)=>void)(new Error('Firestore unavailable'));
+    return ()=>{};
   }
 
   let email = '';
@@ -714,6 +667,9 @@ export const subscribeJapaneseCourses = (
         const courses: any[] = snapshot.docs
           .map((d) => {
             const data = d.data();
+            if(typeof data?.courseJson === 'string') {
+              try{return JSON.parse(data.courseJson);}catch(err){handleFirestoreError('decodeJapaneseCourse',err);return null;}
+            }
             return data?.course || null;
           })
           .filter(Boolean);
@@ -1236,6 +1192,7 @@ export const subscribePracticeMistakesProgress = (
 
 // Flush all pending debounced writes immediately (on visibility hidden, unload, or route change)
 export const flushAllPendingProgressSync = async (): Promise<void> => {
+  await flushOrderedWrites();
   if (flashcardWriteTimer) {
     clearTimeout(flashcardWriteTimer);
     flashcardWriteTimer = null;
