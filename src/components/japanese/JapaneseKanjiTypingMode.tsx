@@ -79,6 +79,37 @@ export function matchKanjiReading(userInput: string, targetStr: string | undefin
   return false;
 }
 
+/**
+ * Tách chuỗi cách đọc thành từng cách đọc riêng (mỗi cách đọc = 1 ô gõ).
+ * VD: "キョウ、ケイ" → ["キョウ", "ケイ"]; "-" hoặc rỗng → [].
+ */
+export function splitKanjiReadings(targetStr: string | undefined): string[] {
+  if (!targetStr) return [];
+  const t = targetStr.trim();
+  if (!t || t === '-') return [];
+  return t
+    .split(/[,、/;\n]+/)
+    .map((p) => p.trim())
+    .filter((p) => p && p !== '-');
+}
+
+/**
+ * Chấm một nhóm ô (Kun hoặc On) không phụ thuộc thứ tự:
+ * mỗi ô phải khớp một cách đọc khác nhau trong nhóm.
+ */
+function matchReadingGroup(inputs: string[], parts: string[]): boolean[] {
+  const used = new Set<number>();
+  return parts.map((_, i) => {
+    const input = inputs[i] || '';
+    const j = parts.findIndex((p, k) => !used.has(k) && matchKanjiReading(input, p));
+    if (j >= 0) {
+      used.add(j);
+      return true;
+    }
+    return false;
+  });
+}
+
 export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = ({
   mode,
   kanjiCards = [],
@@ -137,11 +168,11 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
     return saved !== null ? saved === 'true' : true;
   });
 
-  // Inputs for Core Mode (Kanji): Kunyomi + Onyomi
-  const [kunInput, setKunInput] = useState('');
-  const [onInput, setOnInput] = useState('');
-  const [kunCorrect, setKunCorrect] = useState<boolean | null>(null);
-  const [onCorrect, setOnCorrect] = useState<boolean | null>(null);
+  // Inputs for Core Mode (Kanji): mỗi cách đọc Kun / On là một ô riêng
+  const [kunInputs, setKunInputs] = useState<string[]>([]);
+  const [onInputs, setOnInputs] = useState<string[]>([]);
+  const [kunResults, setKunResults] = useState<boolean[]>([]);
+  const [onResults, setOnResults] = useState<boolean[]>([]);
 
   // Input for Vocab Mode: 1 Kana box
   const [vocabInput, setVocabInput] = useState('');
@@ -152,8 +183,8 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
   const [isOverallCorrect, setIsOverallCorrect] = useState<boolean | null>(null);
 
   // Refs
-  const kunInputRef = useRef<HTMLInputElement>(null);
-  const onInputRef = useRef<HTMLInputElement>(null);
+  const kunInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const onInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const vocabInputRef = useRef<HTMLInputElement>(null);
   const advanceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -163,17 +194,21 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
   const currentKanji = mode === 'core' ? (currentCard as JapaneseKanjiCard | undefined) : undefined;
   const currentVocab = mode === 'vocab' ? (currentCard as JapaneseVocabCard | undefined) : undefined;
 
-  const hasKunyomi =
-    mode === 'core' &&
-    !!currentKanji?.kunyomi &&
-    currentKanji.kunyomi.trim() !== '' &&
-    currentKanji.kunyomi.trim() !== '-';
+  const kunParts = mode === 'core' ? splitKanjiReadings(currentKanji?.kunyomi) : [];
+  const onParts = mode === 'core' ? splitKanjiReadings(currentKanji?.onyomi) : [];
+  const hasKunyomi = kunParts.length > 0;
+  const hasOnyomi = onParts.length > 0;
+  const kunCorrect = kunResults.length > 0 && kunResults.every(Boolean);
+  const onCorrect = onResults.length > 0 && onResults.every(Boolean);
 
-  const hasOnyomi =
-    mode === 'core' &&
-    !!currentKanji?.onyomi &&
-    currentKanji.onyomi.trim() !== '' &&
-    currentKanji.onyomi.trim() !== '-';
+  // Thứ tự các ô để di chuyển bằng Enter: Kun 1..n rồi On 1..m
+  const getReadingSlots = () => [
+    ...kunParts.map((_, i) => ({ group: 'kun' as const, index: i })),
+    ...onParts.map((_, i) => ({ group: 'on' as const, index: i })),
+  ];
+  const focusSlot = (group: 'kun' | 'on', index: number) => {
+    (group === 'kun' ? kunInputRefs : onInputRefs).current[index]?.focus();
+  };
 
   // Timer
   useEffect(() => {
@@ -197,11 +232,11 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
       advanceTimerRef.current = null;
     }
 
-    setKunInput('');
-    setOnInput('');
+    setKunInputs(kunParts.map(() => ''));
+    setOnInputs(onParts.map(() => ''));
     setVocabInput('');
-    setKunCorrect(null);
-    setOnCorrect(null);
+    setKunResults([]);
+    setOnResults([]);
     setIsAnswerChecked(false);
     setIsOverallCorrect(null);
 
@@ -209,9 +244,9 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
     const timer = setTimeout(() => {
       if (mode === 'core') {
         if (hasKunyomi) {
-          kunInputRef.current?.focus();
+          focusSlot('kun', 0);
         } else if (hasOnyomi) {
-          onInputRef.current?.focus();
+          focusSlot('on', 0);
         }
       } else {
         vocabInputRef.current?.focus();
@@ -219,7 +254,8 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
     }, 40);
 
     return () => clearTimeout(timer);
-  }, [currentIndex, mode, hasKunyomi, hasOnyomi]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex, mode, kunParts.length, onParts.length, currentCard?.id]);
 
   // Handle Tab Switch (Original / Mastered / All)
   const handleFilterChange = (newTab: 'original' | 'mastered' | 'all') => {
@@ -277,20 +313,20 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
     }
   };
 
-  // Core Kunyomi change (Romaji -> Hiragana)
-  const handleKunChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Core: Kun (Romaji -> Hiragana), On (Romaji -> Katakana), mỗi ô một cách đọc
+  const handleReadingChange = (
+    group: 'kun' | 'on',
+    index: number,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
     handleClearErrorOnEdit();
-    const raw = e.target.value;
-    const converted = convertRomajiToKana(raw, 'hiragana');
-    setKunInput(converted);
-  };
-
-  // Core Onyomi change (Romaji -> Katakana)
-  const handleOnChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    handleClearErrorOnEdit();
-    const raw = e.target.value;
-    const converted = convertRomajiToKana(raw, 'katakana');
-    setOnInput(converted);
+    const converted = convertRomajiToKana(e.target.value, group === 'kun' ? 'hiragana' : 'katakana');
+    const setter = group === 'kun' ? setKunInputs : setOnInputs;
+    setter((prev) => {
+      const next = [...prev];
+      next[index] = converted;
+      return next;
+    });
   };
 
   // Vocab reading change (Romaji -> Hiragana)
@@ -311,16 +347,18 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
 
     if (mode === 'core') {
       // Finalize trailing 'n'
-      const finalKun = hasKunyomi ? kunInput.replace(/n(?=[^a-z]|$)/gi, 'ん') : '';
-      const finalOn = hasOnyomi ? onInput.replace(/n(?=[^a-z]|$)/gi, 'ン') : '';
-      if (finalKun !== kunInput) setKunInput(finalKun);
-      if (finalOn !== onInput) setOnInput(finalOn);
+      const finalKun = kunParts.map((_, i) => (kunInputs[i] || '').replace(/n(?=[^a-z]|$)/gi, 'ん'));
+      const finalOn = onParts.map((_, i) => (onInputs[i] || '').replace(/n(?=[^a-z]|$)/gi, 'ン'));
+      setKunInputs(finalKun);
+      setOnInputs(finalOn);
 
-      const kunMatch = hasKunyomi ? matchKanjiReading(finalKun, currentKanji?.kunyomi) : true;
-      const onMatch = hasOnyomi ? matchKanjiReading(finalOn, currentKanji?.onyomi) : true;
+      const kunRes = matchReadingGroup(finalKun, kunParts);
+      const onRes = matchReadingGroup(finalOn, onParts);
+      setKunResults(kunRes);
+      setOnResults(onRes);
 
-      setKunCorrect(kunMatch);
-      setOnCorrect(onMatch);
+      const kunMatch = kunRes.every(Boolean);
+      const onMatch = onRes.every(Boolean);
 
       const matched = kunMatch && onMatch;
       setIsOverallCorrect(matched);
@@ -338,13 +376,15 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
       } else {
         sound.playWrong();
         setWrongCardIds((prev) => new Set(prev).add(currentCard.id));
-        // Refocus wrong input
+        // Refocus first wrong input
         setTimeout(() => {
-          if (!kunMatch && hasKunyomi) {
-            kunInputRef.current?.focus();
-          } else if (!onMatch && hasOnyomi) {
-            onInputRef.current?.focus();
+          const k = kunRes.indexOf(false);
+          if (k >= 0) {
+            focusSlot('kun', k);
+            return;
           }
+          const o = onRes.indexOf(false);
+          if (o >= 0) focusSlot('on', o);
         }, 50);
       }
     } else {
@@ -399,38 +439,30 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
     handleNextCard();
   };
 
-  // Keyboard navigation for Core Mode
-  const handleKunKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (isAnswerChecked && isOverallCorrect) {
-        handleNextCard();
+  // Keyboard navigation for Core Mode: Enter → sang ô trống kế tiếp, hết ô trống thì kiểm tra
+  const handleReadingKeyDown = (
+    group: 'kun' | 'on',
+    index: number,
+    e: React.KeyboardEvent<HTMLInputElement>
+  ) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if (isAnswerChecked && isOverallCorrect) {
+      handleNextCard();
+      return;
+    }
+    const slots = getReadingSlots();
+    const cur = slots.findIndex((sl) => sl.group === group && sl.index === index);
+    const valueOf = (sl: { group: 'kun' | 'on'; index: number }) =>
+      ((sl.group === 'kun' ? kunInputs : onInputs)[sl.index] || '').trim();
+    for (let step = 1; step < slots.length; step++) {
+      const sl = slots[(cur + step) % slots.length];
+      if (!valueOf(sl)) {
+        focusSlot(sl.group, sl.index);
         return;
       }
-      if (hasOnyomi && !onInput.trim()) {
-        // Move focus to Onyomi box if empty
-        onInputRef.current?.focus();
-      } else {
-        // Check answer
-        handleCheckAnswer();
-      }
     }
-  };
-
-  const handleOnKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (isAnswerChecked && isOverallCorrect) {
-        handleNextCard();
-        return;
-      }
-      if (hasKunyomi && !kunInput.trim()) {
-        // Kun is empty, move focus there
-        kunInputRef.current?.focus();
-      } else {
-        handleCheckAnswer();
-      }
-    }
+    handleCheckAnswer();
   };
 
   // Keyboard navigation for Vocab Mode
@@ -836,45 +868,58 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
                     • Âm thuần Nhật (Hiragana)
                   </span>
                 </label>
-                {!hasKunyomi && (
+                {!hasKunyomi ? (
                   <span className="text-[10px] text-slate-400 italic">Không có âm Kun</span>
-                )}
+                ) : kunParts.length > 1 ? (
+                  <span className="text-[10px] font-bold text-amber-300">{kunParts.length} cách đọc</span>
+                ) : null}
               </div>
 
-              <div className="relative">
-                <input
-                  ref={kunInputRef}
-                  type="text"
-                  value={kunInput}
-                  disabled={!hasKunyomi}
-                  onChange={handleKunChange}
-                  onKeyDown={handleKunKeyDown}
-                  placeholder={
-                    hasKunyomi ? 'Gõ âm Kun (vd: saki → さき)' : '— Không có âm Kun (Bỏ qua) —'
-                  }
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck="false"
-                  className={`w-full px-4 py-3 rounded-xl bg-slate-950 border text-base sm:text-lg font-bold font-japanese outline-none transition-all ${
-                    !hasKunyomi
-                      ? 'border-slate-800 text-slate-400 bg-slate-900/50 cursor-not-allowed'
-                      : isAnswerChecked
-                      ? kunCorrect
-                        ? 'border-emerald-500 text-emerald-400 bg-emerald-500/10'
-                        : 'border-rose-500 text-rose-300 bg-rose-500/10'
-                      : 'border-slate-700 text-slate-300/70 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20'
-                  }`}
-                />
-                {hasKunyomi && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400">
-                    Hiragana
-                  </span>
-                )}
+              <div className={`grid gap-2 ${kunParts.length > 1 ? 'sm:grid-cols-2' : ''}`}>
+                {(hasKunyomi ? kunParts : ['']).map((_, i) => (
+                  <div key={i} className="relative">
+                    <input
+                      ref={(el) => {
+                        kunInputRefs.current[i] = el;
+                      }}
+                      type="text"
+                      value={kunInputs[i] ?? ''}
+                      disabled={!hasKunyomi}
+                      onChange={(e) => handleReadingChange('kun', i, e)}
+                      onKeyDown={(e) => handleReadingKeyDown('kun', i, e)}
+                      placeholder={
+                        !hasKunyomi
+                          ? '— Không có âm Kun (Bỏ qua) —'
+                          : kunParts.length > 1
+                          ? `Âm Kun thứ ${i + 1}/${kunParts.length}`
+                          : 'Gõ âm Kun (vd: saki → さき)'
+                      }
+                      aria-label={`Âm Kun thứ ${i + 1}`}
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck="false"
+                      className={`w-full px-4 py-3 rounded-xl bg-slate-950 border text-base sm:text-lg font-bold font-japanese outline-none transition-all ${
+                        !hasKunyomi
+                          ? 'border-slate-800 text-slate-400 bg-slate-900/50 cursor-not-allowed'
+                          : isAnswerChecked && kunResults.length > 0
+                          ? kunResults[i]
+                            ? 'border-emerald-500 text-emerald-400 bg-emerald-500/10'
+                            : 'border-rose-500 text-rose-300 bg-rose-500/10'
+                          : 'border-slate-700 text-slate-300/70 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20'
+                      }`}
+                    />
+                    {hasKunyomi && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400">
+                        {kunParts.length > 1 ? `Hiragana ${i + 1}` : 'Hiragana'}
+                      </span>
+                    )}
+                  </div>
+                ))}
               </div>
 
               {/* Error feedback for Kunyomi */}
-              {isAnswerChecked && hasKunyomi && !kunCorrect && (
+              {isAnswerChecked && hasKunyomi && kunResults.length > 0 && !kunCorrect && (
                 <div className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-xl p-2.5 flex items-center justify-between animate-fade-in">
                   <div>
                     <span className="font-bold">Đáp án chuẩn: </span>
@@ -896,45 +941,58 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
                     • Âm Hán Nhật (Katakana)
                   </span>
                 </label>
-                {!hasOnyomi && (
+                {!hasOnyomi ? (
                   <span className="text-[10px] text-slate-400 italic">Không có âm On</span>
-                )}
+                ) : onParts.length > 1 ? (
+                  <span className="text-[10px] font-bold text-cyan-300">{onParts.length} cách đọc</span>
+                ) : null}
               </div>
 
-              <div className="relative">
-                <input
-                  ref={onInputRef}
-                  type="text"
-                  value={onInput}
-                  disabled={!hasOnyomi}
-                  onChange={handleOnChange}
-                  onKeyDown={handleOnKeyDown}
-                  placeholder={
-                    hasOnyomi ? 'Gõ âm On (vd: sen → セン)' : '— Không có âm On (Bỏ qua) —'
-                  }
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck="false"
-                  className={`w-full px-4 py-3 rounded-xl bg-slate-950 border text-base sm:text-lg font-bold font-japanese outline-none transition-all ${
-                    !hasOnyomi
-                      ? 'border-slate-800 text-slate-400 bg-slate-900/50 cursor-not-allowed'
-                      : isAnswerChecked
-                      ? onCorrect
-                        ? 'border-emerald-500 text-emerald-400 bg-emerald-500/10'
-                        : 'border-rose-500 text-rose-300 bg-rose-500/10'
-                      : 'border-slate-700 text-slate-300/70 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20'
-                  }`}
-                />
-                {hasOnyomi && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400">
-                    Katakana
-                  </span>
-                )}
+              <div className={`grid gap-2 ${onParts.length > 1 ? 'sm:grid-cols-2' : ''}`}>
+                {(hasOnyomi ? onParts : ['']).map((_, i) => (
+                  <div key={i} className="relative">
+                    <input
+                      ref={(el) => {
+                        onInputRefs.current[i] = el;
+                      }}
+                      type="text"
+                      value={onInputs[i] ?? ''}
+                      disabled={!hasOnyomi}
+                      onChange={(e) => handleReadingChange('on', i, e)}
+                      onKeyDown={(e) => handleReadingKeyDown('on', i, e)}
+                      placeholder={
+                        !hasOnyomi
+                          ? '— Không có âm On (Bỏ qua) —'
+                          : onParts.length > 1
+                          ? `Âm On thứ ${i + 1}/${onParts.length}`
+                          : 'Gõ âm On (vd: sen → セン)'
+                      }
+                      aria-label={`Âm On thứ ${i + 1}`}
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck="false"
+                      className={`w-full px-4 py-3 rounded-xl bg-slate-950 border text-base sm:text-lg font-bold font-japanese outline-none transition-all ${
+                        !hasOnyomi
+                          ? 'border-slate-800 text-slate-400 bg-slate-900/50 cursor-not-allowed'
+                          : isAnswerChecked && onResults.length > 0
+                          ? onResults[i]
+                            ? 'border-emerald-500 text-emerald-400 bg-emerald-500/10'
+                            : 'border-rose-500 text-rose-300 bg-rose-500/10'
+                          : 'border-slate-700 text-slate-300/70 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20'
+                      }`}
+                    />
+                    {hasOnyomi && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400">
+                        {onParts.length > 1 ? `Katakana ${i + 1}` : 'Katakana'}
+                      </span>
+                    )}
+                  </div>
+                ))}
               </div>
 
               {/* Error feedback for Onyomi */}
-              {isAnswerChecked && hasOnyomi && !onCorrect && (
+              {isAnswerChecked && hasOnyomi && onResults.length > 0 && !onCorrect && (
                 <div className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-xl p-2.5 flex items-center justify-between animate-fade-in">
                   <div>
                     <span className="font-bold">Đáp án chuẩn: </span>
