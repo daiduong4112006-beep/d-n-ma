@@ -14,6 +14,7 @@ import {
   PenLine,
 } from 'lucide-react';
 import { SectionHeader, FilterChip } from './courseUi';
+import { SpeakingRecorder } from './SpeakingRecorder';
 
 /* ----------------------------------------------------------------------------
  * Ôn SPK – bộ ôn thi nói JPD123. Toàn bộ tính năng của bản gốc chạy trong khung
@@ -229,7 +230,7 @@ export const JapaneseSpeakingSection: React.FC<Props> = ({
         icon={<Mic className="w-6 h-6" />}
         eyebrow="Mục 4 · Ôn SPK"
         title="Ôn thi nói Bài 4 – 7"
-        desc="18 bài đọc, 48 câu hỏi, 24 bộ tranh và 8 đề thi thử có đồng hồ. Bấm loa để nghe giọng Nhật mẫu, tự trả lời rồi mở đáp án để so."
+        desc="18 bài đọc, 48 câu hỏi, 24 bộ tranh và 8 đề thi thử có đồng hồ. Bấm loa để nghe giọng Nhật mẫu, bấm Ghi âm luyện nói (góc phải) để thu câu trả lời và nghe lại so với mẫu."
         actions={
           <button
             type="button"
@@ -271,6 +272,7 @@ export const JapaneseSpeakingSection: React.FC<Props> = ({
           style={full ? { overflow: 'auto' } : { height }}
         />
       </div>
+      <SpeakingRecorder />
       {zoomSrc && (
         <div
           role="dialog"
