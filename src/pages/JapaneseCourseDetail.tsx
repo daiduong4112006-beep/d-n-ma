@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   Mic,
   FileStack,
+  CalendarClock,
 } from 'lucide-react';
 import {
   JapaneseCourse,
@@ -32,6 +33,7 @@ import { JapaneseMultiChoiceMode } from '../components/japanese/JapaneseMultiCho
 import { JapaneseKanjiStudyMode } from '../components/japanese/JapaneseKanjiStudyMode';
 import { JapaneseSpeakingSection, SPK_GROUPS } from '../components/japanese/JapaneseSpeakingSection';
 import { JapaneseExamBankSection, ExamBankStats } from '../components/japanese/JapaneseExamBankSection';
+import { JapaneseSrsSection, SrsScope, computeSrsTodayCounts } from '../components/japanese/JapaneseSrsSection';
 import { SectionHeader, FilterChip, ToneButton, ProgressRing, TONE, CourseTone } from '../components/japanese/courseUi';
 import { sound } from '../utils/audio';
 
@@ -43,7 +45,7 @@ interface Props {
   speakingSrcDoc?: string;
 }
 
-type CourseTab = 'vocabulary' | 'kanji' | 'grammar' | 'speaking' | 'exam-bank';
+type CourseTab = 'review' | 'vocabulary' | 'kanji' | 'grammar' | 'speaking' | 'exam-bank';
 type ActiveSubView = 'tabs' | 'lesson-detail' | 'lesson-editor' | 'typing' | 'typing-example' | 'flashcard' | 'multichoice' | 'kanji-flashcard' | 'kanji-study';
 
 export const JapaneseCourseDetail: React.FC<Props> = ({
@@ -71,7 +73,17 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
   const [spkCounts, setSpkCounts] = useState<Record<string, string>>({});
   const [feCat, setFeCat] = useState<string>('');
   const [feStats, setFeStats] = useState<ExamBankStats | null>(null);
+  const [srsScope, setSrsScope] = useState<SrsScope>('all');
+  const [srsCounts, setSrsCounts] = useState<Record<SrsScope, number> | null>(null);
   const [typingFilter, setTypingFilter] = useState<'original' | 'mastered' | 'all'>('original');
+
+  // Số thẻ cần ôn hôm nay (cập nhật khi ôn xong / đồng bộ)
+  useEffect(() => {
+    const update = () => setSrsCounts(computeSrsTodayCounts(course));
+    update();
+    window.addEventListener('mcq_sm2_updated', update);
+    return () => window.removeEventListener('mcq_sm2_updated', update);
+  }, [course]);
 
   // Keep selectedLesson in sync when course prop updates from cloud or other devices
   useEffect(() => {
@@ -420,6 +432,15 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
     L7: 'Tự nhiên & Cơ bản',
   };
   const SUBS: Record<CourseTab, { items: SubItem[]; value: string; set: (k: string) => void }> = {
+    review: {
+      items: [
+        { key: 'all', label: 'Tất cả', count: srsCounts?.all },
+        { key: 'vocab', label: 'Chỉ từ vựng', count: srsCounts?.vocab },
+        { key: 'kanji', label: 'Chỉ chữ Hán', count: srsCounts?.kanji },
+      ],
+      value: srsScope,
+      set: (k) => setSrsScope(k as SrsScope),
+    },
     vocabulary: {
       items: [{ key: 'ALL', label: 'Tất cả bài', count: (course.lessons || []).length }, ...['4', '5', '6', '7'].map((n) => ({ key: `Bài ${n}`, label: `Bài ${n}`, count: lessonCount(n) }))],
       value: vocabLessonFilter,
@@ -462,6 +483,7 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
     sub: string;
     progress?: number;
   }[] = [
+    { id: 'review', tone: 'violet', icon: <CalendarClock className="w-5 h-5" />, label: 'Ôn hôm nay', sub: srsCounts ? (srsCounts.all ? `${srsCounts.all} thẻ cần ôn` : 'Đã ôn xong hôm nay') : 'Ôn tập ngắt quãng' },
     { id: 'vocabulary', tone: 'orange', icon: <BookOpen className="w-5 h-5" />, label: 'Từ vựng', sub: `${course.lessons?.length || 0} bài · ${allCards.length} từ`, progress: pct(vocabMastered, allCards.length) },
     { id: 'kanji', tone: 'rose', icon: <span className="font-japanese font-black text-lg leading-none">漢</span>, label: 'Chữ Hán', sub: `${kanjiTotal} chữ · ${(course.kanjiVocabList || []).length} từ ghép`, progress: pct(kanjiMastered, kanjiTotal) },
     { id: 'grammar', tone: 'indigo', icon: <FileText className="w-5 h-5" />, label: 'Ngữ pháp', sub: `${course.grammarPoints?.length || 0} mẫu câu` },
@@ -752,6 +774,9 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
           )}
         </div>
       )}
+
+      {/* ÔN HÔM NAY (SRS) */}
+      {activeTab === 'review' && <JapaneseSrsSection course={course} scope={srsScope} onCounts={setSrsCounts} />}
 
       {/* TAB 2: CHỮ HÁN (KANJI) */}
       {activeTab === 'kanji' && (

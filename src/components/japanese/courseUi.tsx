@@ -5,7 +5,7 @@ import React from 'react';
  * (Từ vựng · Chữ Hán · Ngữ pháp · Ôn SPK · Source FE) để mọi mục cùng một kiểu.
  * ------------------------------------------------------------------------- */
 
-export type CourseTone = 'orange' | 'rose' | 'indigo' | 'emerald' | 'sky';
+export type CourseTone = 'orange' | 'rose' | 'indigo' | 'emerald' | 'sky' | 'violet';
 
 /** Lớp màu theo từng mục (viết đầy đủ để Tailwind nhận diện được) */
 export const TONE: Record<
@@ -56,6 +56,15 @@ export const TONE: Record<
     bar: 'bg-sky-500',
     chip: 'bg-sky-500 text-white shadow-sky-500/25',
     dot: 'bg-sky-500',
+  },
+  violet: {
+    text: 'text-violet-500 dark:text-violet-400',
+    soft: 'bg-violet-50 dark:bg-violet-500/10',
+    solid: 'bg-violet-500 hover:bg-violet-400 text-white shadow-violet-500/30',
+    ring: 'ring-violet-500/40',
+    bar: 'bg-violet-500',
+    chip: 'bg-violet-500 text-white shadow-violet-500/25',
+    dot: 'bg-violet-500',
   },
 };
 

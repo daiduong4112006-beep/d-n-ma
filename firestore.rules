@@ -61,6 +61,12 @@ service cloud.firestore {
       allow create: if ownsIncoming('email');
       allow update: if ownsExisting('email') && ownsIncoming('email');
     }
+    match /srs_progress/{email} {
+      allow read, write: if signedIn() && myEmail() == email;
+    }
+    match /fe_mock_exams/{email} {
+      allow read, write: if signedIn() && myEmail() == email;
+    }
     match /vocabulary/{email} {
       allow read, write: if signedIn() && myEmail() == email;
     }
