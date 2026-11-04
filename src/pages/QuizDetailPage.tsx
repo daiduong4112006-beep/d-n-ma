@@ -1,4 +1,5 @@
 import { subscribeStorageKeys } from '../utils/storageEvents';
+import {readPreferences} from '../utils/experiencePreferences';
 import React, { useState, useEffect, useRef } from 'react';
 import { Quiz, StudyOptions, Question } from '../types/quiz';
 import { ClickableText } from '../components/ClickableText';
@@ -230,10 +231,10 @@ export const QuizDetailPage: React.FC<QuizDetailPageProps> = ({
   };
 
   // Study Options state
-  const [shuffleQuestions, setShuffleQuestions] = useState(false);
-  const [shuffleOptions, setShuffleOptions] = useState(false);
+  const [shuffleQuestions, setShuffleQuestions] = useState(()=>readPreferences().shuffleQuestions);
+  const [shuffleOptions, setShuffleOptions] = useState(()=>readPreferences().shuffleOptions);
   const [questionLimitInput, setQuestionLimitInput] = useState<number | string>(quiz.questions.length);
-  const [timeLimitMinutesInput, setTimeLimitMinutesInput] = useState<number | string>(45);
+  const [timeLimitMinutesInput, setTimeLimitMinutesInput] = useState<number | string>(()=>readPreferences().examMinutes);
   const [instantFeedback, setInstantFeedback] = useState(true);
 
   const toggleStar = (qId: string) => {

@@ -1,6 +1,11 @@
 import { subscribeStorageKeys } from './utils/storageEvents';
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Lock } from 'lucide-react';
+import {canOpenAdmin} from './utils/adminAccess';
+import {subscribeAccountControl} from './lib/admin';
+import {setAccountControl} from './utils/accountControls';
+import {useExperiencePreferences} from './utils/experiencePreferences';
+const AdminPage=lazy(()=>import('./pages/Admin').then(m=>({default:m.AdminPage})));
 import { Quiz, QuizAttempt, Question, WrongQuestionDetail, GlobalStatistics, StudyOptions } from './types/quiz';
 import {
   getQuizzes,
@@ -22,6 +27,7 @@ import {
 import { getSubjectsList } from './utils/statistics';
 import {
   auth,
+  isLocalTestEnvironment,
   onAuthStateChanged,
   subscribeQuizzes,
   subscribeAttempts,
@@ -75,6 +81,7 @@ import { getPageTitle } from './app/pageTitles';
 import { useThemeAndSound } from './hooks/useThemeAndSound';
 
 export default function App() {
+  const [accountDisabled,setAccountDisabled]=useState(false);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [wrongQuestions, setWrongQuestions] = useState<WrongQuestionDetail[]>([]);
@@ -112,12 +119,16 @@ export default function App() {
       return null;
     }
   });
+  const preferences=useExperiencePreferences(currentUser?.email);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
 
   // Giao diện sáng/tối & âm thanh (đồng bộ theo tài khoản)
   const { isDarkMode, soundEnabled, handleToggleDarkMode, handleToggleSound } = useThemeAndSound(currentUser?.email);
 
+  useEffect(()=>{const open=()=>setIsShortcutsOpen(true);window.addEventListener('dm-open-shortcuts',open);return()=>window.removeEventListener('dm-open-shortcuts',open);},[]);
+  useEffect(()=>{document.documentElement.dataset.reading=activeTab==='japanese'?'standard':preferences.reading;document.documentElement.dataset.density=activeTab==='japanese'?'comfortable':preferences.density;document.documentElement.dataset.motion=preferences.reduceMotion?'reduce':'normal';},[preferences,activeTab]);
+  useEffect(()=>{let stop=()=>{};let previous='';const authStop=onAuthStateChanged(auth,user=>{stop();if(previous)setAccountControl(previous,null);setAccountDisabled(false);const email=user?.email?.toLowerCase();previous=email||'';if(!email||!user.emailVerified)return;stop=subscribeAccountControl(email,c=>{setAccountControl(email,c);setAccountDisabled(c?.disabled===true&&!canOpenAdmin());},()=>{});});return()=>{authStop();stop();if(previous)setAccountControl(previous,null);};},[]);
   // Global Keyboard Shortcuts (Press '?' to show cheat sheet)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -254,7 +265,9 @@ export default function App() {
     };
 
     window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    const hashChanged=()=>handlePopState({state:null} as PopStateEvent);
+    window.addEventListener('hashchange',hashChanged);
+    return () => {window.removeEventListener('popstate', handlePopState);window.removeEventListener('hashchange',hashChanged);};
   }, [quizzes]);
 
   // Handle Initial Load Hash URL
@@ -614,9 +627,11 @@ export default function App() {
   const subjectsList = getSubjectsList(quizzes);
 
   const pageTitle = getPageTitle(activeTab);
+  if(accountDisabled)return <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white"><Lock size={36}/><h1>Tài khoản đã bị tạm khóa</h1><p>Liên hệ quản trị viên để được hỗ trợ.</p><button onClick={async()=>{await logoutUser();localStorage.removeItem('mcq_user');setCurrentUser(null);setAccountDisabled(false);}}>Đăng xuất</button></div>;
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-clip bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col md:flex-row antialiased">
+    <div data-grid={activeTab!=='japanese'&&preferences.showGrid} className={`mcq-experience ${preferences.focusMode&&['quiz-mode','review-mode'].includes(activeTab)?'mcq-focus':''} min-h-screen w-full max-w-full overflow-x-clip bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col md:flex-row antialiased`}>
+      {isLocalTestEnvironment&&<div className="fixed bottom-3 left-3 z-[200] rounded-xl border border-amber-500 bg-slate-900 text-amber-200 text-[10px] p-2 shadow-lg"><strong>KIỂM THỬ CỤC BỘ · DỮ LIỆU GIẢ LẬP</strong><button className="ml-3 underline cursor-pointer" onClick={async()=>{await logoutUser();localStorage.clear();window.location.reload();}}>Dọn phiên kiểm thử</button></div>}
       {/* Left Sidebar Navigation */}
       <Sidebar
         activeTab={activeTab}
@@ -654,7 +669,7 @@ export default function App() {
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <Suspense fallback={<PageLoading />}>
           {/* Main List: My Quizzes */}
-          {(activeTab === 'dashboard' || activeTab === 'my-quizzes' || !['dashboard', 'my-quizzes', 'quiz-detail', 'create-quiz', 'edit-quiz', 'quiz-mode', 'quiz-result', 'review-mode', 'practice-mistakes', 'statistics', 'import-export', 'saved-vocabulary', 'japanese', 'settings', 'shared'].includes(activeTab)) && (
+          {(activeTab === 'dashboard' || activeTab === 'my-quizzes' || !['dashboard', 'my-quizzes', 'quiz-detail', 'create-quiz', 'edit-quiz', 'quiz-mode', 'quiz-result', 'review-mode', 'practice-mistakes', 'statistics', 'import-export', 'saved-vocabulary', 'japanese', 'settings', 'admin', 'shared'].includes(activeTab)) && (
             <Dashboard
               quizzes={quizzes}
               onStartQuizWithOptions={handleStartQuizWithOptions}
@@ -969,6 +984,7 @@ export default function App() {
             />
           )}
 
+          {activeTab==='admin'&&<AdminPage/>}
           {/* Settings */}
           {activeTab === 'settings' && (
             <SettingsPage

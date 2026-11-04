@@ -22,6 +22,8 @@ import {
   PanelLeftOpen,
 } from 'lucide-react';
 import { sound } from '../utils/audio';
+import {canOpenAdmin} from '../utils/adminAccess';
+import {readPreferences} from '../utils/experiencePreferences';
 
 interface SidebarProps {
   activeTab: string;
@@ -86,6 +88,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     localStorage.setItem('sidebar_collapsed', String(next));
   };
 
+  useEffect(()=>{if(readPreferences().focusMode&&['quiz-mode','review-mode'].includes(activeTab))setIsCollapsed(true);else setIsCollapsed(localStorage.getItem('sidebar_collapsed')==='true');},[activeTab]);
   // Close mobile menu on tab change
   useEffect(() => {
     setIsMobileOpen(false);
@@ -109,6 +112,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const systemItems = [
     { id: 'settings', label: 'Cài đặt hệ thống', icon: Settings, color: 'slate' },
+    ...(canOpenAdmin()?[{id:'admin',label:'Quản lý',icon:ShieldCheck,color:'indigo'}]:[]),
   ];
 
   const colorMap: Record<string, { bg: string; text: string; activeBg: string; activeText: string }> = {

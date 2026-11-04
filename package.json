@@ -12,7 +12,10 @@
     "lint": "tsc --noEmit",
     "test:sync": "node scripts/tests/run.cjs",
     "test:study": "node scripts/tests/study.cjs",
-    "prebuild": "node scripts/check-react-versions.cjs"
+    "prebuild": "node scripts/check-react-versions.cjs",
+    "test:settings-admin": "node scripts/tests/settings-admin.cjs",
+    "test:admin-rules": "node scripts/tests/admin-rules.cjs",
+    "test:japanese-entry": "node scripts/tests/japanese-course-entry.cjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

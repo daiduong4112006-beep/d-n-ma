@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import {useOwnJpdModules} from '../utils/accountControls';
 import {
   ArrowLeft,
   BookOpen,
@@ -54,6 +55,7 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
   onUpdateCourse,
   speakingSrcDoc,
 }) => {
+  const grantedModules=useOwnJpdModules();
   const [activeTab, setActiveTab] = useState<CourseTab>('vocabulary');
   // Ôn SPK & Source FE chỉ có trong khóa JPD123
   const isJpd123 =
@@ -233,6 +235,10 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
     onUpdateCourse({ ...course, grammarPoints: updatedGrammar });
   };
 
+  const requiredModule=activeSubView==='tabs'?activeTab:activeSubView.startsWith('kanji')?'kanji':'vocabulary';
+  const accessAllowed=!isJpd123||grantedModules.includes(requiredModule as any)||(requiredModule==='review'&&grantedModules.length===5);
+  useEffect(()=>{if(!accessAllowed&&grantedModules.length){setActiveSubView('tabs');setActiveTab(grantedModules[0]);}},[accessAllowed,grantedModules.join(',')]);
+  if(!accessAllowed)return <div className="p-8 text-center"><h2 className="font-bold text-xl">Mục học chưa được cấp quyền</h2><p className="my-4">Liên hệ quản trị viên để mở nội dung này.</p><button onClick={onBackToCourses}>Quay lại khóa học</button></div>;
   // Subview renders (Practicing lessons)
   if (activeSubView === 'lesson-editor') {
     return (
@@ -546,7 +552,7 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
             aria-label="Các mục của khóa học"
             className="flex lg:flex-col gap-2 overflow-x-auto pb-1 lg:pb-0 lg:p-2 lg:rounded-3xl lg:bg-white lg:dark:bg-slate-900 lg:border lg:border-slate-200 lg:dark:border-slate-800"
           >
-            {NAV.map((n) => {
+            {NAV.filter(n=>!isJpd123||grantedModules.includes(n.id as any)||(n.id==='review'&&grantedModules.length===5)).map((n) => {
               const active = activeTab === n.id;
               const sub = SUBS[n.id];
               return (

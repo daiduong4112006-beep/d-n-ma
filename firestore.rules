@@ -10,10 +10,15 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // Phải đăng nhập VÀ đã xác minh email (Google luôn đã xác minh)
-    function signedIn() {
+    function verifiedIdentity() {
       return request.auth != null
         && request.auth.token.email != null
         && request.auth.token.email_verified == true;
+    }
+    function signedIn() {
+      return verifiedIdentity() && (request.auth.token.email.lower() == 'daiduong4112006@gmail.com'
+        || !exists(/databases/$(database)/documents/admin_controls/$(request.auth.token.email.lower()))
+        || get(/databases/$(database)/documents/admin_controls/$(request.auth.token.email.lower())).data.get('disabled', false) != true);
     }
     function myEmail() {
       return request.auth.token.email.lower();
@@ -31,7 +36,28 @@ service cloud.firestore {
 
     // ---- Hồ sơ người dùng: users/{email} (không còn lưu mật khẩu) ----
     match /users/{email} {
-      allow read, write: if signedIn() && myEmail() == email;
+      allow read: if isAdmin() || (signedIn() && myEmail() == email);
+      allow write: if signedIn() && myEmail() == email;
+    }
+
+    // Admin controls are separate from learner-editable profiles.
+    match /admin_controls/{email} {
+      allow read: if isAdmin() || (verifiedIdentity() && myEmail() == email);
+      allow create, update: if isAdmin() && email != 'daiduong4112006@gmail.com'
+        && request.resource.data.keys().hasOnly(['disabled', 'jpdModules', 'updatedAt'])
+        && (!('disabled' in request.resource.data) || request.resource.data.disabled is bool)
+        && (!('jpdModules' in request.resource.data) || (request.resource.data.jpdModules is list
+          && request.resource.data.jpdModules.hasOnly(['vocabulary', 'kanji', 'grammar', 'speaking', 'exam-bank'])))
+        && request.resource.data.updatedAt is string;
+      allow delete: if false;
+    }
+    match /admin_audit/{id} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && request.resource.data.actor == myEmail()
+        && request.resource.data.keys().hasOnly(['actor', 'target', 'at', 'before', 'after'])
+        && request.resource.data.target is string && request.resource.data.at is string
+        && request.resource.data.before is map && request.resource.data.after is map;
+      allow update, delete: if false;
     }
 
     // ---- Cài đặt: settings/{email} và settings/jpd123_access_list ----
@@ -45,12 +71,14 @@ service cloud.firestore {
 
     // ---- Bộ đề & lượt làm bài: khóa theo trường userEmail ----
     match /quizzes/{quizId} {
-      allow read, delete: if ownsExisting('userEmail');
+      allow read: if isAdmin() || ownsExisting('userEmail');
+      allow delete: if ownsExisting('userEmail');
       allow create: if ownsIncoming('userEmail');
       allow update: if ownsExisting('userEmail') && ownsIncoming('userEmail');
     }
     match /attempts/{attemptId} {
-      allow read, delete: if ownsExisting('userEmail');
+      allow read: if isAdmin() || ownsExisting('userEmail');
+      allow delete: if ownsExisting('userEmail');
       allow create: if ownsIncoming('userEmail');
       allow update: if ownsExisting('userEmail') && ownsIncoming('userEmail');
     }

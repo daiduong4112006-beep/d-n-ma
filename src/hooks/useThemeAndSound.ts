@@ -33,9 +33,10 @@ export const useThemeAndSound = (email?: string) => {
 
   // Load user settings from Firestore when user logs in
   useEffect(() => {
+    let active=true;
     if (email) {
       getUserSettingsFromFirestore(email).then((settings) => {
-        if (settings) {
+        if (active&&settings) {
           if (typeof settings.isDarkMode === 'boolean') {
             setIsDarkMode(settings.isDarkMode);
           }
@@ -46,6 +47,7 @@ export const useThemeAndSound = (email?: string) => {
         }
       });
     }
+    return()=>{active=false;};
   }, [email]);
 
   const handleToggleDarkMode = () => {

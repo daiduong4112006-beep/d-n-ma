@@ -2,6 +2,7 @@ import { orderedWrite, flushOrderedWrites } from '../utils/orderedWrites';
 import { initializeApp } from 'firebase/app';
 import {
   getAuth,
+  connectAuthEmulator,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
@@ -16,6 +17,7 @@ import {
 } from 'firebase/auth';
 import {
   initializeFirestore,
+  connectFirestoreEmulator,
   getFirestore,
   collection,
   doc,
@@ -39,23 +41,27 @@ import { getStorage, ref as storageRef, uploadString, getDownloadURL } from 'fir
 import firebaseConfig from '../../firebase-applet-config.json';
 import { Quiz, QuizAttempt } from '../types/quiz';
 
-const app = initializeApp(firebaseConfig);
+export const isLocalTestEnvironment=import.meta.env.DEV&&import.meta.env.VITE_USE_FIREBASE_EMULATORS==='true';
+const useLocalEmulators=isLocalTestEnvironment;
+const app = initializeApp(useLocalEmulators?{...firebaseConfig,projectId:'demo-dun-admin-qa',apiKey:'demo-key',authDomain:'localhost'}:firebaseConfig);
 export const auth = getAuth(app);
+if(useLocalEmulators)connectAuthEmulator(auth,'http://127.0.0.1:9199',{disableWarnings:true});
 // Bộ nhớ đệm offline của Firestore (IndexedDB, dùng chung nhiều tab): mất mạng vẫn đọc được dữ liệu
 // đã tải và ghi được, có mạng lại sẽ tự đẩy lên. Trình duyệt không có IndexedDB → dùng bộ nhớ tạm.
 const createDb = (): Firestore => {
   try {
     return initializeFirestore(
       app,
-      { ignoreUndefinedProperties: true, localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) },
-      firebaseConfig.firestoreDatabaseId
+      { ignoreUndefinedProperties: true, localCache: useLocalEmulators?memoryLocalCache():persistentLocalCache({ tabManager: persistentMultipleTabManager() }) },
+      useLocalEmulators?'(default)':firebaseConfig.firestoreDatabaseId
     );
   } catch (e) {
     console.warn('Firestore offline cache unavailable, using memory cache:', e);
-    return initializeFirestore(app, { ignoreUndefinedProperties: true, localCache: memoryLocalCache() }, firebaseConfig.firestoreDatabaseId);
+    return initializeFirestore(app, { ignoreUndefinedProperties: true, localCache: memoryLocalCache() }, useLocalEmulators?'(default)':firebaseConfig.firestoreDatabaseId);
   }
 };
 export const db = createDb();
+if(useLocalEmulators)connectFirestoreEmulator(db,'127.0.0.1',8380);
 
 // ---------------- Ảnh câu hỏi → Firebase Storage ----------------
 // Ảnh dán/tải lên được lưu dạng data URL (base64) ngay trong bộ đề, dễ vượt giới hạn 1 MB của

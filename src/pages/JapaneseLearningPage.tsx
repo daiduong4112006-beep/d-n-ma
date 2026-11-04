@@ -16,6 +16,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { JapaneseCourse } from '../types/japanese';
+import {isJpd123Course,visibleJapaneseCourses} from '../utils/japaneseCourseVisibility';
 import {
   getJapaneseCourses,
   getCoursesStorageKey,
@@ -56,38 +57,38 @@ export const JapaneseLearningPage: React.FC<Props> = ({ currentUser, onBackToDas
   });
 
   const isAdmin = isJapaneseAdmin(currentUser?.email);
+  const [,accessRefresh]=useState(0);
+  useEffect(()=>{const refresh=()=>accessRefresh(n=>n+1);window.addEventListener('mcq-account-control',refresh);window.addEventListener('mcq-jpd-access',refresh);return()=>{window.removeEventListener('mcq-account-control',refresh);window.removeEventListener('mcq-jpd-access',refresh);};},[]);
   const hasJpdAccess = canAccessJpd123(currentUser?.email);
 
   useEffect(() => {
-    const list = getJapaneseCourses(currentUser?.email);
+    let active=true;
+    const list = visibleJapaneseCourses(getJapaneseCourses(currentUser?.email),hasJpdAccess);
     setCourses(list);
-    // If admin or delegated user and there is 1 course (e.g. JPD 123), automatically open it for convenience
-    if (hasJpdAccess && list.length === 1 && !selectedCourse) {
-      setSelectedCourse(list[0]);
-    } else if (!hasJpdAccess) {
-      // For non-authorized user, if they had JPD 123 open previously, close it
-      if (selectedCourse?.id === 'course-jpd123') {
-        setSelectedCourse(null);
-      }
-    }
+    // A sync or permission change may refresh an explicitly opened course, never open one.
+    setSelectedCourse(prev=>prev?list.find(c=>c.id===prev.id)||null:null);
 
     // Subscribe to Firestore for real-time synchronization between phones, tablets, and computers FOR THIS USER
     const refresh = () => {
-      const fresh=getJapaneseCourses(currentUser?.email);setCourses(fresh);
-      setSelectedCourse(prev=>prev?fresh.find(c=>c.id===prev.id)||null:(hasJpdAccess&&fresh.length===1?fresh[0]:null));
+      if(!active)return;
+      const fresh=visibleJapaneseCourses(getJapaneseCourses(currentUser?.email),hasJpdAccess);setCourses(fresh);
+      setSelectedCourse(prev=>prev?fresh.find(c=>c.id===prev.id)||null:null);
     };
     const stopLocal=subscribeStorageKeys(key=>key===getCoursesStorageKey(currentUser?.email),refresh);
     const unSub = subscribeJapaneseCourses(currentUser?.email, cloud=>{
+      if(!active)return;
       if(Array.isArray(cloud)){reconcileJapaneseCoursesFromCloud(cloud,currentUser?.email);refresh();}
     });
 
     return () => {
-      stopLocal(); if (unSub) unSub();
+      active=false;stopLocal(); if (unSub) unSub();
     };
   }, [currentUser?.email, isAdmin, hasJpdAccess]);
 
+  useEffect(()=>setSelectedCourse(null),[currentUser?.email]);
+
   const refreshCourses = () => {
-    const list = getJapaneseCourses(currentUser?.email);
+    const list = visibleJapaneseCourses(getJapaneseCourses(currentUser?.email),hasJpdAccess);
     setCourses(list);
     if (selectedCourse) {
       const updated = list.find((c) => c.id === selectedCourse.id);
@@ -96,6 +97,7 @@ export const JapaneseLearningPage: React.FC<Props> = ({ currentUser, onBackToDas
   };
 
   const handleOpenCourse = (course: JapaneseCourse) => {
+    if(isJpd123Course(course)&&!hasJpdAccess)return;
     setSelectedCourse(course);
     sound.playClick();
   };
@@ -182,7 +184,7 @@ export const JapaneseLearningPage: React.FC<Props> = ({ currentUser, onBackToDas
   };
 
   // If a course is selected, show its detail view
-  if (selectedCourse) {
+  if (selectedCourse && (hasJpdAccess||!isJpd123Course(selectedCourse))) {
     return (
       <div className="w-full max-w-[1680px] mx-auto px-3 sm:px-5 lg:px-6 py-4">
         <JapaneseCourseDetail
@@ -194,7 +196,7 @@ export const JapaneseLearningPage: React.FC<Props> = ({ currentUser, onBackToDas
     );
   }
 
-  const filteredCourses = courses.filter((c) => {
+  const filteredCourses = visibleJapaneseCourses(courses,hasJpdAccess).filter((c) => {
     const q = searchQuery.toLowerCase().trim();
     if (!q) return true;
     return (

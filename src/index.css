@@ -1,4 +1,7 @@
 @import "tailwindcss";
+@import "./admin-users.css";
+@import "./settings-access.css";
+@import "./settings-admin-live.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 

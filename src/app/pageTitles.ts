@@ -1,6 +1,6 @@
 /** Tiêu đề trang hiển thị trên thanh bên theo mục đang mở */
 export const getPageTitle = (activeTab: string): string =>
-    activeTab === 'dashboard' || activeTab === 'my-quizzes'
+    activeTab === 'admin' ? 'Quản lý người dùng' : activeTab === 'dashboard' || activeTab === 'my-quizzes'
       ? 'Bộ đề của tôi'
       : activeTab === 'quiz-detail'
       ? 'Chi tiết bộ đề & Ôn tập'

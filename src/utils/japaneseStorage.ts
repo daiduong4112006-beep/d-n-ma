@@ -1,4 +1,5 @@
 import { notifyDataChanged } from './storageEvents';
+import {ownJpdModules} from './accountControls';
 import {
   JapaneseLesson,
   JapaneseVocabCard,
@@ -60,6 +61,7 @@ export function saveAllowedJpd123Emails(emails: string[], skipCloudSync = false)
   try {
     const cleanList = Array.from(new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean)));
     localStorage.setItem(JPD123_ACCESS_LIST_KEY, JSON.stringify(cleanList));
+    window.dispatchEvent(new CustomEvent('mcq-jpd-access'));
     if (!skipCloudSync) {
       saveJpd123AccessListToFirestore(cleanList).catch(() => {});
     }
@@ -96,8 +98,7 @@ export function canAccessJpd123(email?: string | null): boolean {
   const targetEmail = (email !== undefined ? (email || '') : getCurrentUserEmail()).toLowerCase().trim();
   if (!targetEmail) return false;
   if (isJapaneseAdmin(targetEmail)) return true;
-  const allowed = getAllowedJpd123Emails();
-  return allowed.includes(targetEmail);
+  return ownJpdModules(targetEmail).length>0;
 }
 
 export function getCoursesStorageKey(email?: string | null): string {
