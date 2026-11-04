@@ -1,3 +1,5 @@
+import { FE_MATRIX, eligibleFeQuestion, feCategory, sampleExam } from '../../utils/feExamMatrix';
+export { sampleExam } from '../../utils/feExamMatrix';
 import { subscribeStorageKeys } from '../../utils/storageEvents';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Timer, Flag, Send, Trophy, RotateCcw, History, ChevronLeft, ChevronRight, Star, Play } from 'lucide-react';
@@ -14,6 +16,8 @@ export interface MockQuestion {
   id: string;
   category: string;
   html: string;
+  text?: string;
+  sources?: { file: string; page: number }[];
   answer?: { key?: string; text?: string; why?: string; unsure?: boolean };
 }
 
@@ -29,7 +33,6 @@ export interface MockAttempt {
 }
 
 const HISTORY_KEY = 'jpd-fe-mock-history';
-const EXCLUDE_CATS = new Set(['Cần xem lại / nhiều câu']);
 
 const loadHistory = (): MockAttempt[] => {
   try {
@@ -44,34 +47,6 @@ const saveHistory = (h: MockAttempt[]) => {
   } catch {}
   const email = (auth.currentUser?.email || '').toLowerCase();
   if (email) setDoc(doc(db, 'fe_mock_exams', email), { email, history: h.slice(0, 30), updatedAt: new Date().toISOString() }).catch(() => {});
-};
-
-const shuffle = <T,>(a: T[]): T[] => {
-  const b = [...a];
-  for (let i = b.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [b[i], b[j]] = [b[j], b[i]];
-  }
-  return b;
-};
-
-/** Bốc n câu, chia theo tỉ lệ số câu của từng dạng (phương pháp phần dư lớn nhất) */
-export const sampleExam = (pool: MockQuestion[], n: number): MockQuestion[] => {
-  const byCat = new Map<string, MockQuestion[]>();
-  pool.forEach((q) => byCat.set(q.category, [...(byCat.get(q.category) || []), q]));
-  const total = pool.length;
-  const quotas = [...byCat.entries()].map(([c, qs]) => {
-    const exact = (qs.length / total) * n;
-    return { c, qs, take: Math.floor(exact), rem: exact - Math.floor(exact) };
-  });
-  let left = n - quotas.reduce((s, q) => s + q.take, 0);
-  quotas.sort((a, b) => b.rem - a.rem).forEach((q) => {
-    if (left > 0 && q.take < q.qs.length) {
-      q.take++;
-      left--;
-    }
-  });
-  return shuffle(quotas.flatMap((q) => shuffle(q.qs).slice(0, q.take)));
 };
 
 const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
@@ -118,10 +93,11 @@ export const FeMockExam: React.FC<{
   onMarkForReview?: (ids: string[]) => void;
 }> = ({ questions, onMarkForReview }) => {
   const pool = useMemo(
-    () => questions.filter((q) => q.answer?.key && !q.answer.unsure && !EXCLUDE_CATS.has(q.category)),
+    () => questions.filter(eligibleFeQuestion),
     [questions]
   );
-  const [count, setCount] = useState(50);
+  const count = 30;
+  const [generationError, setGenerationError] = useState('');
   const [minutes, setMinutes] = useState(50);
   const [exam, setExam] = useState<MockQuestion[] | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -154,11 +130,12 @@ export const FeMockExam: React.FC<{
     const wrongIds: string[] = [];
     exam.forEach((q) => {
       const ok = answers[q.id] === q.answer?.key;
-      byCat[q.category] = byCat[q.category] || { total: 0, correct: 0 };
-      byCat[q.category].total++;
+      const category = feCategory(q) || q.category;
+      byCat[category] = byCat[category] || { total: 0, correct: 0 };
+      byCat[category].total++;
       if (ok) {
         correct++;
-        byCat[q.category].correct++;
+        byCat[category].correct++;
       } else wrongIds.push(q.id);
     });
     const att: MockAttempt = {
@@ -201,7 +178,13 @@ export const FeMockExam: React.FC<{
   }, [exam, result]);
 
   const start = () => {
-    setExam(sampleExam(pool, Math.min(count, pool.length)));
+    try {
+      setExam(sampleExam(pool, count));
+      setGenerationError('');
+    } catch (error) {
+      setGenerationError(error instanceof Error ? error.message : 'Không thể tạo đề theo ma trận.');
+      return;
+    }
     setAnswers({});
     setFlags(new Set());
     setIdx(0);
@@ -365,7 +348,7 @@ export const FeMockExam: React.FC<{
             <span className="text-sky-500 font-black">
               Câu {idx + 1}/{exam.length}
             </span>
-            <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">{q.category}</span>
+            <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">{feCategory(q) || q.category}</span>
             <span className="flex-1" />
             <button
               type="button"
@@ -438,14 +421,19 @@ export const FeMockExam: React.FC<{
             <div className="text-[11px] font-black uppercase tracking-[0.14em] text-sky-300">Thi thử cuối kỳ</div>
             <div className="mt-1 text-2xl font-black">Làm một đề ngẫu nhiên có tính giờ</div>
             <p className="mt-1 text-sm text-slate-400">
-              Câu hỏi được bốc từ {pool.length} câu có đáp án chắc chắn, chia theo đúng tỉ lệ các dạng. Không hiện đáp án cho tới khi nộp bài.
+              Đề 30 câu theo ma trận ước lượng từ đề cũ, không phải ma trận chính thức. Loại đề PT và đáp án chưa chắc chắn; 3 câu đọc hiểu cùng một đoạn, theo dạng từ SP26.
             </p>
           </div>
+          <div className="flex flex-wrap gap-2 text-xs text-slate-200">
+            {FE_MATRIX.map(item => <span key={item.category} className="rounded-lg bg-white/10 px-2 py-1">{item.category}: {item.count}</span>)}
+          </div>
+          <p className="text-xs text-slate-400">Ngữ pháp, trợ từ, hội thoại ưu tiên Bài 5–6. Nhãn dạng và bài được ước lượng tự động từ nội dung. Thời gian thi do bạn chọn.</p>
+          {generationError && <p role="alert" className="text-sm text-rose-300">{generationError}</p>}
           <div className="flex flex-wrap items-end gap-3">
             <label className="space-y-1">
               <span className="block text-[11px] font-bold text-slate-400">Số câu</span>
-              <select value={count} onChange={(e) => setCount(Number(e.target.value))} className={sel}>
-                {[20, 30, 40, 50, 60].map((n) => (
+              <select value={count} disabled className={sel} aria-label="Ma trận FE 30 câu">
+                {[30].map((n) => (
                   <option key={n} value={n}>
                     {n} câu
                   </option>

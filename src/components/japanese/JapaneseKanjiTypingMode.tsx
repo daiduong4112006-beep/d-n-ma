@@ -1,3 +1,4 @@
+import { firstAttemptAccuracy } from '../../utils/typingScore';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
@@ -211,6 +212,8 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
   const [currentIndex, setCurrentIndex] = useState(0);
   const [seconds, setSeconds] = useState(0);
   const [score, setScore] = useState(0);
+  // An accepted card can only schedule one advance and earn one first-attempt point.
+  const acceptedAnswersRef = useRef(new Set<string>());
   const [wrongCardIds, setWrongCardIds] = useState<Set<string>>(new Set());
   const [isCompleted, setIsCompleted] = useState(false);
 
@@ -248,6 +251,8 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
   // Dừng đọc khi rời màn luyện gõ
   useEffect(() => {
     return () => {
+      if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
+      stepTokenRef.current += 1;
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
@@ -328,12 +333,21 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
     setCards(isShuffleEnabled ? shuffleArray(filtered) : [...filtered]);
     setCurrentIndex(0);
     setScore(0);
+    setWrongCardIds(new Set());
+    setIsAnswerChecked(false);
+    setIsOverallCorrect(null);
+    setVocabInput('');
+    setKunInputs([]);
+    setOnInputs([]);
+    setKunResults([]);
+    setOnResults([]);
+    acceptedAnswersRef.current.clear();
+    stepTokenRef.current += 1;
+    if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
     setSeconds(0);
     setIsCompleted(false);
-    setWrongCardIds(new Set());
     sound.playClick();
   };
-
   // Toggle Shuffle
   const handleToggleShuffle = () => {
     const nextState = !isShuffleEnabled;
@@ -408,6 +422,7 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
 
   // Check Answer Handler
   const handleCheckAnswer = () => {
+    if (currentCard && acceptedAnswersRef.current.has(currentCard.id)) return;
     if (!currentCard) return;
 
     if (mode === 'core') {
@@ -431,7 +446,8 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
 
       if (matched) {
         sound.playCorrect();
-        setScore((s) => s + 1);
+        acceptedAnswersRef.current.add(currentCard.id);
+        if (!wrongCardIds.has(currentCard.id)) setScore((s) => s + 1);
         if (autoSpeechEnabled && currentKanji) {
           speakJapanese(currentKanji.kanji);
         }
@@ -467,7 +483,8 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
 
       if (matched) {
         sound.playCorrect();
-        setScore((s) => s + 1);
+        acceptedAnswersRef.current.add(currentCard.id);
+        if (!wrongCardIds.has(currentCard.id)) setScore((s) => s + 1);
         // Gõ đúng → hiện nghĩa, đọc tiếng Nhật rồi đọc nghĩa tiếng Việt, đọc xong mới sang thẻ
         const tokenAtCheck = stepTokenRef.current;
         const goNextIfStill = () => {
@@ -569,24 +586,42 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
     setCards(isShuffleEnabled ? shuffleArray(baseCards) : [...baseCards]);
     setCurrentIndex(0);
     setScore(0);
+    setWrongCardIds(new Set());
+    setIsAnswerChecked(false);
+    setIsOverallCorrect(null);
+    setVocabInput('');
+    setKunInputs([]);
+    setOnInputs([]);
+    setKunResults([]);
+    setOnResults([]);
+    acceptedAnswersRef.current.clear();
+    stepTokenRef.current += 1;
+    if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
     setSeconds(0);
     setIsCompleted(false);
-    setWrongCardIds(new Set());
     sound.playClick();
   };
-
   const handleRestartWrongOnly = () => {
     const wrongList = sourceList.filter((c) => wrongCardIds.has(c.id));
     if (wrongList.length === 0) return;
     setCards(isShuffleEnabled ? shuffleArray(wrongList) : [...wrongList]);
     setCurrentIndex(0);
     setScore(0);
+    setWrongCardIds(new Set());
+    setIsAnswerChecked(false);
+    setIsOverallCorrect(null);
+    setVocabInput('');
+    setKunInputs([]);
+    setOnInputs([]);
+    setKunResults([]);
+    setOnResults([]);
+    acceptedAnswersRef.current.clear();
+    stepTokenRef.current += 1;
+    if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
     setSeconds(0);
     setIsCompleted(false);
-    setWrongCardIds(new Set());
     sound.playClick();
   };
-
   const isCurrentCardMastered = !!currentCard?.mastered;
 
   const handleToggleMasteredCurrent = () => {
@@ -649,7 +684,7 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
   // VIEW: COMPLETED SUMMARY
   // =========================================================================
   if (isCompleted) {
-    const accuracy = cards.length > 0 ? Math.round((score / cards.length) * 100) : 0;
+    const accuracy = firstAttemptAccuracy(score, cards.length);
     return (
       <div className="min-h-screen bg-[#070913] text-slate-100 flex flex-col justify-center items-center p-4 sm:p-8 select-none">
         <div className="max-w-md w-full bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 text-center space-y-6 shadow-2xl animate-fade-in">
@@ -676,7 +711,7 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
               </span>
             </div>
             <div className="p-3.5 rounded-2xl bg-slate-800/60 border border-slate-700/50">
-              <span className="text-[10px] font-black uppercase text-slate-400 block">CHÍNH XÁC</span>
+              <span className="text-[10px] font-black uppercase text-slate-400 block">ĐÚNG LẦN ĐẦU</span>
               <span className="text-xl font-black text-emerald-400 mt-0.5 block">{accuracy}%</span>
             </div>
             <div className="p-3.5 rounded-2xl bg-slate-800/60 border border-slate-700/50">

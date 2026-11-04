@@ -1,3 +1,4 @@
+import { firstAttemptAccuracy } from '../../utils/typingScore';
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import {
   X,
@@ -29,6 +30,18 @@ import { realtimeSync } from '../../utils/realtimeSync';
 import { computeJapaneseDiff } from '../../utils/japaneseDiff';
 
 export type TypingDirection = 'vi-to-jp' | 'jp-to-vi';
+
+function recoverTypingScore(state: {currentIndex: number; score?: number; wrongCardIds?: string[]; scoringVersion?: number; acceptedCardIds?: string[]}, order: string[]) {
+  const wrong = new Set(state.wrongCardIds || []);
+  const accepted = new Set<string>(state.scoringVersion === 2 && Array.isArray(state.acceptedCardIds)
+    ? state.acceptedCardIds.filter(id => order.includes(id)) : []);
+  if (state.scoringVersion === 2) return {accepted, score: [...accepted].filter(id => !wrong.has(id)).length};
+  // Legacy score included corrected answers; deduct mistakes before the saved position.
+  const failed = order.slice(0, state.currentIndex).filter(id => wrong.has(id)).length;
+  const score = Math.max(0, Math.min(state.score || 0, state.currentIndex - failed));
+  return {accepted: new Set(order.slice(0, state.currentIndex).filter(id => !wrong.has(id)).slice(0, score)), score};
+}
+
 
 interface JapaneseTypingModeProps {
   lesson: JapaneseLesson;
@@ -110,6 +123,8 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
   const [isAnswerChecked, setIsAnswerChecked] = useState(false);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [score, setScore] = useState(0);
+  // An accepted card can only schedule one advance and earn one first-attempt point.
+  const acceptedAnswersRef = useRef(new Set<string>());
   const [wrongCardIds, setWrongCardIds] = useState<Set<string>>(new Set());
   const [isCompleted, setIsCompleted] = useState(false);
   const [showResumeBanner, setShowResumeBanner] = useState(false);
@@ -136,6 +151,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const pendingCursorRef = useRef<number | null>(null);
   const timerRef = useRef<number | null>(null);
+  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Preserve cursor position across React re-renders when editing in the middle of text
   useLayoutEffect(() => {
@@ -146,6 +162,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     }
   });
 
+  useEffect(() => () => { if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current); }, [currentIndex, filterTab, direction, isShuffleEnabled]);
   const currentCard = cards[currentIndex];
   const isCurrentKata = currentCard
     ? /[\u30A0-\u30FF]/.test(currentCard.term) && !/[\u4E00-\u9FAF]/.test(currentCard.term)
@@ -165,6 +182,9 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     setIsAnswerChecked(false);
     setIsCorrect(null);
     setScore(0);
+    setWrongCardIds(new Set());
+    acceptedAnswersRef.current.clear();
+    if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
     setSeconds(0);
     setIsCompleted(false);
     setWrongCardIds(new Set());
@@ -207,13 +227,15 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     setIsCorrect(null);
     setCurrentIndex(0);
     setScore(0);
+    setWrongCardIds(new Set());
+    acceptedAnswersRef.current.clear();
+    if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
     sound.playClick();
   };
-
   // 1. Restore previous session progress on mount or filter change
   useEffect(() => {
     const saved = getTypingProgress(storageId);
-    if (saved && typeof saved.currentIndex === 'number' && saved.currentIndex > 0 && saved.currentIndex < cards.length) {
+    if (saved && typeof saved.currentIndex === 'number' && saved.currentIndex >= 0 && saved.currentIndex < cards.length) {
       if (saved.cardIds && saved.cardIds.length === cards.length) {
         const idMap = new Map<string, JapaneseVocabCard>(cards.map((c) => [c.id, c] as [string, JapaneseVocabCard]));
         const reordered = saved.cardIds.map((id) => idMap.get(id)).filter(Boolean) as JapaneseVocabCard[];
@@ -222,7 +244,13 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
         }
       }
       setCurrentIndex(saved.currentIndex);
-      setScore(saved.score || 0);
+      const order = saved.cardIds || cards.map(c => c.id);
+      const recovered = recoverTypingScore(saved, order);
+      acceptedAnswersRef.current = recovered.accepted;
+      setScore(recovered.score);
+      const alreadyAccepted = recovered.accepted.has(order[saved.currentIndex]);
+      setIsAnswerChecked(alreadyAccepted);
+      setIsCorrect(alreadyAccepted ? true : null);
       setSeconds(saved.seconds || 0);
       if (saved.wrongCardIds) setWrongCardIds(new Set(saved.wrongCardIds));
       if (saved.inputVal) setInputVal(saved.inputVal);
@@ -240,8 +268,18 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     const unsubscribe = realtimeSync.subscribeKey('JP_TYPING', storageId, (payload) => {
       if (typeof payload.currentIndex === 'number' && payload.currentIndex >= 0 && payload.currentIndex < cards.length) {
         isRemoteUpdateRef.current = true;
+        if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
         setCurrentIndex(payload.currentIndex);
-        if (typeof payload.data?.score === 'number') setScore(payload.data.score);
+        const order: string[] = payload.data?.cardIds || cards.map(c => c.id);
+        const recovered = recoverTypingScore({...payload.data, currentIndex: payload.currentIndex}, order);
+        acceptedAnswersRef.current = recovered.accepted;
+        setScore(recovered.score);
+        const alreadyAccepted = recovered.accepted.has(order[payload.currentIndex]);
+        setIsAnswerChecked(alreadyAccepted);
+        setIsCorrect(alreadyAccepted ? true : null);
+        if (typeof payload.data?.inputVal === 'string') setInputVal(payload.data.inputVal);
+        const orderedCards = order.map(id => cards.find(c => c.id === id)).filter(Boolean) as JapaneseVocabCard[];
+        if (orderedCards.length === cards.length && new Set(order).size === cards.length) setCards(orderedCards);
         if (typeof payload.data?.seconds === 'number') setSeconds(payload.data.seconds);
         if (payload.data?.wrongCardIds && Array.isArray(payload.data.wrongCardIds)) {
           setWrongCardIds(new Set(payload.data.wrongCardIds));
@@ -271,10 +309,12 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
       cardIds: cards.map((c) => c.id),
       score,
       wrongCardIds: Array.from(wrongCardIds),
+      scoringVersion: 2,
+      acceptedCardIds: [...acceptedAnswersRef.current],
       seconds,
       inputVal,
     });
-  }, [currentIndex, cards, score, wrongCardIds, seconds, inputVal, isCompleted, storageId]);
+  }, [currentIndex, cards, score, wrongCardIds, seconds, inputVal, isCompleted, isAnswerChecked, storageId]);
 
   // Timer counter
   useEffect(() => {
@@ -306,9 +346,10 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
 
   // Focus input automatically on card change
   useEffect(() => {
-    setInputVal('');
-    setIsAnswerChecked(false);
-    setIsCorrect(null);
+    const alreadyAccepted = acceptedAnswersRef.current.has(cards[currentIndex]?.id);
+    if (!alreadyAccepted) setInputVal('');
+    setIsAnswerChecked(alreadyAccepted);
+    setIsCorrect(alreadyAccepted ? true : null);
     setShowAudioHintFeedback(false);
     
     // Auto focus into input on every card transition
@@ -372,6 +413,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
   };
 
   const checkAnswer = () => {
+    if (currentCard && acceptedAnswersRef.current.has(currentCard.id)) return;
     if (!currentCard || !inputVal.trim()) return;
 
     let finalized = inputVal;
@@ -406,13 +448,14 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
 
     if (matched) {
       sound.playCorrect();
-      setScore((s) => s + 1);
+      acceptedAnswersRef.current.add(currentCard.id);
+      if (!wrongCardIds.has(currentCard.id)) setScore((s) => s + 1);
       if (autoSpeechEnabled) {
         speakJapanese(speechText);
       }
 
       // Advance automatically after a short delay
-      setTimeout(() => {
+      advanceTimerRef.current = setTimeout(() => {
         handleNextCard();
       }, 1200);
     } else {
@@ -428,6 +471,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
   };
 
   const handleNextCard = () => {
+    if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
     if (currentIndex < cards.length - 1) {
       setCurrentIndex((i) => i + 1);
       setInputVal('');
@@ -485,6 +529,9 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     }
     setCurrentIndex(0);
     setScore(0);
+    setWrongCardIds(new Set());
+    acceptedAnswersRef.current.clear();
+    if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
     setSeconds(0);
     setIsCompleted(false);
     setIsAnswerChecked(false);
@@ -500,6 +547,9 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     setCards(shuffled);
     setCurrentIndex(0);
     setScore(0);
+    setWrongCardIds(new Set());
+    acceptedAnswersRef.current.clear();
+    if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
     setSeconds(0);
     setIsCompleted(false);
     setIsAnswerChecked(false);
@@ -508,7 +558,6 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     setShowResumeBanner(false);
     sound.playClick();
   };
-
   // RESTORE ACTION (Khôi phục / Bắt đầu lại)
   const handleRestore = (onlyMistakes: boolean = false) => {
     if (onlyMistakes) {
@@ -524,6 +573,9 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     }
     setCurrentIndex(0);
     setScore(0);
+    setWrongCardIds(new Set());
+    acceptedAnswersRef.current.clear();
+    if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
     setSeconds(0);
     setIsCompleted(false);
     setIsAnswerChecked(false);
@@ -532,7 +584,6 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     setShowResumeBanner(false);
     sound.playClick();
   };
-
   return (
     <div className="min-h-screen bg-[#070913] text-slate-100 flex flex-col justify-between p-4 sm:p-8 select-none">
       {/* Top Bar matching image.png: Left (Viet->Nhat / Nhat->Viet + 1/27), Center (THỜI GIAN + 00:00), Right (Tùy chọn + ✕ Thoát) */}
@@ -1553,18 +1604,18 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
 
           <div className="space-y-1">
             <h2 className="text-2xl font-black text-white">Hoàn thành bài luyện gõ!</h2>
-            <p className="text-xs text-slate-400">Bạn đã hoàn tất bài tập gõ chữ Nhật.</p>
+            <p className="text-xs text-slate-400">Đúng lần đầu: {firstAttemptAccuracy(score, cards.length)}%. Sửa đáp án không xóa lần sai.</p>
           </div>
 
           <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-around">
             <div>
               <span className="text-2xl font-black text-emerald-400 block">{score}</span>
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Đúng</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Đúng lần đầu</span>
             </div>
             <div className="w-px h-8 bg-slate-700" />
             <div>
               <span className="text-2xl font-black text-rose-400 block">{wrongCardIds.size}</span>
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Chưa đúng</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Từng trả lời sai</span>
             </div>
             <div className="w-px h-8 bg-slate-700" />
             <div>

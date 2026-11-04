@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test:sync": "node scripts/tests/run.cjs"
+    "test:sync": "node scripts/tests/run.cjs",
+    "test:study": "node scripts/tests/study.cjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -37,6 +38,7 @@
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.3",
-    "@types/express": "^4.17.21"
+    "@types/express": "^4.17.21",
+    "react-test-renderer": "^19.0.1"
   }
 }

@@ -1,3 +1,4 @@
+import { firstAttemptAccuracy } from '../../utils/typingScore';
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import {
   X,
@@ -74,17 +75,22 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
   const toggleDirection = (newDir?: 'vi-to-jp' | 'jp-to-vi') => {
     const next = newDir || (direction === 'vi-to-jp' ? 'jp-to-vi' : 'vi-to-jp');
     setDirection(next);
-    localStorage.setItem('grammar_typing_direction', next);
+    setCurrentIndex(0);
+    setScore(0);
+    setWrongIndices(new Set());
     setSingleInput('');
     setInputA('');
     setInputB('');
-    setIsAnswerChecked(false);
-    setIsCorrect(null);
     setCorrectA(null);
     setCorrectB(null);
+    acceptedAnswersRef.current.clear();
+    setSeconds(0);
+    if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
+    localStorage.setItem('grammar_typing_direction', next);
+    setIsAnswerChecked(false);
+    setIsCorrect(null);
     sound.playClick();
   };
-
   const [currentIndex, setCurrentIndex] = useState(0);
 
   // Single sentence input state
@@ -101,6 +107,8 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
   const [correctA, setCorrectA] = useState<boolean | null>(null);
   const [correctB, setCorrectB] = useState<boolean | null>(null);
   const [score, setScore] = useState(0);
+  // An accepted card can only schedule one advance and earn one first-attempt point.
+  const acceptedAnswersRef = useRef(new Set<number>());
   const [wrongIndices, setWrongIndices] = useState<Set<number>>(new Set());
   const [isCompleted, setIsCompleted] = useState(false);
 
@@ -123,6 +131,7 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
     pos: number;
   } | null>(null);
   const timerRef = useRef<number | null>(null);
+  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Preserve cursor position across React re-renders when editing in the middle of text
   useLayoutEffect(() => {
@@ -141,6 +150,7 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
     }
   });
 
+  useEffect(() => () => { if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current); }, [currentIndex, direction, isShuffleEnabled]);
   const currentItem = items[currentIndex];
   const parsed: ParsedDialogue = currentItem
     ? parseDialogueExample(currentItem.japanese, currentItem.vietnamese)
@@ -280,7 +290,7 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
 
   // Check answer logic supporting both vi-to-jp and jp-to-vi
   const checkAnswer = () => {
-    if (!currentItem) return;
+    if (!currentItem || acceptedAnswersRef.current.has(currentIndex)) return;
 
     const targetKana = imeMode === 'katakana' ? 'ン' : 'ん';
 
@@ -319,11 +329,12 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
 
       if (overallCorrect) {
         sound.playCorrect();
-        setScore((s) => s + 1);
+        acceptedAnswersRef.current.add(currentIndex);
+        if (!wrongIndices.has(currentIndex)) setScore((s) => s + 1);
         if (autoSpeechEnabled) {
           speakJapanese(currentItem.japanese);
         }
-        setTimeout(() => {
+        advanceTimerRef.current = setTimeout(() => {
           handleNext();
         }, 1300);
       } else {
@@ -362,11 +373,12 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
 
       if (ok) {
         sound.playCorrect();
-        setScore((s) => s + 1);
+        acceptedAnswersRef.current.add(currentIndex);
+        if (!wrongIndices.has(currentIndex)) setScore((s) => s + 1);
         if (autoSpeechEnabled) {
           speakJapanese(currentItem.japanese);
         }
-        setTimeout(() => {
+        advanceTimerRef.current = setTimeout(() => {
           handleNext();
         }, 1300);
       } else {
@@ -380,6 +392,7 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
   };
 
   const handleNext = () => {
+    if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
     if (currentIndex < items.length - 1) {
       setCurrentIndex((i) => i + 1);
     } else {
@@ -479,14 +492,20 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
     setItems(shuffled);
     setCurrentIndex(0);
     setScore(0);
+    setWrongIndices(new Set());
+    setSingleInput('');
+    setInputA('');
+    setInputB('');
+    setCorrectA(null);
+    setCorrectB(null);
+    acceptedAnswersRef.current.clear();
+    if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
     setSeconds(0);
     setIsCompleted(false);
     setIsAnswerChecked(false);
     setIsCorrect(null);
-    setWrongIndices(new Set());
     sound.playClick();
   };
-
   // Restart / Restore session
   const handleRestart = (onlyMistakes: boolean = false) => {
     if (onlyMistakes) {
@@ -500,13 +519,20 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
     }
     setCurrentIndex(0);
     setScore(0);
+    setWrongIndices(new Set());
+    setSingleInput('');
+    setInputA('');
+    setInputB('');
+    setCorrectA(null);
+    setCorrectB(null);
+    acceptedAnswersRef.current.clear();
+    if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
     setSeconds(0);
     setIsCompleted(false);
     setIsAnswerChecked(false);
     setIsCorrect(null);
     sound.playClick();
   };
-
   return (
     <div className="min-h-screen bg-[#070913] text-slate-100 flex flex-col justify-between p-4 sm:p-8 select-none">
       {/* Top Header */}
@@ -1499,12 +1525,12 @@ export const JapaneseGrammarPracticeMode: React.FC<JapaneseGrammarPracticeModePr
 
           <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-slate-800/60 border border-slate-700/50">
             <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Độ chính xác</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Đúng lần đầu</span>
               <div className="text-2xl font-black text-emerald-400">
-                {items.length > 0 ? Math.round((score / items.length) * 100) : 0}%
+                {firstAttemptAccuracy(score, items.length)}%
               </div>
               <span className="text-[10px] text-slate-400">
-                {score}/{items.length} câu đúng
+                {score}/{items.length} câu đúng lần đầu
               </span>
             </div>
             <div>

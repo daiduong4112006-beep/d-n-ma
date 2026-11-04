@@ -18,6 +18,9 @@ export interface TypingProgressState {
   seconds: number;
   inputVal?: string;
   savedAt: string;
+  /** Version 2 scores only first-attempt successes and preserves pending accepted cards. */
+  scoringVersion?: 2;
+  acceptedCardIds?: string[];
 }
 
 export interface MultiChoiceProgressState {
