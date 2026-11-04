@@ -490,7 +490,7 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
     { id: 'grammar', tone: 'indigo', icon: <FileText className="w-5 h-5" />, label: 'Ngữ pháp', sub: `${course.grammarPoints?.length || 0} mẫu câu` },
     ...(isJpd123
       ? ([
-          { id: 'speaking', tone: 'emerald', icon: <Mic className="w-5 h-5" />, label: 'Ôn SPK', sub: 'Thi nói · 48 câu · 24 tranh', progress: pct(spkLearned, 48) },
+          { id: 'speaking', tone: 'emerald', icon: <Mic className="w-5 h-5" />, label: 'Ôn SPK', sub: 'Thi nói · 48 câu · 29 tranh', progress: pct(spkLearned, 48) },
           { id: 'exam-bank', tone: 'sky', icon: <FileStack className="w-5 h-5" />, label: 'Source FE', sub: `Đề cuối kỳ · ${feStats?.done ?? feDone}/880 đã làm`, progress: pct(feStats?.done ?? feDone, 880) },
         ] as const)
       : []),

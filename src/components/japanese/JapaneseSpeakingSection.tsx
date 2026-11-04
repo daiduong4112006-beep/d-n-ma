@@ -230,7 +230,7 @@ export const JapaneseSpeakingSection: React.FC<Props> = ({
         icon={<Mic className="w-6 h-6" />}
         eyebrow="Mục 4 · Ôn SPK"
         title="Ôn thi nói Bài 4 – 7"
-        desc="18 bài đọc, 48 câu hỏi, 24 bộ tranh và 8 đề thi thử có đồng hồ. Bấm loa để nghe giọng Nhật mẫu, bấm Ghi âm luyện nói (góc phải) để thu câu trả lời và nghe lại so với mẫu."
+        desc="18 bài đọc, 48 câu hỏi, 29 bộ tranh và 10 đề thi thử có đồng hồ. Bấm loa để nghe giọng Nhật mẫu, bấm Ghi âm luyện nói (góc phải) để thu câu trả lời và nghe lại so với mẫu."
         actions={
           <button
             type="button"
@@ -264,7 +264,7 @@ export const JapaneseSpeakingSection: React.FC<Props> = ({
           ref={frameRef}
           key={theme}
           title="Ôn thi nói JPD123"
-          src={doc ? undefined : `${src}?theme=${theme}&embed=1#${route}`}
+          src={doc ? undefined : `${src}?v=spk-20261104-29&theme=${theme}&embed=1#${route}`}
           srcDoc={doc}
           onLoad={onLoad}
           allow="autoplay"
