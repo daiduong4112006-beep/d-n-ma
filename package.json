@@ -11,7 +11,8 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test:sync": "node scripts/tests/run.cjs",
-    "test:study": "node scripts/tests/study.cjs"
+    "test:study": "node scripts/tests/study.cjs",
+    "prebuild": "node scripts/check-react-versions.cjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -23,8 +24,8 @@
     "katex": "^0.18.1",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
-    "react": "^19.0.1",
-    "react-dom": "^19.0.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "react-markdown": "^10.1.0",
     "rehype-katex": "^7.0.1",
     "remark-math": "^6.0.0",
@@ -39,6 +40,6 @@
     "typescript": "~5.8.2",
     "vite": "^6.2.3",
     "@types/express": "^4.17.21",
-    "react-test-renderer": "^19.0.1"
+    "react-test-renderer": "19.3.1"
   }
 }
