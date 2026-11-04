@@ -22,7 +22,8 @@ import {
   PanelLeftOpen,
 } from 'lucide-react';
 import { sound } from '../utils/audio';
-import {canOpenAdmin} from '../utils/adminAccess';
+import {canShowAdminEntry} from '../utils/adminAccess';
+import {auth,onAuthStateChanged} from '../lib/firebase';
 import {readPreferences} from '../utils/experiencePreferences';
 
 interface SidebarProps {
@@ -62,6 +63,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   soundEnabled,
   onToggleSound,
 }) => {
+  const [showAdminEntry,setShowAdminEntry]=useState(()=>canShowAdminEntry(currentUser?.email));
+  useEffect(()=>onAuthStateChanged(auth,()=>setShowAdminEntry(canShowAdminEntry(currentUser?.email))),[currentUser?.email]);
   const [internalSoundOn, setInternalSoundOn] = useState(sound.isEnabled());
   const [isCollapsed, setIsCollapsed] = useState(() => {
     const saved = localStorage.getItem('sidebar_collapsed');
@@ -112,7 +115,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const systemItems = [
     { id: 'settings', label: 'Cài đặt hệ thống', icon: Settings, color: 'slate' },
-    ...(canOpenAdmin()?[{id:'admin',label:'Quản lý',icon:ShieldCheck,color:'indigo'}]:[]),
+    ...(showAdminEntry?[{id:'admin',label:'Quản lý',icon:ShieldCheck,color:'indigo'}]:[]),
   ];
 
   const colorMap: Record<string, { bg: string; text: string; activeBg: string; activeText: string }> = {
@@ -408,14 +411,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Mobile Overlay */}
       {isMobileOpen && (
         <div
-          className="md:hidden fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
+          className="md:hidden fixed inset-x-0 top-14 bottom-0 bg-black/50 z-40 backdrop-blur-sm"
           onClick={() => setIsMobileOpen(false)}
         />
       )}
 
       {/* Mobile Slide-out Sidebar */}
       <aside
-        className={`md:hidden fixed top-14 left-0 bottom-0 z-50 w-[280px] bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-transform duration-300 ease-in-out shadow-2xl overflow-hidden overflow-x-hidden ${
+        className={`md:hidden fixed top-14 left-0 bottom-0 z-50 w-[280px] pb-[env(safe-area-inset-bottom)] bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-transform duration-300 ease-in-out shadow-2xl overflow-hidden overflow-x-hidden ${
           isMobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
