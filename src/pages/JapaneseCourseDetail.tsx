@@ -38,7 +38,15 @@ import { JapaneseSrsSection, SrsScope, computeSrsTodayCounts } from '../componen
 import { SectionHeader, FilterChip, ToneButton, ProgressRing, TONE, CourseTone } from '../components/japanese/courseUi';
 import { sound } from '../utils/audio';
 
-const COMBINED_LESSON_ID = 'jpd-combined-4-7';
+const COMBINED_LESSON_ID = 'jpd-combined';
+const COMBINED_PICKS_KEY = 'jpd_combined_lesson_picks';
+const COMBINED_ALL = ['4', '5', '6', '7'];
+const isCombinedId = (id?: string) => !!id && id.startsWith(COMBINED_LESSON_ID);
+/** '4,5,6' → '4–6'; không liền nhau → '4, 6' */
+const picksLabel = (p: string[]) => {
+  const n = p.map(Number).sort((x, y) => x - y);
+  return n.length > 1 && n.every((v, i) => i === 0 || v === n[i - 1] + 1) ? `${n[0]}–${n[n.length - 1]}` : n.join(', ');
+};
 
 interface Props {
   course: JapaneseCourse;
@@ -89,22 +97,38 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
     return () => window.removeEventListener('mcq_sm2_updated', update);
   }, [course]);
 
-  // Bài ảo "Toàn bộ từ vựng Bài 4–7": gộp thẻ của các bài 4.x → 7.x (không lưu riêng)
-  const buildCombinedLesson = (): JapaneseLesson | null => {
+  // Bài ảo "Tổng hợp từ vựng": gộp thẻ của các bài được tích chọn (4–7), không lưu riêng
+  const [combinedPicks, setCombinedPicks] = useState<string[]>(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(COMBINED_PICKS_KEY) || 'null');
+      if (Array.isArray(v) && v.length && v.every((x) => COMBINED_ALL.includes(x))) return v;
+    } catch {}
+    return COMBINED_ALL;
+  });
+  const toggleCombinedPick = (n: string) => {
+    setCombinedPicks((prev) => {
+      const next = prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n].sort();
+      if (!next.length) return prev; // phải chọn ít nhất 1 bài
+      try { localStorage.setItem(COMBINED_PICKS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const buildCombinedLesson = (picks: string[] = combinedPicks): JapaneseLesson | null => {
     const src = (course.lessons || []).filter((l) => {
       const m = (l.lessonCode || l.title).match(/(\d+)/);
-      const n = m ? Number(m[1]) : NaN;
-      return n >= 4 && n <= 7;
+      return !!m && picks.includes(m[1]);
     });
     if (!src.length) return null;
     const seen = new Set<string>();
     const cards = src.flatMap((l) => l.cards || []).filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)));
+    const label = picksLabel(picks);
     return {
-      id: COMBINED_LESSON_ID,
+      // id đổi theo bài được chọn để tiến độ gõ/flashcard của mỗi tổ hợp lưu riêng
+      id: `${COMBINED_LESSON_ID}-${[...picks].sort().join('')}`,
       courseId: course.id,
-      lessonCode: 'Bài 4–7',
-      title: 'Tổng hợp Bài 4–7: 全部の単語 (Toàn bộ từ vựng)',
-      description: `Gộp ${cards.length} từ của ${src.length} bài, từ Bài 4 đến Bài 7.`,
+      lessonCode: `Bài ${label}`,
+      title: `Tổng hợp từ vựng Bài ${label}`,
+      description: `Gộp ${cards.length} từ của ${src.length} bài. Tích chọn những bài bạn đã học.`,
       cards,
       createdAt: src[0].createdAt,
       updatedAt: src[0].updatedAt,
@@ -114,7 +138,7 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
 
   // Đưa thay đổi (đã nhớ / chưa nhớ) của một bài về course; bài gộp thì cập nhật theo id thẻ ở từng bài gốc
   const mergeLessonIntoCourse = (updatedLesson: JapaneseLesson): JapaneseLesson[] => {
-    if (updatedLesson.id !== COMBINED_LESSON_ID) {
+    if (!isCombinedId(updatedLesson.id)) {
       return course.lessons.map((l) => (l.id === updatedLesson.id ? updatedLesson : l));
     }
     const byId = new Map(updatedLesson.cards.map((c) => [c.id, c] as [string, JapaneseVocabCard]));
@@ -125,10 +149,10 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
 
   // Keep selectedLesson in sync when course prop updates from cloud or other devices
   useEffect(() => {
-    if (selectedLesson?.id === COMBINED_LESSON_ID) {
+    if (isCombinedId(selectedLesson?.id)) {
       const fresh = buildCombinedLesson();
       if (!fresh) {setSelectedLesson(null);setActiveSubView('tabs');return;}
-      if (JSON.stringify(fresh.cards) !== JSON.stringify(selectedLesson.cards)) setSelectedLesson(fresh);
+      if (fresh.id !== selectedLesson!.id || JSON.stringify(fresh.cards) !== JSON.stringify(selectedLesson!.cards)) setSelectedLesson(fresh);
       return;
     }
     if (selectedLesson) {
@@ -138,7 +162,7 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
         setSelectedLesson(fresh);
       }
     }
-  }, [course]);
+  }, [course, combinedPicks.join(',')]);
 
   // 1. Vocabulary Handlers
   const handleSelectLesson = (lesson: JapaneseLesson) => {
@@ -370,8 +394,26 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
             }
             setActiveSubView(mode);
           }}
-          onEditLesson={selectedLesson.id === COMBINED_LESSON_ID ? undefined : () => handleEditLesson(selectedLesson)}
-          onDeleteLesson={selectedLesson.id === COMBINED_LESSON_ID ? undefined : () => setLessonToDelete(selectedLesson)}
+          onEditLesson={isCombinedId(selectedLesson.id) ? undefined : () => handleEditLesson(selectedLesson)}
+          onDeleteLesson={isCombinedId(selectedLesson.id) ? undefined : () => setLessonToDelete(selectedLesson)}
+          headerExtra={isCombinedId(selectedLesson.id) ? (
+            <div className="flex flex-wrap items-center gap-2 pt-2">
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Học các bài:</span>
+              {COMBINED_ALL.map((n) => {
+                const on = combinedPicks.includes(n);
+                return (
+                  <label
+                    key={n}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-black cursor-pointer select-none transition-colors ${on ? 'bg-orange-500/10 border-orange-400 text-orange-600 dark:text-orange-400' : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300'}`}
+                    title={on && combinedPicks.length === 1 ? 'Phải chọn ít nhất 1 bài' : undefined}
+                  >
+                    <input type="checkbox" className="accent-orange-500 w-3.5 h-3.5" checked={on} onChange={() => toggleCombinedPick(n)} />
+                    Bài {n}
+                  </label>
+                );
+              })}
+            </div>
+          ) : undefined}
           onToggleMastery={handleToggleCardMastery}
         />
 
@@ -485,7 +527,7 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
       set: (k) => setSrsScope(k as SrsScope),
     },
     vocabulary: {
-      items: [{ key: 'ALL', label: 'Tất cả bài', count: (course.lessons || []).length }, ...['4', '5', '6', '7'].map((n) => ({ key: `Bài ${n}`, label: `Bài ${n}`, count: lessonCount(n) })), ...(combinedLesson ? [{ key: COMBINED_LESSON_ID, label: 'Toàn bộ từ vựng Bài 4–7', count: combinedLesson.cards.length }] : [])],
+      items: [{ key: 'ALL', label: 'Tất cả bài', count: (course.lessons || []).length }, ...['4', '5', '6', '7'].map((n) => ({ key: `Bài ${n}`, label: `Bài ${n}`, count: lessonCount(n) })), ...(combinedLesson ? [{ key: COMBINED_LESSON_ID, label: `Tổng hợp từ vựng (Bài ${picksLabel(combinedPicks)})`, count: combinedLesson.cards.length }] : [])],
       value: vocabLessonFilter,
       set: (k) => {
         if (k === COMBINED_LESSON_ID) {
@@ -744,34 +786,6 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-              {combinedLesson && vocabLessonFilter === 'ALL' && !vocabSearch.trim() && (() => {
-                const total = combinedLesson.cards.length;
-                const mem = combinedLesson.cards.filter((c) => c.mastered).length;
-                const p = pct(mem, total);
-                return (
-                  <div
-                    key={COMBINED_LESSON_ID}
-                    onClick={() => handleSelectLesson(combinedLesson)}
-                    className="group relative overflow-hidden p-5 rounded-3xl bg-gradient-to-br from-orange-500 to-rose-500 text-white border border-orange-400/40 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-orange-500/20 transition-all cursor-pointer flex flex-col gap-3"
-                  >
-                    <span aria-hidden="true" className="pointer-events-none absolute -right-2 -top-6 text-[96px] font-black leading-none text-white/10 select-none">4–7</span>
-                    <span className="relative self-start px-2 py-0.5 rounded-md bg-white/20 text-[10px] font-black tracking-wider uppercase">Tổng hợp · Bài 4–7</span>
-                    <div className="relative min-w-0">
-                      <h4 className="text-lg font-black font-japanese truncate">全部の単語</h4>
-                      <p className="text-xs text-white/80 truncate">Toàn bộ từ vựng từ Bài 4 đến Bài 7</p>
-                    </div>
-                    <div className="relative mt-auto space-y-1.5">
-                      <div className="flex items-center justify-between text-[11px] font-bold">
-                        <span>{total} từ vựng</span>
-                        <span>{mem}/{total} đã nhớ · {p}%</span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-white/25 overflow-hidden">
-                        <div className="h-full bg-white rounded-full" style={{ width: `${p}%` }} />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
               {filteredLessons.map((lesson) => {
                 const total = lesson.cards.length;
                 const mem = lesson.cards.filter((c) => c.mastered).length;

@@ -25,6 +25,8 @@ interface JapaneseLessonDetailProps {
   onEditLesson?: () => void;
   onDeleteLesson?: () => void;
   onToggleMastery: (cardId: string, currentMastered: boolean) => void;
+  /** Nội dung thêm dưới tiêu đề (vd: ô tích chọn bài cho bài tổng hợp) */
+  headerExtra?: React.ReactNode;
 }
 
 export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
@@ -35,6 +37,7 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
   onEditLesson,
   onDeleteLesson,
   onToggleMastery,
+  headerExtra,
 }) => {
   const [vocabSearch, setVocabSearch] = useState('');
   const [vocabFilterTab, setVocabFilterTab] = useState<'original' | 'mastered' | 'all'>('original');
@@ -105,6 +108,7 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
               {lesson.description}
             </p>
           )}
+          {headerExtra}
         </div>
 
         {/* Action Buttons matching screenshot */}
