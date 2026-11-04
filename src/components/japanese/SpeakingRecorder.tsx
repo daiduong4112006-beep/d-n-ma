@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Mic, Square, Play, Pause, Trash2, Download, X, ChevronDown, Volume2 } from 'lucide-react';
 import { speakJapanese, katakanaToHiragana } from '../../utils/japaneseKana';
-import { convertKanjiToHiragana } from '../../utils/japaneseKanjiConverter';
+import { toKanaReading } from '../../utils/kanaReading';
 
 /* ----------------------------------------------------------------------------
  * Máy ghi âm nổi cho phần Ôn SPK: ghi lại câu trả lời, nghe lại để so với giọng
@@ -27,7 +27,7 @@ const getRecognition = (): any => {
 
 /** Chuẩn hóa về hiragana, bỏ dấu câu/khoảng trắng để so sánh */
 const norm = (s: string) =>
-  katakanaToHiragana(convertKanjiToHiragana(s || ''))
+  katakanaToHiragana(toKanaReading(s || ''))
     .replace(/[\s、。，．・！？!?「」『』（）()\[\]【】〜~ー\-.,]/g, '')
     .toLowerCase();
 
@@ -234,7 +234,7 @@ export const SpeakingRecorder: React.FC = () => {
         </div>
         {recording && canRecognize && (
           <div className="rounded-xl bg-emerald-50 dark:bg-emerald-500/10 px-3 py-2 text-xs font-japanese text-emerald-800 dark:text-emerald-200 min-h-[2rem]">
-            {live || 'Đang nghe…'}
+            {live ? toKanaReading(live) : 'Đang nghe…'}
           </div>
         )}
         {error && <p className="text-xs font-semibold text-rose-500">{error}</p>}
@@ -265,13 +265,13 @@ export const SpeakingRecorder: React.FC = () => {
             {t.transcript && (
               <div className="text-xs font-japanese text-slate-700 dark:text-slate-200">
                 <span className="font-sans font-bold text-slate-400">Máy nghe được: </span>
-                {t.transcript}
+                {toKanaReading(t.transcript)}
               </div>
             )}
             {t.target && (
               <div className="text-xs font-japanese text-slate-500">
                 <span className="font-sans font-bold text-slate-400">Câu mẫu: </span>
-                {t.target}
+                {toKanaReading(t.target)}
               </div>
             )}
           </div>

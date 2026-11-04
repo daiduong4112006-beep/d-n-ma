@@ -14,6 +14,7 @@ import {
   Sparkles,
   SlidersHorizontal,
   ArrowLeftRight,
+  Lightbulb,
 } from 'lucide-react';
 import { JapaneseLesson, JapaneseVocabCard } from '../../types/japanese';
 import {
@@ -28,6 +29,121 @@ import { getTypingProgress, saveTypingProgress, clearTypingProgress } from '../.
 import { shuffleArray } from '../../utils/shuffle';
 import { realtimeSync } from '../../utils/realtimeSync';
 import { computeJapaneseDiff } from '../../utils/japaneseDiff';
+import { removeVietnameseAccents } from '../../utils/japaneseKana';
+import { toKanaReading } from '../../utils/kanaReading';
+
+// Câu ví dụ hiển thị/đọc hoàn toàn bằng kana (không chữ Hán)
+const toKanaExample = (ex?: string) => (ex ? toKanaReading(ex) : ex);
+
+/* ---------------- Gợi ý & so sánh cho chiều Nhật → Việt ---------------- */
+/** Tách nghĩa tiếng Việt thành các cách nói chấp nhận được (vd. "Cả năm, suốt năm") */
+const viVariants = (def: string): string[] =>
+  (def || '')
+    .split(/[,;/／+、|]+/)
+    .map((x) => x.replace(/[\(（][^\)）]*[\)）]/g, '').replace(/[~～〜]/g, '').trim())
+    .filter(Boolean);
+
+const hasVietnameseMarks = (s: string) => s !== removeVietnameseAccents(s);
+
+/** Cách nói gần với câu trả lời nhất (để chỉ chỗ sai cho đúng) */
+const closestVariant = (input: string, def: string): string => {
+  const vs = viVariants(def);
+  if (!vs.length) return def || '';
+  const norm = (x: string) => removeVietnameseAccents(x.toLowerCase()).replace(/\s+/g, ' ').trim();
+  const u = norm(input);
+  let best = vs[0];
+  let bestScore = -1;
+  for (const v of vs) {
+    const t = norm(v);
+    let same = 0;
+    for (let i = 0; i < Math.min(u.length, t.length); i++) if (u[i] === t[i]) same++;
+    const score = same - Math.abs(u.length - t.length) * 0.5;
+    if (score > bestScore) {
+      bestScore = score;
+      best = v;
+    }
+  }
+  return best;
+};
+
+/** Gợi ý tiếng Việt từng bước: 1 = chữ cái đầu mỗi từ, 2 = lộ một nửa, 3 = cả đáp án */
+const viHintMask = (answer: string, level: number): string => {
+  if (level >= 3) return answer;
+  return answer
+    .split(/(\s+)/)
+    .map((w) => {
+      if (!w.trim()) return w;
+      const chars = Array.from(w);
+      const keep = level <= 1 ? 1 : Math.max(1, Math.ceil(chars.length / 2));
+      return chars.map((c, i) => (i < keep ? c : '_')).join('');
+    })
+    .join('');
+};
+
+/** So sánh từng chữ cho tiếng Việt (bộ so sánh tiếng Nhật sẽ đổi chữ La-tinh thành kana) */
+const computePlainDiff = (input: string, target: string) => {
+  const a = Array.from(input);
+  const b = Array.from(target);
+  const eq = (x: string, y: string) => x.toLowerCase() === y.toLowerCase();
+  const n = a.length;
+  const m = b.length;
+  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--)
+    for (let j = m - 1; j >= 0; j--) dp[i][j] = eq(a[i], b[j]) ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  const userMark: boolean[] = new Array(n).fill(false);
+  const targetMark: boolean[] = new Array(m).fill(false);
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (eq(a[i], b[j])) {
+      userMark[i] = targetMark[j] = true;
+      i++;
+      j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) i++;
+    else j++;
+  }
+  const group = (chars: string[], marks: boolean[], bad: 'wrong' | 'missing') => {
+    const parts: { text: string; type: 'correct' | 'wrong' | 'missing' }[] = [];
+    chars.forEach((c, k) => {
+      const type = marks[k] ? 'correct' : bad;
+      const last = parts[parts.length - 1];
+      if (last && last.type === type) last.text += c;
+      else parts.push({ text: c, type });
+    });
+    return parts;
+  };
+  const userParts = group(a, userMark, 'wrong');
+  const targetParts = group(b, targetMark, 'missing');
+  // Gợi ý: từ đầu tiên bị sai
+  const uw = input.trim().split(/\s+/);
+  const tw = target.trim().split(/\s+/);
+  let firstErrorHint = '';
+  for (let k = 0; k < Math.max(uw.length, tw.length); k++) {
+    const x = uw[k] || '';
+    const y = tw[k] || '';
+    if (x.toLowerCase() !== y.toLowerCase()) {
+      firstErrorHint = !x ? `Còn thiếu "${tw.slice(k).join(' ')}"` : !y ? `Thừa "${uw.slice(k).join(' ')}"` : `Gõ "${x}" → cần là "${y}"`;
+      break;
+    }
+  }
+  return { userParts, targetParts, firstErrorHint };
+};
+
+/** Đọc tiếng Việt (nếu máy có giọng tiếng Việt) */
+const speakVietnamese = (text: string) => {
+  try {
+    const synth = window.speechSynthesis;
+    if (!synth || !text) return;
+    const voice = synth.getVoices().find((v) => v.lang?.toLowerCase().startsWith('vi'));
+    if (!voice) return;
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.voice = voice;
+    u.lang = voice.lang;
+    u.rate = 0.95;
+    synth.speak(u);
+  } catch {}
+};
 
 export type TypingDirection = 'vi-to-jp' | 'jp-to-vi';
 
@@ -129,6 +245,8 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
   const [isCompleted, setIsCompleted] = useState(false);
   const [showResumeBanner, setShowResumeBanner] = useState(false);
   const [showAudioHintFeedback, setShowAudioHintFeedback] = useState(false);
+  // Gợi ý tiếng Việt từng bước (chiều Nhật → Việt)
+  const [viHintLevel, setViHintLevel] = useState(0);
 
   // Options modal & audio settings
   const [showOptionsModal, setShowOptionsModal] = useState(false);
@@ -164,6 +282,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
 
   useEffect(() => () => { if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current); }, [currentIndex, filterTab, direction, isShuffleEnabled]);
   const currentCard = cards[currentIndex];
+  const exKana = toKanaExample(currentCard?.example);
   const isCurrentKata = currentCard
     ? /[\u30A0-\u30FF]/.test(currentCard.term) && !/[\u4E00-\u9FAF]/.test(currentCard.term)
     : false;
@@ -368,6 +487,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     setIsAnswerChecked(alreadyAccepted);
     setIsCorrect(alreadyAccepted ? true : null);
     setShowAudioHintFeedback(false);
+    setViHintLevel(0);
     
     // Auto focus into input on every card transition
     const focusTimer1 = setTimeout(() => {
@@ -385,8 +505,23 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
 
   const handlePlayHintAudio = () => {
     if (!currentCard) return;
+    // Nhật → Việt: đáp án là tiếng Việt nên gợi ý bằng chữ tiếng Việt (từng bước), không phát lại tiếng Nhật
+    if (direction === 'jp-to-vi') {
+      const next = Math.min(3, viHintLevel + 1);
+      setViHintLevel(next);
+      setShowAudioHintFeedback(true);
+      sound.playClick();
+      if (next >= 3) {
+        // Đã xem cả đáp án → tính là chưa thuộc câu này
+        setWrongCardIds((prev) => new Set(prev).add(currentCard.id));
+        const ans = isExampleMode ? currentCard.exampleMeaning || currentCard.definition : viVariants(currentCard.definition)[0] || currentCard.definition;
+        speakVietnamese(ans);
+      }
+      inputRef.current?.focus();
+      return;
+    }
     const targetText = isExampleMode
-      ? currentCard.example || currentCard.reading || currentCard.term
+      ? exKana || currentCard.reading || currentCard.term
       : currentCard.reading || currentCard.term;
     speakJapanese(targetText);
     setShowAudioHintFeedback(true);
@@ -400,7 +535,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
   useEffect(() => {
     if (autoSpeechEnabled && currentCard && (direction === 'jp-to-vi' || isExampleMode) && !isCompleted) {
       const targetText = isExampleMode
-        ? currentCard.example || currentCard.reading || currentCard.term
+        ? exKana || currentCard.reading || currentCard.term
         : currentCard.reading || currentCard.term;
       speakJapanese(targetText);
     }
@@ -448,7 +583,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
       if (direction === 'jp-to-vi') {
         matched = checkVietnameseAnswer(finalized, currentCard.exampleMeaning || currentCard.definition);
       } else {
-        matched = checkGrammarSentenceAnswer(finalized, currentCard.example || '', true);
+        matched = checkGrammarSentenceAnswer(finalized, exKana || '', true) || checkGrammarSentenceAnswer(finalized, currentCard.example || '', true);
       }
     } else if (direction === 'vi-to-jp') {
       matched = checkJapaneseAnswer(finalized, currentCard);
@@ -460,7 +595,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
     setIsCorrect(matched);
 
     const speechText = isExampleMode
-      ? currentCard.example || currentCard.reading || currentCard.term
+      ? exKana || currentCard.reading || currentCard.term
       : currentCard.reading || currentCard.term;
 
     if (matched) {
@@ -1201,7 +1336,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
               {(direction === 'jp-to-vi' || isExampleMode) && (
                 <button
                   type="button"
-                  onClick={() => speakJapanese(isExampleMode ? (currentCard.example || currentCard.reading || currentCard.term) : (currentCard.reading || currentCard.term))}
+                  onClick={() => speakJapanese(isExampleMode ? (exKana || currentCard.reading || currentCard.term) : (currentCard.reading || currentCard.term))}
                   className="p-1 rounded-full text-slate-400 hover:text-cyan-400 hover:bg-slate-800 transition-colors cursor-pointer"
                   title="Nghe phát âm"
                 >
@@ -1229,7 +1364,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
                     </span>
                     <button
                       type="button"
-                      onClick={() => speakJapanese(currentCard.example || '')}
+                      onClick={() => speakJapanese(exKana || '')}
                       className="p-1 rounded-full text-slate-400 hover:text-cyan-400 hover:bg-slate-700 transition-colors cursor-pointer"
                       title="Nghe phát âm câu ví dụ tiếng Nhật"
                     >
@@ -1238,8 +1373,8 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
                   </div>
                   <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-white tracking-tight leading-relaxed">
                     {direction === 'vi-to-jp'
-                      ? (currentCard.exampleMeaning || currentCard.example)
-                      : currentCard.example}
+                      ? (currentCard.exampleMeaning || exKana)
+                      : exKana}
                   </h2>
                 </div>
 
@@ -1275,10 +1410,13 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
               </div>
             )}
 
-            {!isExampleMode && currentCard.example && (
-              <p className="text-sm sm:text-base text-slate-300 font-medium">
-                {currentCard.example}
-              </p>
+            {/* Câu ví dụ kèm theo: Nhật → Việt hiện câu tiếng Nhật; Việt → Nhật hiện nghĩa tiếng Việt
+                (hiện câu tiếng Nhật sẽ lộ luôn đáp án) */}
+            {!isExampleMode && direction === 'jp-to-vi' && exKana && (
+              <p className="text-sm sm:text-base text-slate-300 font-medium">{exKana}</p>
+            )}
+            {!isExampleMode && direction === 'vi-to-jp' && currentCard.exampleMeaning && (
+              <p className="text-sm sm:text-base text-slate-400 font-medium italic">Ví dụ: {currentCard.exampleMeaning}</p>
             )}
           </div>
 
@@ -1381,24 +1519,50 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
                 type="button"
                 onClick={handlePlayHintAudio}
                 className="px-3.5 sm:px-5 rounded-3xl bg-indigo-600/25 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/40 hover:border-indigo-400 transition-all cursor-pointer flex flex-col items-center justify-center shrink-0 shadow-lg active:scale-95 group"
-                title="Không biết từ? Bấm vào đây để nghe gợi ý phát âm"
+                title={direction === 'jp-to-vi' ? 'Không nhớ nghĩa? Bấm để hiện dần chữ cái của đáp án' : 'Không biết từ? Bấm vào đây để nghe gợi ý phát âm'}
               >
-                <Volume2 className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-400 group-hover:text-white group-hover:scale-110 transition-transform" />
+                {direction === 'jp-to-vi' ? (
+                  <Lightbulb className="w-5 h-5 sm:w-6 sm:h-6 text-amber-300 group-hover:text-white group-hover:scale-110 transition-transform" />
+                ) : (
+                  <Volume2 className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-400 group-hover:text-white group-hover:scale-110 transition-transform" />
+                )}
                 <span className="text-[10px] sm:text-[11px] font-black mt-0.5 whitespace-nowrap">
                   Gợi ý
                 </span>
               </button>
             </div>
 
+            {/* Gợi ý tiếng Việt (Nhật → Việt) */}
+            {showAudioHintFeedback && !isAnswerChecked && direction === 'jp-to-vi' && (() => {
+              const ans = isExampleMode ? currentCard.exampleMeaning || currentCard.definition : viVariants(currentCard.definition)[0] || currentCard.definition;
+              return (
+                <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-amber-950/50 border border-amber-500/40 text-amber-100 text-xs animate-in fade-in slide-in-from-top-1 duration-150 shadow-md">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Lightbulb className="w-4 h-4 text-amber-300 shrink-0" />
+                    <span className="min-w-0">
+                      {viHintLevel >= 3 ? 'Đáp án: ' : 'Gợi ý: '}
+                      <b className="font-mono text-sm tracking-wide text-white break-words">{viHintMask(ans, viHintLevel)}</b>
+                      {viHintLevel >= 3 && <span className="text-amber-300/80"> · câu này sẽ được ôn lại</span>}
+                    </span>
+                  </div>
+                  {viHintLevel < 3 && (
+                    <button type="button" onClick={handlePlayHintAudio} className="text-amber-300 hover:text-white font-bold underline text-[11px] cursor-pointer shrink-0">
+                      {viHintLevel === 1 ? 'Gợi ý thêm' : 'Xem đáp án'}
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Audio Hint Feedback Banner */}
-            {showAudioHintFeedback && !isAnswerChecked && (
+            {showAudioHintFeedback && !isAnswerChecked && direction === 'vi-to-jp' && (
               <div className="flex items-center justify-between p-3 rounded-2xl bg-indigo-950/70 border border-indigo-500/40 text-indigo-200 text-xs animate-in fade-in slide-in-from-top-1 duration-150 shadow-md">
                 <div className="flex items-center gap-2">
                   <Volume2 className="w-4 h-4 text-indigo-400 animate-pulse shrink-0" />
                   <span>
                     🔊 Đang phát âm gợi ý! {(direction === 'vi-to-jp' || isExampleMode) && (
                       <span className="text-amber-300 font-bold ml-1">
-                        Bắt đầu bằng &quot;{((isExampleMode ? (direction === 'vi-to-jp' ? currentCard.example : (currentCard.exampleMeaning || currentCard.definition)) : currentCard.reading) || currentCard.term).replace(/^[~～〜⁓〰\s(（]+/, '').charAt(0)}...&quot;
+                        Bắt đầu bằng &quot;{((isExampleMode ? (direction === 'vi-to-jp' ? exKana : (currentCard.exampleMeaning || currentCard.definition)) : currentCard.reading) || currentCard.term).replace(/^[~～〜⁓〰\s(（]+/, '').charAt(0)}...&quot;
                       </span>
                     )}
                   </span>
@@ -1440,7 +1604,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
                             direction === 'vi-to-jp' ? (
                               <>
                                 <b className="text-white text-base">
-                                  {currentCard.example}
+                                  {exKana}
                                 </b>
                                 {currentCard.exampleMeaning && (
                                   <span className="text-amber-300 font-medium ml-1">
@@ -1453,9 +1617,9 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
                                 <b className="text-white text-base">
                                   {currentCard.exampleMeaning || currentCard.definition}
                                 </b>
-                                {currentCard.example && (
+                                {exKana && (
                                   <span className="text-indigo-300 font-medium ml-1">
-                                    ({currentCard.example})
+                                    ({exKana})
                                   </span>
                                 )}
                               </>
@@ -1489,7 +1653,7 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
                   <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
                     <button
                       type="button"
-                      onClick={() => speakJapanese(isExampleMode ? (currentCard.example || currentCard.reading || currentCard.term) : (currentCard.reading || currentCard.term))}
+                      onClick={() => speakJapanese(isExampleMode ? (exKana || currentCard.reading || currentCard.term) : (currentCard.reading || currentCard.term))}
                       className="p-2 rounded-xl bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white transition-colors cursor-pointer"
                       title={isExampleMode ? "Phát âm câu ví dụ này" : "Phát âm từ này"}
                     >
@@ -1536,12 +1700,22 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
                   <div className="pt-2 border-t border-rose-900/50 text-left">
                     {(() => {
                       const targetTextForDiff = isExampleMode
-                        ? (direction === 'vi-to-jp' ? (currentCard.example || '') : (currentCard.exampleMeaning || currentCard.definition || ''))
+                        ? (direction === 'vi-to-jp' ? (exKana || '') : (currentCard.exampleMeaning || currentCard.definition || ''))
                         : direction === 'vi-to-jp'
                         ? (isCurrentKata ? currentCard.term : (currentCard.reading || currentCard.term || ''))
                         : (currentCard.definition || '');
 
-                      const diff = computeJapaneseDiff(inputVal, targetTextForDiff);
+                      // Nhật → Việt: so với cách nói gần nhất; gõ không dấu thì so không dấu
+                      let diffTarget = targetTextForDiff;
+                      let diffInput = inputVal;
+                      if (direction === 'jp-to-vi') {
+                        diffTarget = closestVariant(inputVal, targetTextForDiff);
+                        if (!hasVietnameseMarks(inputVal)) {
+                          diffTarget = removeVietnameseAccents(diffTarget);
+                          diffInput = removeVietnameseAccents(inputVal);
+                        }
+                      }
+                      const diff = direction === 'jp-to-vi' ? computePlainDiff(diffInput, diffTarget) : computeJapaneseDiff(diffInput, diffTarget);
                       return (
                         <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2">
                           {diff.firstErrorHint && (
@@ -1586,6 +1760,11 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
                               </div>
                             </div>
                           </div>
+                          {direction === 'jp-to-vi' && viVariants(targetTextForDiff).length > 1 && (
+                            <div className="text-[11px] text-slate-400">
+                              Nghĩa đầy đủ (gõ 1 cách là được): <span className="text-slate-200 font-bold">{targetTextForDiff}</span>
+                            </div>
+                          )}
                         </div>
                       );
                     })()}
