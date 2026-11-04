@@ -27,7 +27,7 @@ export const useThemeAndSound = (email?: string) => {
     }
     // Thanh trạng thái / thanh địa chỉ trên điện thoại cùng màu với thanh trên của app
     // (trước là tím #4f46e5 cố định nên lệch màu, nhất là ở chế độ tối)
-    const color = isDarkMode ? '#0f172a' : '#ffffff';
+    const color = isDarkMode ? '#020617' : '#ffffff';
     document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', color));
   }, [isDarkMode]);
 

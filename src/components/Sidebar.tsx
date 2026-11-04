@@ -388,7 +388,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <>
       {/* Mobile Top Bar */}
-      <div className="md:hidden sticky top-0 z-40 h-14 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between px-4 shadow-sm">
+      <div className="md:hidden sticky top-0 z-40 h-14 bg-white/95 dark:bg-[#020617]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between px-4 shadow-sm">
         <button
           type="button"
           onClick={() => setActiveTab('dashboard')}
