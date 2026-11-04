@@ -52,7 +52,20 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
     ? kanjiCards
     : (customCards || lesson?.cards || []);
 
-  const [deck, setDeck] = useState<any[]>(initialCards);
+  // Lọc thẻ: Chưa nhớ / Đã nhớ / Tất cả (giống bộ gõ)
+  type FilterTab = 'original' | 'mastered' | 'all';
+  const [filterTab, setFilterTab] = useState<FilterTab>(() => {
+    const v = localStorage.getItem('flashcard_filter_tab');
+    return v === 'original' || v === 'mastered' ? v : 'all';
+  });
+  const cardsForTab = (tab: FilterTab, mastered?: Set<string>) =>
+    tab === 'all'
+      ? initialCards
+      : initialCards.filter((c) => (mastered ? mastered.has(c.id) : !!c.mastered) === (tab === 'mastered'));
+  // id các thẻ đã có lúc chọn tab — thẻ mới thêm (không nằm trong đây) mới được nối vào bộ thẻ
+  const knownIdsRef = useRef<Set<string>>(new Set(initialCards.map((c) => c.id)));
+
+  const [deck, setDeck] = useState<any[]>(() => cardsForTab(filterTab));
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [direction, setDirection] = useState<'jp-to-vi' | 'vi-to-jp'>('jp-to-vi');
@@ -71,17 +84,20 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
     return localStorage.getItem('flashcard_wide_frame') !== 'false';
   });
 
-  const persistenceKey = storageId || (lesson ? `lesson_${lesson.id}` : isKanjiMode ? 'kanji_deck' : 'vocab_deck');
+  const baseKey = storageId || (lesson ? `lesson_${lesson.id}` : isKanjiMode ? 'kanji_deck' : 'vocab_deck');
+  // Tab "Tất cả" giữ khóa cũ để không mất tiến độ đã lưu trước đây
+  const persistenceKey = filterTab === 'all' ? baseKey : `${baseKey}_${filterTab}`;
 
   // 1. Restore previous session progress on mount
   useEffect(() => {
     const saved = getFlashcardProgress(persistenceKey);
-    if (saved && typeof saved.currentIndex === 'number' && saved.currentIndex >= 0 && saved.currentIndex < initialCards.length) {
+    const tabCards = cardsForTab(filterTab, masteredSet);
+    if (saved && typeof saved.currentIndex === 'number' && saved.currentIndex >= 0 && saved.currentIndex < tabCards.length) {
       // If saved card order exists, reorder deck
-      if (saved.cardIds && saved.cardIds.length === initialCards.length) {
-        const idMap = new Map<string, any>(initialCards.map((c) => [c.id, c] as [string, any]));
+      if (saved.cardIds && saved.cardIds.length === tabCards.length) {
+        const idMap = new Map<string, any>(tabCards.map((c) => [c.id, c] as [string, any]));
         const reordered = saved.cardIds.map((id) => idMap.get(id)).filter(Boolean);
-        if (reordered.length === initialCards.length) {
+        if (reordered.length === tabCards.length) {
           setDeck(reordered);
         }
       }
@@ -142,13 +158,53 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
     const fresh=new Map<string,any>(initialCards.map(c=>[c.id,c] as [string,any]));
     setDeck(prev=>{
       const seen=new Set(prev.map(c=>c.id));
-      const next=[...prev.filter(c=>fresh.has(c.id)).map(c=>fresh.get(c.id)),...initialCards.filter(c=>!seen.has(c.id))];
+      const added=initialCards.filter(c=>!seen.has(c.id)&&!knownIdsRef.current.has(c.id));
+      added.forEach(c=>knownIdsRef.current.add(c.id));
+      const next=[...prev.filter(c=>fresh.has(c.id)).map(c=>fresh.get(c.id)),...added];
       return JSON.stringify(next)===JSON.stringify(prev)?prev:next;
     });
     const ids=initialCards.filter(c=>c.mastered).map(c=>c.id);
     setMasteredSet(prev=>prev.size===ids.length&&ids.every(id=>prev.has(id))?prev:new Set(ids));
-    setCurrentIndex(i=>Math.max(0,Math.min(i,initialCards.length-1)));
+    setCurrentIndex(i=>Math.max(0,i));
   },[initialCards]);
+  // Giữ chỉ số trong phạm vi bộ thẻ hiện tại
+  useEffect(()=>{setCurrentIndex(i=>Math.max(0,Math.min(i,deck.length-1)));},[deck.length]);
+
+  const handleChangeFilterTab = (tab: FilterTab) => {
+    if (tab === filterTab) return;
+    setFilterTab(tab);
+    try { localStorage.setItem('flashcard_filter_tab', tab); } catch {}
+    knownIdsRef.current = new Set(initialCards.map((c) => c.id));
+    setDeck(cardsForTab(tab, masteredSet));
+    setCurrentIndex(0);
+    setIsFlipped(false);
+    setShowResumeBanner(false);
+    sound.playClick();
+  };
+  const masteredCount = initialCards.filter((c) => masteredSet.has(c.id)).length;
+  const filterBar = (
+    <div className="max-w-4xl mx-auto w-full flex justify-center pt-3">
+      <div className="inline-flex items-center gap-1 p-1 rounded-2xl bg-slate-900 border border-slate-800">
+        {([
+          ['original', 'Chưa nhớ', initialCards.length - masteredCount],
+          ['mastered', 'Đã nhớ', masteredCount],
+          ['all', 'Tất cả', initialCards.length],
+        ] as [FilterTab, string, number][]).map(([k, label, n]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => handleChangeFilterTab(k)}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition-colors ${
+              filterTab === k ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            {label}
+            <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${filterTab === k ? 'bg-white/20' : 'bg-slate-800 text-slate-400'}`}>{n}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 
   const currentItem = deck[currentIndex];
 
@@ -202,7 +258,8 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
 
   // RESTORE ACTION (Khôi phục)
   const handleRestore = () => {
-    setDeck(initialCards);
+    knownIdsRef.current = new Set(initialCards.map((c) => c.id));
+    setDeck(cardsForTab(filterTab, masteredSet));
     setCurrentIndex(0);
     setIsFlipped(false);
     setShowResumeBanner(false);
@@ -247,7 +304,14 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
   if (!currentItem || deck.length === 0) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center p-6 text-center text-slate-100">
-        <p className="text-sm text-slate-400">Không có thẻ nào trong học phần.</p>
+        {initialCards.length > 0 && <div className="mb-6 w-full">{filterBar}</div>}
+        <p className="text-sm text-slate-400">
+          {initialCards.length === 0
+            ? 'Không có thẻ nào trong học phần.'
+            : filterTab === 'mastered'
+            ? 'Chưa có thẻ nào được đánh dấu đã nhớ.'
+            : 'Bạn đã nhớ hết các thẻ. Chọn "Tất cả" để ôn lại.'}
+        </p>
         <button
           type="button"
           onClick={onExit}
@@ -296,6 +360,8 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
           </button>
         </div>
       </div>
+
+      {filterBar}
 
       {/* Options Modal */}
       {showOptionsModal && (
@@ -718,11 +784,13 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
                 ) : (
                   <div className="space-y-4">
                     <h2 className="text-6xl sm:text-7xl md:text-8xl font-black text-cyan-400 font-japanese">
-                      {currentItem.term}
-                    </h2>
-                    <p className="text-2xl sm:text-3xl font-bold text-indigo-300 font-japanese">
                       {currentItem.reading || currentItem.term}
-                    </p>
+                    </h2>
+                    {currentItem.reading && currentItem.reading !== currentItem.term && (
+                      <p className="text-2xl sm:text-3xl font-bold text-indigo-300 font-japanese">
+                        {currentItem.term}
+                      </p>
+                    )}
                   </div>
                 )
               )
@@ -812,18 +880,22 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <h2 className="text-5xl sm:text-6xl md:text-7xl font-black text-cyan-400">
-                      {currentItem.term}
-                    </h2>
                     {(() => {
-                      const hira = (currentItem.reading && currentItem.reading !== currentItem.term)
-                        ? currentItem.reading
-                        : katakanaToHiragana(currentItem.term);
-                      return hira && hira !== currentItem.term ? (
-                        <p className="text-xl sm:text-2xl font-bold text-indigo-300">
-                          {hira}
-                        </p>
-                      ) : null;
+                      // Chữ Nhật (kana) to ở trên, chữ Hán nhỏ ở dưới
+                      const hasReading = !!currentItem.reading && currentItem.reading !== currentItem.term;
+                      return (
+                        <>
+                          <h2 className="text-5xl sm:text-6xl md:text-7xl font-black text-cyan-400 font-japanese">
+                            {hasReading ? currentItem.reading : currentItem.term}
+                          </h2>
+                          {hasReading && (
+                            <p className="text-xl sm:text-2xl font-bold text-indigo-300 font-japanese">{currentItem.term}</p>
+                          )}
+                          {currentItem.romaji && (
+                            <p className="text-sm font-mono font-bold text-slate-400">[{currentItem.romaji}]</p>
+                          )}
+                        </>
+                      );
                     })()}
                   </div>
                 )
