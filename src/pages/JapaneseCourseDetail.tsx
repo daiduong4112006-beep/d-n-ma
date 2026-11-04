@@ -16,6 +16,7 @@ import {
   FileStack,
   CalendarClock,
 } from 'lucide-react';
+import { LessonPickerFilter } from '../components/japanese/LessonPickerFilter';
 import {
   JapaneseCourse,
   JapaneseLesson,
@@ -130,13 +131,6 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
     const sorted = allCombinedSubs.filter((k) => next.includes(k));
     setSavedPicks(sorted);
     try { localStorage.setItem(COMBINED_PICKS_KEY, JSON.stringify(sorted)); } catch {}
-  };
-  const toggleSub = (k: string) =>
-    setPicks(combinedPicks.includes(k) ? combinedPicks.filter((x) => x !== k) : [...combinedPicks, k]);
-  const toggleBai = (b: string) => {
-    const subs = allCombinedSubs.filter((k) => k.split('.')[0] === b);
-    const allOn = subs.every((k) => combinedPicks.includes(k));
-    setPicks(allOn ? combinedPicks.filter((k) => !subs.includes(k)) : [...new Set([...combinedPicks, ...subs])]);
   };
   // id thẻ → mục bài (để hiện ô "Bài 4.2" cạnh từ)
   const cardLessonLabel: Record<string, string> = {};
@@ -424,38 +418,13 @@ export const JapaneseCourseDetail: React.FC<Props> = ({
           onDeleteLesson={isCombinedId(selectedLesson.id) ? undefined : () => setLessonToDelete(selectedLesson)}
           cardLessonLabel={isCombinedId(selectedLesson.id) ? cardLessonLabel : undefined}
           headerExtra={isCombinedId(selectedLesson.id) ? (
-            <div className="pt-3 space-y-2">
-              <div className="text-xs font-bold text-slate-500 dark:text-slate-400">Tích các bài / mục bạn đã học:</div>
-              <div className="flex flex-col gap-2">
-                {COMBINED_BAI.map((b) => {
-                  const subs = allCombinedSubs.filter((k) => k.split('.')[0] === b);
-                  if (!subs.length) return null;
-                  const on = subs.filter((k) => combinedPicks.includes(k)).length;
-                  const chip = (active: boolean) =>
-                    `inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-black cursor-pointer select-none transition-colors ${active ? 'bg-orange-500/10 border-orange-400 text-orange-600 dark:text-orange-400' : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300'}`;
-                  return (
-                    <div key={b} className="flex flex-wrap items-center gap-1.5">
-                      <label className={`${chip(on === subs.length)} min-w-[78px]`}>
-                        <input
-                          type="checkbox"
-                          className="accent-orange-500 w-3.5 h-3.5"
-                          checked={on === subs.length}
-                          ref={(el) => { if (el) el.indeterminate = on > 0 && on < subs.length; }}
-                          onChange={() => toggleBai(b)}
-                        />
-                        Bài {b}
-                      </label>
-                      <span className="text-slate-300 dark:text-slate-600">›</span>
-                      {subs.map((k) => (
-                        <label key={k} className={chip(combinedPicks.includes(k))}>
-                          <input type="checkbox" className="accent-orange-500 w-3.5 h-3.5" checked={combinedPicks.includes(k)} onChange={() => toggleSub(k)} />
-                          {k}
-                        </label>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
+            <div className="pt-3">
+              <LessonPickerFilter
+                groups={COMBINED_BAI.map((b) => ({ bai: b, subs: allCombinedSubs.filter((k) => k.split('.')[0] === b) })).filter((g) => g.subs.length)}
+                picks={combinedPicks}
+                summary={picksLabel(combinedPicks, allCombinedSubs)}
+                onApply={setPicks}
+              />
             </div>
           ) : undefined}
           onToggleMastery={handleToggleCardMastery}
