@@ -57,7 +57,7 @@ import { updateStudyProgressFromCloud } from './utils/studyProgressStorage';
 import { Sidebar } from './components/Sidebar';
 import { AuthModal } from './components/AuthModal';
 import { EmailVerifyBanner } from './components/EmailVerifyBanner';
-import { InstallAppBar } from './components/InstallAppBar';
+import './utils/installPrompt'; // bắt sự kiện cài app sớm cho nút trong Cài đặt
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 
 // Pages
@@ -664,7 +664,6 @@ export default function App() {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-h-screen md:h-screen overflow-hidden">
         <EmailVerifyBanner />
-        <InstallAppBar />
         {/* Scrollable Main Workspace */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <Suspense fallback={<PageLoading />}>
