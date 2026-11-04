@@ -58,6 +58,19 @@ function getUserEmail(): string {
   return '';
 }
 
+/**
+ * Đánh dấu tiến độ "đã xóa" thay vì chỉ xóa trên máy. Nếu chỉ xóa trên máy thì bản cũ
+ * vẫn còn trên đám mây, lần sau mở lại sẽ bị tải về → hiện lại câu cuối (vd 13/13) dù đã làm xong.
+ */
+function markProgressCleared(key: string): void {
+  const tomb = { cleared: true, savedAt: new Date().toISOString() };
+  localStorage.setItem(key, JSON.stringify(tomb));
+  const email = getUserEmail();
+  if (email) {
+    syncStudyProgressToFirestore(email, key, tomb).catch(() => {});
+  }
+}
+
 export function updateStudyProgressFromCloud(items: Record<string, any>): void {
   if (typeof window === 'undefined') return;
   try {
@@ -69,6 +82,8 @@ export function updateStudyProgressFromCloud(items: Record<string, any>): void {
       if(localTime && (!remoteTime || localTime >= remoteTime))return;
       if(raw===JSON.stringify(val))return;
       localStorage.setItem(key, JSON.stringify(val));
+      // Bản đã xóa (đã học xong / bắt đầu lại) → không báo cho màn hình đang mở
+      if (val?.cleared) return;
 
       // Notify any currently active Japanese study component in this tab
       if (key.startsWith(FLASHCARD_PREFIX) && typeof val?.currentIndex === 'number') {
@@ -112,7 +127,7 @@ export function saveFlashcardProgress(
 
     const email = getUserEmail();
     if (email) {
-      syncStudyProgressToFirestore(email, key, data).catch(() => {});
+      syncStudyProgressToFirestore(email, key, { ...data, cleared: false }).catch(() => {});
     }
   } catch (e) {
     console.error('Failed to save flashcard progress:', e);
@@ -124,7 +139,8 @@ export function getFlashcardProgress(lessonId: string): FlashcardProgressState |
   try {
     const raw = localStorage.getItem(`${FLASHCARD_PREFIX}${lessonId}`);
     if (!raw) return null;
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return parsed?.cleared ? null : parsed;
   } catch (e) {
     return null;
   }
@@ -133,7 +149,7 @@ export function getFlashcardProgress(lessonId: string): FlashcardProgressState |
 export function clearFlashcardProgress(lessonId: string): void {
   if (typeof window === 'undefined' || !lessonId) return;
   try {
-    localStorage.removeItem(`${FLASHCARD_PREFIX}${lessonId}`);
+    markProgressCleared(`${FLASHCARD_PREFIX}${lessonId}`);
     realtimeSync.broadcast('JP_FLASHCARD', lessonId, 0, { currentIndex: 0, masteredIds: [] });
   } catch (e) {
     console.error(e);
@@ -162,7 +178,7 @@ export function saveTypingProgress(
 
     const email = getUserEmail();
     if (email) {
-      syncStudyProgressToFirestore(email, key, data).catch(() => {});
+      syncStudyProgressToFirestore(email, key, { ...data, cleared: false }).catch(() => {});
     }
   } catch (e) {
     console.error('Failed to save typing progress:', e);
@@ -174,7 +190,8 @@ export function getTypingProgress(lessonId: string): TypingProgressState | null 
   try {
     const raw = localStorage.getItem(`${TYPING_PREFIX}${lessonId}`);
     if (!raw) return null;
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return parsed?.cleared ? null : parsed;
   } catch (e) {
     return null;
   }
@@ -183,7 +200,7 @@ export function getTypingProgress(lessonId: string): TypingProgressState | null 
 export function clearTypingProgress(lessonId: string): void {
   if (typeof window === 'undefined' || !lessonId) return;
   try {
-    localStorage.removeItem(`${TYPING_PREFIX}${lessonId}`);
+    markProgressCleared(`${TYPING_PREFIX}${lessonId}`);
     realtimeSync.broadcast('JP_TYPING', lessonId, 0, { currentIndex: 0 });
   } catch (e) {
     console.error(e);
@@ -212,7 +229,7 @@ export function saveMultiChoiceProgress(
 
     const email = getUserEmail();
     if (email) {
-      syncStudyProgressToFirestore(email, key, data).catch(() => {});
+      syncStudyProgressToFirestore(email, key, { ...data, cleared: false }).catch(() => {});
     }
   } catch (e) {
     console.error('Failed to save multichoice progress:', e);
@@ -224,7 +241,8 @@ export function getMultiChoiceProgress(lessonId: string): MultiChoiceProgressSta
   try {
     const raw = localStorage.getItem(`${MULTICHOICE_PREFIX}${lessonId}`);
     if (!raw) return null;
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return parsed?.cleared ? null : parsed;
   } catch (e) {
     return null;
   }
@@ -233,7 +251,7 @@ export function getMultiChoiceProgress(lessonId: string): MultiChoiceProgressSta
 export function clearMultiChoiceProgress(lessonId: string): void {
   if (typeof window === 'undefined' || !lessonId) return;
   try {
-    localStorage.removeItem(`${MULTICHOICE_PREFIX}${lessonId}`);
+    markProgressCleared(`${MULTICHOICE_PREFIX}${lessonId}`);
     realtimeSync.broadcast('JP_MULTICHOICE', lessonId, 0, { currentIndex: 0 });
   } catch (e) {
     console.error(e);
@@ -262,7 +280,7 @@ export function saveKanjiFlashcardProgress(
 
     const email = getUserEmail();
     if (email) {
-      syncStudyProgressToFirestore(email, key, data).catch(() => {});
+      syncStudyProgressToFirestore(email, key, { ...data, cleared: false }).catch(() => {});
     }
   } catch (e) {
     console.error('Failed to save kanji flashcard progress:', e);
@@ -274,7 +292,8 @@ export function getKanjiFlashcardProgress(folderId: string): KanjiFlashcardProgr
   try {
     const raw = localStorage.getItem(`${KANJI_FLASHCARD_PREFIX}${folderId}`);
     if (!raw) return null;
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return parsed?.cleared ? null : parsed;
   } catch (e) {
     return null;
   }
@@ -283,7 +302,7 @@ export function getKanjiFlashcardProgress(folderId: string): KanjiFlashcardProgr
 export function clearKanjiFlashcardProgress(folderId: string): void {
   if (typeof window === 'undefined' || !folderId) return;
   try {
-    localStorage.removeItem(`${KANJI_FLASHCARD_PREFIX}${folderId}`);
+    markProgressCleared(`${KANJI_FLASHCARD_PREFIX}${folderId}`);
     realtimeSync.broadcast('JP_KANJI', folderId, 0, { currentIndex: 0 });
   } catch (e) {
     console.error(e);

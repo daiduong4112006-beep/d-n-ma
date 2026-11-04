@@ -362,9 +362,15 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
           setCards(reordered);
         }
       }
-      setCurrentIndex(saved.currentIndex);
       const order = saved.cardIds || cards.map(c => c.id);
       const recovered = recoverTypingScore(saved, order);
+      // Đã gõ đúng câu cuối (thoát ra trước khi kịp sang màn kết quả) → coi như đã học xong,
+      // xóa tiến độ và bắt đầu lượt mới thay vì mở lại ở 13/13.
+      if (saved.currentIndex === cards.length - 1 && recovered.accepted.has(order[saved.currentIndex])) {
+        clearTypingProgress(storageId);
+        return;
+      }
+      setCurrentIndex(saved.currentIndex);
       acceptedAnswersRef.current = recovered.accepted;
       setScore(recovered.score);
       const alreadyAccepted = recovered.accepted.has(order[saved.currentIndex]);
