@@ -27,6 +27,8 @@ interface JapaneseLessonDetailProps {
   onToggleMastery: (cardId: string, currentMastered: boolean) => void;
   /** Nội dung thêm dưới tiêu đề (vd: ô tích chọn bài cho bài tổng hợp) */
   headerExtra?: React.ReactNode;
+  /** id thẻ → nhãn bài (vd '4.2'), dùng cho bài tổng hợp */
+  cardLessonLabel?: Record<string, string>;
 }
 
 export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
@@ -38,6 +40,7 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
   onDeleteLesson,
   onToggleMastery,
   headerExtra,
+  cardLessonLabel,
 }) => {
   const [vocabSearch, setVocabSearch] = useState('');
   const [vocabFilterTab, setVocabFilterTab] = useState<'original' | 'mastered' | 'all'>('original');
@@ -396,7 +399,7 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
                     </div>
 
                     {/* Sub-word, romaji, part of speech */}
-                    {(subWord || romajiText || card.partOfSpeech) && (
+                    {(subWord || romajiText || card.partOfSpeech || cardLessonLabel?.[card.id]) && (
                       <div className="flex items-center gap-2 flex-wrap pl-9">
                         {subWord && (
                           <span className="text-base font-bold font-sans text-slate-700 dark:text-slate-300">
@@ -411,6 +414,11 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
                         {card.partOfSpeech && (
                           <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase">
                             {card.partOfSpeech}
+                          </span>
+                        )}
+                        {cardLessonLabel?.[card.id] && (
+                          <span className="px-2 py-0.5 rounded-md bg-orange-500/10 text-orange-600 dark:text-orange-400 text-[10px] font-black" title="Từ này thuộc bài">
+                            Bài {cardLessonLabel[card.id]}
                           </span>
                         )}
                       </div>
@@ -471,6 +479,11 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
                           {card.partOfSpeech && (
                             <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase">
                               {card.partOfSpeech}
+                            </span>
+                          )}
+                          {cardLessonLabel?.[card.id] && (
+                            <span className="px-2 py-0.5 rounded-md bg-orange-500/10 text-orange-600 dark:text-orange-400 text-[10px] font-black" title="Từ này thuộc bài">
+                              Bài {cardLessonLabel[card.id]}
                             </span>
                           )}
                         </div>
