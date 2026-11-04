@@ -21,6 +21,7 @@ import { sound } from '../../utils/audio';
 import { getFlashcardProgress, saveFlashcardProgress, clearFlashcardProgress } from '../../utils/studyProgressStorage';
 import { shuffleArray } from '../../utils/shuffle';
 import { realtimeSync } from '../../utils/realtimeSync';
+import { toKanaReading } from '../../utils/kanaReading';
 
 interface JapaneseFlashcardModeProps {
   lesson?: JapaneseLesson;
@@ -687,7 +688,7 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
                       </h2>
                       {currentItem.example && (
                         <p className="text-sm sm:text-base md:text-lg text-slate-300 italic max-w-2xl mx-auto leading-relaxed pt-1">
-                          &ldquo;{currentItem.example}&rdquo;
+                          &ldquo;{toKanaReading(currentItem.example)}&rdquo;
                           {currentItem.exampleMeaning && (
                             <span className="block text-xs sm:text-sm text-slate-400 not-italic mt-0.5">
                               {currentItem.exampleMeaning}
@@ -780,7 +781,7 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
                     </h2>
                     {currentItem.example && (
                       <p className="text-base sm:text-lg md:text-xl text-slate-300 italic max-w-2xl mx-auto leading-relaxed">
-                        &ldquo;{currentItem.example}&rdquo;
+                        &ldquo;{toKanaReading(currentItem.example)}&rdquo;
                       </p>
                     )}
                     <div className="pt-4 border-t border-slate-800 flex items-center justify-center gap-3 text-sm text-slate-400">
@@ -805,7 +806,7 @@ export const JapaneseFlashcardMode: React.FC<JapaneseFlashcardModeProps> = ({
                     </h2>
                     {currentItem.example && (
                       <p className="text-base sm:text-lg text-slate-400 italic max-w-xl mx-auto">
-                        &ldquo;{currentItem.example}&rdquo;
+                        &ldquo;{toKanaReading(currentItem.example)}&rdquo;
                       </p>
                     )}
                   </div>

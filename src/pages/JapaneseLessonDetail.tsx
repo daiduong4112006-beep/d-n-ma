@@ -15,6 +15,7 @@ import {
 import { JapaneseLesson, JapaneseVocabCard } from '../types/japanese';
 import { speakJapanese, katakanaToHiragana } from '../utils/japaneseKana';
 import { sound } from '../utils/audio';
+import { toKanaReading } from '../utils/kanaReading';
 
 interface JapaneseLessonDetailProps {
   lesson: JapaneseLesson;
@@ -416,7 +417,7 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
                       </div>
                       {card.example && (
                         <div className="text-xs text-slate-400 dark:text-slate-500 italic">
-                          {card.example}
+                          {toKanaReading(card.example)}
                         </div>
                       )}
                     </div>
@@ -477,7 +478,7 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
                       </div>
                       {card.example && (
                         <div className="text-xs text-slate-400 dark:text-slate-500 mt-1 italic line-clamp-2">
-                          {card.example}
+                          {toKanaReading(card.example)}
                         </div>
                       )}
                     </div>

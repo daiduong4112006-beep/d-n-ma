@@ -22,6 +22,7 @@ import {
 } from '../../utils/spacedRepetition';
 import { speakJapanese } from '../../utils/japaneseKana';
 import { sound } from '../../utils/audio';
+import { toKanaReading } from '../../utils/kanaReading';
 
 export type SrsScope = 'all' | 'vocab' | 'kanji';
 
@@ -53,7 +54,7 @@ export const buildSrsCards = (course: JapaneseCourse, scope: SrsScope = 'all'): 
           front: c.term,
           reading: c.reading && c.reading !== c.term ? c.reading : undefined,
           meaning: c.definition,
-          extra: c.example,
+          extra: c.example ? toKanaReading(c.example) : c.example,
           extraMeaning: c.exampleMeaning,
           tag: tag ? `Từ vựng · Bài ${tag}` : 'Từ vựng',
         });

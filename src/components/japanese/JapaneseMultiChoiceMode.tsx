@@ -20,6 +20,7 @@ import { sound } from '../../utils/audio';
 import { getMultiChoiceProgress, saveMultiChoiceProgress, clearMultiChoiceProgress } from '../../utils/studyProgressStorage';
 import { shuffleArray } from '../../utils/shuffle';
 import { realtimeSync } from '../../utils/realtimeSync';
+import { toKanaReading } from '../../utils/kanaReading';
 
 interface JapaneseMultiChoiceModeProps {
   lesson: JapaneseLesson;
@@ -70,7 +71,7 @@ export const JapaneseMultiChoiceMode: React.FC<JapaneseMultiChoiceModeProps> = (
 
     return cards.map((targetCard) => {
       let questionText = '';
-      let subText = targetCard.example;
+      let subText = toKanaReading(targetCard.example);
       let correctAnswerText = '';
       let distractors: string[] = [];
 
@@ -116,7 +117,7 @@ export const JapaneseMultiChoiceMode: React.FC<JapaneseMultiChoiceModeProps> = (
         const romaji = targetCard.romaji ? `[${targetCard.romaji}]` : '';
 
         questionText = mainWord;
-        subText = [subKanji, romaji].filter(Boolean).join(' ') || targetCard.example;
+        subText = [subKanji, romaji].filter(Boolean).join(' ') || toKanaReading(targetCard.example);
         correctAnswerText = targetCard.definition;
 
         const otherCards = cards.filter((c) => c.id !== targetCard.id);

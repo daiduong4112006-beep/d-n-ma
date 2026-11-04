@@ -26,6 +26,7 @@ import {
 } from '../../utils/japaneseKana';
 import { sound } from '../../utils/audio';
 import { shuffleArray } from '../../utils/shuffle';
+import { toKanaReading } from '../../utils/kanaReading';
 
 export interface JapaneseKanjiTypingModeProps {
   mode: 'core' | 'vocab';
@@ -973,7 +974,7 @@ export const JapaneseKanjiTypingMode: React.FC<JapaneseKanjiTypingModeProps> = (
               {isAnswerChecked && isOverallCorrect && currentVocab.example && (
                 <div className="pt-2 text-xs text-slate-400 bg-slate-800/40 p-2.5 rounded-xl border border-slate-800 text-left">
                   <span className="font-bold text-slate-300">Ví dụ: </span>
-                  <span className="text-slate-200">{currentVocab.example}</span>
+                  <span className="text-slate-200">{toKanaReading(currentVocab.example)}</span>
                   {currentVocab.exampleMeaning && (
                     <div className="text-slate-400 mt-0.5">{currentVocab.exampleMeaning}</div>
                   )}
