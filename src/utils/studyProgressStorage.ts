@@ -64,7 +64,9 @@ export function updateStudyProgressFromCloud(items: Record<string, any>): void {
     Object.entries(items).forEach(([key, val]) => {
       const raw=localStorage.getItem(key);const local=raw?JSON.parse(raw):null;
       const localTime=Date.parse(local?.savedAt || '');const remoteTime=Date.parse(val?.savedAt || '');
-      if(localTime && (!remoteTime || localTime > remoteTime))return;
+      // Bản trên máy mới hơn HOẶC chính là bản vừa lưu (đám mây gửi lại, savedAt bằng nhau) → bỏ qua.
+      // Trước đây so sánh '>' nên bản dội lại của chính mình vẫn lọt qua và làm phần gõ bị đặt lại.
+      if(localTime && (!remoteTime || localTime >= remoteTime))return;
       if(raw===JSON.stringify(val))return;
       localStorage.setItem(key, JSON.stringify(val));
 

@@ -259,6 +259,11 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
   }, [storageId, cards.length]);
 
   const isRemoteUpdateRef = useRef(false);
+  // Giá trị mới nhất cho bộ lắng nghe đồng bộ (tránh dùng giá trị cũ trong closure)
+  const currentIndexRef = useRef(currentIndex);
+  currentIndexRef.current = currentIndex;
+  const cardsRef = useRef(cards);
+  cardsRef.current = cards;
   const isInitialMountRef = useRef(true);
 
   // Cross-Tab & Cross-Device Real-time Sync (< 2ms)
@@ -267,6 +272,18 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
 
     const unsubscribe = realtimeSync.subscribeKey('JP_TYPING', storageId, (payload) => {
       if (typeof payload.currentIndex === 'number' && payload.currentIndex >= 0 && payload.currentIndex < cards.length) {
+        // Cùng câu đang gõ và không có gì mới (thường là bản lưu của chính mình được gửi lại):
+        // KHÔNG đụng vào ô nhập, khung báo sai, hay bộ hẹn giờ tự chuyển câu.
+        const curId = cardsRef.current[currentIndexRef.current]?.id;
+        const remoteOrder: string[] = payload.data?.cardIds || [];
+        const remoteAccepted = new Set<string>(payload.data?.acceptedCardIds || []);
+        if (
+          payload.currentIndex === currentIndexRef.current &&
+          (!remoteOrder.length || remoteOrder[payload.currentIndex] === curId) &&
+          remoteAccepted.has(curId) === acceptedAnswersRef.current.has(curId)
+        ) {
+          return;
+        }
         isRemoteUpdateRef.current = true;
         if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
         setCurrentIndex(payload.currentIndex);
