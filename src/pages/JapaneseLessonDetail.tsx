@@ -22,7 +22,7 @@ interface JapaneseLessonDetailProps {
   courseCode?: string;
   onBack: () => void;
   onStartMode: (mode: 'typing' | 'typing-example' | 'flashcard' | 'multichoice', filter?: 'original' | 'mastered' | 'all') => void;
-  onEditLesson: () => void;
+  onEditLesson?: () => void;
   onDeleteLesson?: () => void;
   onToggleMastery: (cardId: string, currentMastered: boolean) => void;
 }
@@ -274,6 +274,7 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
           </div>
 
           {/* Edit / Delete Lesson */}
+          {onEditLesson && (
           <button
             type="button"
             onClick={onEditLesson}
@@ -282,6 +283,7 @@ export const JapaneseLessonDetail: React.FC<JapaneseLessonDetailProps> = ({
           >
             <Edit3 className="w-4 h-4" />
           </button>
+          )}
           {onDeleteLesson && (
             <button
               type="button"
