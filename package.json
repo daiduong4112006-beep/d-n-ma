@@ -17,7 +17,7 @@
     "test:admin-rules": "node scripts/tests/admin-rules.cjs",
     "test:japanese-entry": "node scripts/tests/japanese-course-entry.cjs",
     "test:sync:devices": "node scripts/tests/device-sync.cjs",
-    "test:supabase": "node scripts/tests/supabase-native-auth.cjs && node scripts/tests/supabase-auth-ui.cjs && node scripts/tests/supabase-full-sql.cjs && node scripts/tests/supabase-full-integration.cjs",
+    "test:supabase": "node scripts/tests/supabase-native-auth.cjs && node scripts/tests/supabase-auth-ui.cjs && node scripts/tests/supabase-full-sql.cjs && node scripts/tests/supabase-full-integration.cjs && node scripts/tests/share-modal.cjs",
     "test:supabase:sql": "node scripts/tests/supabase-full-sql.cjs",
     "migrate:supabase": "node scripts/migration/firebase-to-supabase.cjs"
   },

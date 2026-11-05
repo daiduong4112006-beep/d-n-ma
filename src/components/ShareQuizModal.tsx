@@ -25,6 +25,7 @@ export const ShareQuizModal: React.FC<ShareQuizModalProps> = ({ isOpen, onClose,
   const [meta, setMeta] = useState<SharedQuizDoc | null>(null);
   const [results, setResults] = useState<SharedResult[] | null>(null);
   const [saving, setSaving] = useState(false);
+  const [optionError, setOptionError] = useState('');
 
   const loadMeta = async (id: string) => {
     try {
@@ -38,10 +39,11 @@ export const ShareQuizModal: React.FC<ShareQuizModalProps> = ({ isOpen, onClose,
   const updateOptions = async (opts: { expiresAtMs?: number | null; classMode?: boolean }) => {
     if (!quiz) return;
     setSaving(true);
+    setOptionError('');
     try {
       const id = await createOrUpdateSharedQuiz(quiz, ownerName, opts);
       await loadMeta(id);
-    } catch {}
+    } catch { setOptionError('Chưa lưu được tùy chọn. Vui lòng thử lại.'); }
     setSaving(false);
   };
 
@@ -49,6 +51,10 @@ export const ShareQuizModal: React.FC<ShareQuizModalProps> = ({ isOpen, onClose,
     if (!isOpen || !quiz) return;
     let alive = true;
     setStatus('loading');
+    setShareId(null);
+    setMeta(null);
+    setResults(null);
+    setOptionError('');
     createOrUpdateSharedQuiz(quiz, ownerName)
       .then((id) => {
         if (!alive) return;
@@ -93,7 +99,7 @@ export const ShareQuizModal: React.FC<ShareQuizModalProps> = ({ isOpen, onClose,
 
   const handleCopyLink = async () => {
     if (!shareableUrl) return;
-    await copy(shareableUrl);
+    if (!await copy(shareableUrl)) return;
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
   };
@@ -105,7 +111,7 @@ export const ShareQuizModal: React.FC<ShareQuizModalProps> = ({ isOpen, onClose,
   };
 
   const handleCopyJson = async () => {
-    await copy(JSON.stringify(quiz, null, 2));
+    if (!await copy(JSON.stringify(quiz, null, 2))) return;
     setCopiedJson(true);
     setTimeout(() => setCopiedJson(false), 2000);
   };
@@ -125,7 +131,8 @@ export const ShareQuizModal: React.FC<ShareQuizModalProps> = ({ isOpen, onClose,
       onClick={onClose}
     >
       <div
-        className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl w-full max-w-md shadow-2xl p-6 sm:p-7 space-y-5"
+        className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain shadow-2xl p-5 space-y-3"
+        role="dialog" aria-modal="true" aria-labelledby="share-quiz-heading"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -135,7 +142,7 @@ export const ShareQuizModal: React.FC<ShareQuizModalProps> = ({ isOpen, onClose,
               <Share2 className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Chia sẻ bộ đề thi</h2>
+              <h2 id="share-quiz-heading" className="text-base font-bold text-slate-900 dark:text-slate-100">Chia sẻ bộ đề thi</h2>
               <p className="text-xs text-slate-400 truncate">
                 {quiz.title} · {quiz.questions.length} câu
               </p>
@@ -144,6 +151,7 @@ export const ShareQuizModal: React.FC<ShareQuizModalProps> = ({ isOpen, onClose,
           <button
             type="button"
             onClick={onClose}
+            aria-label="Đóng chia sẻ"
             className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -167,12 +175,12 @@ export const ShareQuizModal: React.FC<ShareQuizModalProps> = ({ isOpen, onClose,
         {status === 'ready' && (
           <>
             {/* QR */}
-            <div className="flex flex-col items-center justify-center p-5 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 space-y-3">
-              <div className="p-3 bg-white rounded-2xl shadow-xs border border-slate-200">
-                <img src={qrApiUrl} alt="Mã QR bộ đề" className="w-40 h-40 object-contain rounded-lg" loading="lazy" />
+            <div className="flex flex-col items-center justify-center p-3 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 space-y-2">
+              <div className="p-2 bg-white rounded-2xl shadow-xs border border-slate-200">
+                <img src={qrApiUrl} alt="Mã QR bộ đề" className="w-28 h-28 object-contain rounded-lg" loading="lazy" />
               </div>
               <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 text-center">
-                Quét mã bằng điện thoại để mở bộ đề
+                Quét mã để mở bộ đề
               </p>
             </div>
 
@@ -200,25 +208,15 @@ export const ShareQuizModal: React.FC<ShareQuizModalProps> = ({ isOpen, onClose,
                 </button>
               </div>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                Ai có link đều xem được bộ đề và lưu một bản về tài khoản của họ. Tiến độ, điểm số của bạn không bị chia sẻ.
-                Sửa bộ đề rồi mở lại cửa sổ này thì link cũ sẽ cập nhật nội dung mới.
+                Ai có link đều xem và lưu được bộ đề. Điểm và tiến độ của bạn được giữ riêng.
               </p>
-              {/* Cài đặt link & số liệu */}
-              <div className="mt-3 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
-                <div className="grid grid-cols-2 gap-2 text-center">
-                  <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 py-2">
-                    <div className="text-lg font-black text-indigo-600 dark:text-indigo-400 flex items-center justify-center gap-1">
-                      <Eye className="w-4 h-4" /> {meta?.views || 0}
-                    </div>
-                    <div className="text-[10px] font-bold uppercase text-slate-400">Lượt mở</div>
-                  </div>
-                  <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 py-2">
-                    <div className="text-lg font-black text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1">
-                      <Download className="w-4 h-4" /> {meta?.saves || 0}
-                    </div>
-                    <div className="text-[10px] font-bold uppercase text-slate-400">Lượt lưu</div>
-                  </div>
-                </div>
+              <div className="flex items-center gap-4 text-[11px] text-slate-400">
+                <span className="inline-flex items-center gap-1"><Eye className="w-3.5 h-3.5" />{meta?.views || 0} lượt mở</span>
+                <span className="inline-flex items-center gap-1"><Download className="w-3.5 h-3.5" />{meta?.saves || 0} lượt lưu</span>
+              </div>
+              <details className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                <summary className="cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-200">Tùy chọn link & lớp học</summary>
+                <div className="pt-3 space-y-3">
                 <label className="flex items-center justify-between gap-2 text-xs font-bold text-slate-700 dark:text-slate-200">
                   <span className="inline-flex items-center gap-1.5">
                     <Clock className="w-3.5 h-3.5 text-indigo-500" /> Hạn dùng link
@@ -290,7 +288,9 @@ export const ShareQuizModal: React.FC<ShareQuizModalProps> = ({ isOpen, onClose,
                     )}
                   </div>
                 )}
-              </div>
+                </div>
+              </details>
+              {optionError && <p role="alert" className="text-xs text-rose-500">{optionError}</p>}
               {canNativeShare && (
                 <button
                   type="button"
@@ -306,7 +306,7 @@ export const ShareQuizModal: React.FC<ShareQuizModalProps> = ({ isOpen, onClose,
 
         {/* File JSON */}
         <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-xs text-slate-400">Hoặc gửi file bộ đề (.json):</span>
+          <span className="text-xs text-slate-400">File .json</span>
           <div className="flex items-center gap-1.5">
             <button
               type="button"
