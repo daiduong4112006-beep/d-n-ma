@@ -196,10 +196,13 @@ const $=s=>document.querySelector(s), app=$('#app');
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
 
 /* ---------- storage (best effort) ---------- */
-const KEY='jpd123_v1';
+const accountId=new URLSearchParams(location.search||'').get('account')||'';
+const KEY=accountId?'jpd123_v1_'+encodeURIComponent(accountId):'jpd123_v1';
 let S={learned:{},pics:{},reads:{},exams:{},mine:{}};
 try{Object.assign(S,JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){}
-function persist(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(S));if(typeof window.__dmPersist==='function')window.__dmPersist(S)}catch(e){}}
+window.__dmGetState=()=>JSON.parse(JSON.stringify(S));
+window.__dmApplyState=incoming=>{S={learned:{},pics:{},reads:{},exams:{},mine:{},...incoming};if(JSON.stringify(S.pictureOrder)!==JSON.stringify(currentPictureOrder)){S.pics=migratePictureProgress(S.pics,Array.isArray(S.pictureOrder)?S.pictureOrder:LEGACY_PICTURE_ORDER,currentPictureOrder);S.pictureOrder=currentPictureOrder;}try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}go(route||'home')};
 
 // Index-based progress from the 24-picture edition must follow the same pictures.
 const LEGACY_PICTURE_ORDER = ["img/map_vn.jpg", "img/map_kyoto.jpg", "img/map_thai.jpg", "img/map_hiroshima.jpg", "img/map_korea.jpg", "img/q_A.jpg", "img/q_B.jpg", "img/p1_diary.jpg", "img/p3_diary.jpg", "img/p5_diary.jpg", "img/q_C.jpg", "img/p2_poster.jpg", "img/p3_rest.jpg", "img/p4_menu.jpg", "img/q_D.jpg", "img/q_E.jpg", "img/q_G.jpg", "img/p1_street.jpg", "img/p2_room.jpg", "img/p4_party.jpg", "img/p5_park.jpg", "img/q_F.jpg", "img/q_H.jpg", "img/q_I.jpg"];

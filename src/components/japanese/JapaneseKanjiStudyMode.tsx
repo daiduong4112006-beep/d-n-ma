@@ -4,7 +4,7 @@ import { JapaneseKanjiCard } from '../../types/japanese';
 import { speakJapanese } from '../../utils/japaneseKana';
 import { sound } from '../../utils/audio';
 import { shuffleArray } from '../../utils/shuffle';
-import { realtimeSync } from '../../utils/realtimeSync';
+import { readAccountState, saveAccountState, subscribeAccountState } from '../../utils/accountState';
 
 interface JapaneseKanjiStudyModeProps {
   kanjiCards: JapaneseKanjiCard[];
@@ -33,10 +33,9 @@ export const JapaneseKanjiStudyMode: React.FC<JapaneseKanjiStudyModeProps> = ({
   // Restore progress on mount
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (typeof parsed.currentIndex === 'number' && parsed.currentIndex > 0 && parsed.currentIndex < kanjiCards.length) {
+      const parsed = readAccountState<any>(storageKey, null, storageKey);
+      if (parsed) {
+        if (typeof parsed.currentIndex === 'number' && parsed.currentIndex >= 0 && parsed.currentIndex < kanjiCards.length) {
           setCurrentIndex(parsed.currentIndex);
           setScore(parsed.score || 0);
           setStreak(parsed.streak || 0);
@@ -50,12 +49,17 @@ export const JapaneseKanjiStudyMode: React.FC<JapaneseKanjiStudyModeProps> = ({
 
   const isRemoteUpdateRef = useRef(false);
   const isInitialMountRef = useRef(true);
+  const writingProgressRef = useRef(false);
 
   // Cross-Tab Real-time Sync (< 2ms)
   useEffect(() => {
     if (!storageKey) return;
 
-    const unsubscribe = realtimeSync.subscribeKey('JP_KANJI', storageKey, (payload) => {
+    const unsubscribe = subscribeAccountState(storageKey, () => {
+      if (writingProgressRef.current) return;
+      const data = readAccountState<any>(storageKey, null);
+      if (!data) return;
+      const payload = {currentIndex:data.currentIndex, data};
       if (typeof payload.currentIndex === 'number' && payload.currentIndex >= 0 && payload.currentIndex < deck.length) {
         isRemoteUpdateRef.current = true;
         setCurrentIndex(payload.currentIndex);
@@ -88,8 +92,8 @@ export const JapaneseKanjiStudyMode: React.FC<JapaneseKanjiStudyModeProps> = ({
         streak,
         savedAt: new Date().toISOString(),
       };
-      localStorage.setItem(storageKey, JSON.stringify(data));
-      realtimeSync.broadcast('JP_KANJI', storageKey, currentIndex, data);
+      writingProgressRef.current = true;
+      try { saveAccountState(storageKey, data); } finally { writingProgressRef.current = false; }
     } catch (e) {
       // ignore
     }

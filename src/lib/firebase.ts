@@ -1,3 +1,4 @@
+import {configureCloudOutbox,enqueueCloudMutation,cloudIdentityChanged,flushCloudOutbox} from '../utils/cloudOutbox';
 import { orderedWrite, flushOrderedWrites } from '../utils/orderedWrites';
 import { initializeApp } from 'firebase/app';
 import {
@@ -21,7 +22,8 @@ import {
   getFirestore,
   collection,
   doc,
-  setDoc,
+  setDoc as sdkSetDoc,
+  runTransaction,
   getDoc,
   deleteDoc,
   onSnapshot,
@@ -62,6 +64,34 @@ const createDb = (): Firestore => {
 };
 export const db = createDb();
 if(useLocalEmulators)connectFirestoreEmulator(db,'127.0.0.1',8380);
+configureCloudOutbox({
+ email:()=>currentEmail(),
+ ready:()=>!!auth.currentUser?.emailVerified,
+ write:async item=>{
+  if(auth.currentUser?.email?.trim().toLowerCase()!==item.email)throw new Error('Phiên đăng nhập đã thay đổi.');
+  const ref=doc(db,item.path);
+  await runTransaction(db,async tx=>{
+   const snap=await tx.get(ref);const remote=snap.exists()?snap.data():null;
+   const time=(v:any)=>typeof v==='number'?v:Date.parse(v||'')||0;
+   // An old offline payload must not undo a newer change/deletion from another device.
+   let data=item.data;
+   if(remote&&item.path.startsWith('srs_progress/')){const records={...(remote.records||{})};for(const [id,value] of Object.entries(data.records||{})){const v=value as any;if(!records[id]||(v.lastReviewedDate||'')>(records[id].lastReviewedDate||''))records[id]=v;}data={...data,records,updatedAt:time(remote.updatedAt)>time(data.updatedAt)?remote.updatedAt:data.updatedAt};}
+   else if(remote&&item.path.startsWith('fe_mock_exams/')){const map=new Map([...(remote.history||[]),...(data.history||[])].map((x:any)=>[x.id,x]));data={...data,history:[...map.values()].sort((a:any,b:any)=>b.date.localeCompare(a.date)).slice(0,30),updatedAt:time(remote.updatedAt)>time(data.updatedAt)?remote.updatedAt:data.updatedAt};}
+   else if(remote&&time(remote.updatedAt)>time(data.updatedAt)&&time(data.updatedAt)>0)return;
+   if(item.merge)tx.set(ref,data,{merge:true});else tx.set(ref,data);
+  });
+ }
+});
+onAuthStateChanged(auth,()=>cloudIdentityChanged());
+export const writeCloudDocument=(ref:any,data:any,options?:{merge?:boolean}):Promise<void>=>{
+ const path=typeof ref==='string'?ref:ref.path;
+ // Auth profiles contain Firebase field transforms (password cleanup), not JSON state.
+ if(path?.startsWith('users/'))return options?sdkSetDoc(ref,data,options):sdkSetDoc(ref,data);
+ const email=(data.email||data.userEmail||data.ownerEmail||currentEmail()||'').toLowerCase().trim();
+ return enqueueCloudMutation(email,path,data,options?.merge===true);
+};
+const setDoc=writeCloudDocument;
+
 
 // ---------------- Ảnh câu hỏi → Firebase Storage ----------------
 // Ảnh dán/tải lên được lưu dạng data URL (base64) ngay trong bộ đề, dễ vượt giới hạn 1 MB của
@@ -126,7 +156,7 @@ export const isFirebaseConfigured = (): boolean => {
 };
 
 export const isFirestoreAvailable = (): boolean => {
-  return isFirebaseConfigured() && !firestoreQuotaExceeded;
+  return isFirebaseConfigured();
 };
 
 const handleFirestoreError = (action: string, err: any) => {
@@ -342,7 +372,7 @@ const migrateLegacyOwnership = async (col: 'quizzes' | 'attempts', userIds: stri
 // Real-time Firestore sync for Quizzes
 export const subscribeQuizzes = (
   userId: string,
-  onUpdate: (quizzes: Quiz[]) => void,
+  onUpdate: (quizzes: Quiz[], deleted?:Record<string,string>) => void,
   onError?: (err: Error) => void
 ) => {
   if (!isFirestoreAvailable()) {
@@ -370,8 +400,10 @@ export const subscribeQuizzes = (
 
     return onSnapshot(
       q,
+      {includeMetadataChanges:true},
       (snapshot) => {
-        const quizzes: Quiz[] = snapshot.docs.map((docSnap) => {
+        if(snapshot.metadata?.fromCache&&!snapshot.docs.length)return;
+        const quizzes: Quiz[] = snapshot.docs.filter(d=>!d.data().deletedAt).map((docSnap) => {
           const data = docSnap.data();
           return {
             id: docSnap.id,
@@ -388,7 +420,8 @@ export const subscribeQuizzes = (
             questions: data.questions || [],
           };
         });
-        onUpdate(quizzes);
+        const deleted=Object.fromEntries(snapshot.docs.filter(d=>d.data().deletedAt).map(d=>[d.id,d.data().deletedAt]));
+        onUpdate(quizzes,deleted);
       },
       (err) => {
         handleFirestoreError('subscribeQuizzes', err);
@@ -418,9 +451,9 @@ export const syncQuizToFirestore = async(userId:string,quiz:Quiz):Promise<void>=
 export const flushQuizWrites = async():Promise<void>=>{await flushOrderedWrites();};
 export const removeQuizFromFirestore = async(quizId:string):Promise<void>=>{
   if(!isFirestoreAvailable()||!quizId)return;
-  const email=currentEmail();
+  const email=currentEmail();const deletionTime=new Date().toISOString();
   return orderedWrite(`quiz:${email}:${quizId}`,async()=>{
-    try{await deleteDoc(doc(db,'quizzes',quizId));}
+    try{const at=deletionTime;await setDoc(doc(db,'quizzes',quizId),{userEmail:email,userId:email?'usr_'+email.replace(/[^a-z0-9]/g,'_'):'guest_user',deletedAt:at,updatedAt:at});}
     catch(err){handleFirestoreError('removeQuizFromFirestore',err);throw err;}
   });
 };
@@ -447,7 +480,9 @@ export const subscribeAttempts = (
 
     return onSnapshot(
       q,
+      {includeMetadataChanges:true},
       (snapshot) => {
+        if(snapshot.metadata?.fromCache&&!snapshot.docs.length)return;
         const attempts: QuizAttempt[] = snapshot.docs.map((docSnap) => {
           const data = docSnap.data();
           return {
@@ -616,15 +651,15 @@ export const syncJapaneseCourseToFirestore = async (course:any,email?:string):Pr
     try {
       const lessons=await Promise.all((snapshot.lessons||[]).map(async(l:any)=>({...l,cards:(await offloadQuizImages({questions:l.cards||[]})).questions})));
       const clean=snapshot.lessons?{...snapshot,lessons}:snapshot;
-      await setDoc(doc(db,'user_japanese_courses',`${cleanEmail}_${snapshot.id}`),{email:cleanEmail,courseId:snapshot.id,courseJson:JSON.stringify(clean),schemaVersion:2,updatedAt:new Date().toISOString()});
+      await setDoc(doc(db,'user_japanese_courses',`${cleanEmail}_${snapshot.id}`),{email:cleanEmail,courseId:snapshot.id,courseJson:JSON.stringify(clean),schemaVersion:2,updatedAt:snapshot.updatedAt||new Date().toISOString()});
     }catch(err){handleFirestoreError('syncJapaneseCourseToFirestore',err);throw err;}
   });
 };
 export const deleteJapaneseCourseFromFirestore = async(courseId:string,email?:string):Promise<void>=>{
   if(!isFirestoreAvailable()||!courseId)return;
   const cleanEmail=(email||auth.currentUser?.email||'').trim().toLowerCase();if(!cleanEmail)return;
+  const deletedAt=new Date().toISOString();
   return orderedWrite(`japanese:${cleanEmail}:${courseId}`,async()=>{
-    const deletedAt=new Date().toISOString();
     try{await setDoc(doc(db,'user_japanese_courses',`${cleanEmail}_${courseId}`),{email:cleanEmail,courseId,course:{id:courseId,deletedAt,updatedAt:deletedAt},updatedAt:deletedAt});}
     catch(err){handleFirestoreError('deleteJapaneseCourseFromFirestore',err);throw err;}
   });
@@ -669,7 +704,9 @@ export const subscribeJapaneseCourses = (
     const q = query(collection(db, 'user_japanese_courses'), where('email', '==', cleanEmail));
     return onSnapshot(
       q,
+      {includeMetadataChanges:true},
       (snapshot) => {
+        if(snapshot.metadata?.fromCache&&!snapshot.docs.length)return;
         const courses: any[] = snapshot.docs
           .map((d) => {
             const data = d.data();
@@ -724,6 +761,8 @@ export const getUserSettingsFromFirestore = async (email: string): Promise<any |
 };
 
 // ---------------------------------------------------------------------------
+export const subscribeUserSettings=(email:string,onUpdate:(settings:any)=>void):(()=>void)=>onSnapshot(doc(db,'settings',email.toLowerCase().trim()),snapshot=>{if(snapshot.exists())onUpdate(snapshot.data());},error=>handleFirestoreError('subscribeUserSettings',error));
+
 // JPD123 Course Access Whitelist Sync
 // ---------------------------------------------------------------------------
 export const saveJpd123AccessListToFirestore = async (allowedEmails: string[]): Promise<void> => {
@@ -903,25 +942,8 @@ export const syncFlashcardProgressToFirestore = async (
   progress: { currentIndex: number; knownQuestionIds: string[]; updatedAt?: number },
   immediate = false
 ): Promise<void> => {
-  if (!email || !quizId) return;
-  const key = `${email}_${quizId}`;
-  pendingFlashcardWrites.set(key, { email, quizId, progress });
-
-  if (immediate) {
-    if (flashcardWriteTimer) clearTimeout(flashcardWriteTimer);
-    await executeFlashcardWrite({ email, quizId, progress });
-    pendingFlashcardWrites.delete(key);
-    return;
-  }
-
-  if (!flashcardWriteTimer) {
-    flashcardWriteTimer = setTimeout(() => {
-      flashcardWriteTimer = null;
-      const items = Array.from(pendingFlashcardWrites.values());
-      pendingFlashcardWrites.clear();
-      items.forEach((item) => executeFlashcardWrite(item).catch(() => {}));
-    }, 200); // Ultra-responsive 200ms debounce
-  }
+  if(!email||!quizId)return;
+  return executeFlashcardWrite({email,quizId,progress:JSON.parse(JSON.stringify(progress))});
 };
 
 export const subscribeFlashcardProgress = (
@@ -968,7 +990,9 @@ export const subscribeAllFlashcardProgress = (
     const q = query(collection(db, 'flashcard_progress'), where('email', '==', cleanEmail));
     return onSnapshot(
       q,
+      {includeMetadataChanges:true},
       (snap) => {
+        if(snap.metadata?.fromCache&&!snap.docs.length)return;
         const result: Record<string, any> = {};
         snap.docs.forEach((d) => {
           const data = d.data();
@@ -996,6 +1020,7 @@ export const subscribeAllFlashcardProgress = (
 // Real-time Cloud Sync for Quiz MCQ Practice Learning Progress (QuizPage)
 // ---------------------------------------------------------------------------
 export interface QuizLearningProgressCloud {
+  cleared?:boolean;
   currentIndex: number;
   userAnswers: Record<string, number | number[]>;
   currentOptions?: any;
@@ -1020,6 +1045,7 @@ const executeQuizWrite = async (item: { email: string; quizId: string; progress:
           currentIndex: item.progress.currentIndex,
           userAnswers: item.progress.userAnswers || {},
           currentOptions: item.progress.currentOptions || null,
+          cleared:(item.progress as any).cleared===true,
           updatedAt: item.progress.updatedAt || Date.now(),
         },
         updatedAt: new Date().toISOString(),
@@ -1037,25 +1063,8 @@ export const syncQuizLearningProgressToFirestore = async (
   progress: QuizLearningProgressCloud,
   immediate = false
 ): Promise<void> => {
-  if (!email || !quizId) return;
-  const key = `${email}_${quizId}`;
-  pendingQuizWrites.set(key, { email, quizId, progress });
-
-  if (immediate) {
-    if (quizWriteTimer) clearTimeout(quizWriteTimer);
-    await executeQuizWrite({ email, quizId, progress });
-    pendingQuizWrites.delete(key);
-    return;
-  }
-
-  if (!quizWriteTimer) {
-    quizWriteTimer = setTimeout(() => {
-      quizWriteTimer = null;
-      const items = Array.from(pendingQuizWrites.values());
-      pendingQuizWrites.clear();
-      items.forEach((item) => executeQuizWrite(item).catch(() => {}));
-    }, 200); // Ultra-responsive 200ms debounce
-  }
+  if(!email||!quizId)return;
+  return executeQuizWrite({email,quizId,progress:JSON.parse(JSON.stringify(progress))});
 };
 
 export const subscribeQuizLearningProgress = (
@@ -1102,7 +1111,9 @@ export const subscribeAllQuizLearningProgress = (
     const q = query(collection(db, 'quiz_learning_progress'), where('email', '==', cleanEmail));
     return onSnapshot(
       q,
+      {includeMetadataChanges:true},
       (snap) => {
+        if(snap.metadata?.fromCache&&!snap.docs.length)return;
         const result: Record<string, QuizLearningProgressCloud> = {};
         snap.docs.forEach((d) => {
           const data = d.data();
@@ -1111,6 +1122,7 @@ export const subscribeAllQuizLearningProgress = (
               currentIndex: typeof data.progress.currentIndex === 'number' ? data.progress.currentIndex : 0,
               userAnswers: data.progress.userAnswers || {},
               currentOptions: data.progress.currentOptions || null,
+              cleared:data.progress.cleared===true,
               updatedAt: data.progress.updatedAt || (data.updatedAt ? new Date(data.updatedAt).getTime() : Date.now()),
             };
           }
@@ -1198,7 +1210,7 @@ export const subscribePracticeMistakesProgress = (
 
 // Flush all pending debounced writes immediately (on visibility hidden, unload, or route change)
 export const flushAllPendingProgressSync = async (): Promise<void> => {
-  await flushOrderedWrites();
+  void flushCloudOutbox();
   if (flashcardWriteTimer) {
     clearTimeout(flashcardWriteTimer);
     flashcardWriteTimer = null;
@@ -1218,7 +1230,7 @@ export const flushAllPendingProgressSync = async (): Promise<void> => {
   );
   pendingQuizWrites.clear();
 
-  await Promise.all([...flashcardPromises, ...quizPromises]);
+  await Promise.all([...flashcardPromises, ...quizPromises,flushOrderedWrites(),flushCloudOutbox()]);
 };
 
 // ---------------------------------------------------------------------------
@@ -1255,7 +1267,9 @@ export const subscribeStudyProgress = (
     const q = query(collection(db, 'study_progress'), where('email', '==', cleanEmail));
     return onSnapshot(
       q,
+      {includeMetadataChanges:true},
       (snap) => {
+        if(snap.metadata?.fromCache&&!snap.docs.length)return;
         const result: Record<string, any> = {};
         snap.docs.forEach((d) => {
           const item = d.data();

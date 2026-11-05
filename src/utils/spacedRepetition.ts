@@ -1,7 +1,8 @@
+import {readAccountState,saveAccountState} from './accountState';
 // Ôn tập ngắt quãng (SRS) – dựa trên SM-2, có bước "học lại" ngắn cho thẻ quên.
 // Lưu trên máy theo từng tài khoản và đồng bộ lên Firestore: srs_progress/{email}.
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
-import { db, auth, currentEmail } from '../lib/firebase';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { db, auth, currentEmail, writeCloudDocument as setDoc } from '../lib/firebase';
 
 export type SM2Grade = 1 | 2 | 3 | 4; // 1: Quên, 2: Khó, 3: Nhớ, 4: Dễ
 
@@ -162,7 +163,7 @@ const dailyKey = () => `${userKey()}_daily`;
 
 export const getDailyCounter = (): { date: string; new: number; review: number } => {
   try {
-    const d = JSON.parse(localStorage.getItem(dailyKey()) || 'null');
+    const d = readAccountState<any>('srs-daily',null,dailyKey());
     if (d && d.date === todayStr()) return d;
   } catch {}
   return { date: todayStr(), new: 0, review: 0 };
@@ -172,20 +173,22 @@ const bumpDailyCounter = (kind: 'new' | 'review') => {
   const d = getDailyCounter();
   d[kind] += 1;
   try {
-    localStorage.setItem(dailyKey(), JSON.stringify(d));
+    saveAccountState('srs-daily',d);
   } catch {}
 };
 
 export const getNewPerDay = (): number => {
-  const n = Number(localStorage.getItem('dun_srs_new_per_day'));
+  const n = Number(readAccountState('srs-new-per-day',20,'dun_srs_new_per_day'));
   return n > 0 ? n : 20;
 };
-export const setNewPerDay = (n: number) => localStorage.setItem('dun_srs_new_per_day', String(n));
+export const setNewPerDay = (n: number) => saveAccountState('srs-new-per-day',n);
 
 // ---------------- Đồng bộ đám mây ----------------
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
 const cloudEmail = () => (auth.currentUser?.email || '').toLowerCase();
+
+const canonical=(value:any)=>JSON.stringify(value,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v);
 
 export const mergeRecords = (a: Record<string, SM2State>, b: Record<string, SM2State>) => {
   const out: Record<string, SM2State> = { ...a };
@@ -196,14 +199,7 @@ export const mergeRecords = (a: Record<string, SM2State>, b: Record<string, SM2S
   return out;
 };
 
-const scheduleCloudSave = () => {
-  if (!cloudEmail()) return;
-  if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    saveTimer = null;
-    flushSrsToCloud().catch(() => {});
-  }, 2500);
-};
+const scheduleCloudSave = () => {if(cloudEmail())void flushSrsToCloud().catch(()=>{});};
 
 export const flushSrsToCloud = async () => {
   const email = cloudEmail();
@@ -225,7 +221,7 @@ export const pullSrsFromCloud = async (): Promise<boolean> => {
     const local = getSM2Records();
     const merged = mergeRecords(local, remote);
     saveSM2Records(merged, { skipCloud: true });
-    if (Object.keys(merged).length !== Object.keys(remote).length) scheduleCloudSave();
+    if (canonical(merged)!==canonical(remote)) scheduleCloudSave();
     return true;
   } catch {
     return false;
@@ -246,7 +242,8 @@ export const subscribeSrsFromCloud = (): (()=>void) => {
   const email=cloudEmail();if(!email)return ()=>{};
   return onSnapshot(doc(db,'srs_progress',email),snapshot=>{
     if(!snapshot.exists())return;
-    const local=getSM2Records();const merged=mergeRecords(local,snapshot.data().records||{});
-    if(JSON.stringify(local)!==JSON.stringify(merged))saveSM2Records(merged,{skipCloud:true});
+    const local=getSM2Records();const remote=snapshot.data().records||{};const merged=mergeRecords(local,remote);
+    if(canonical(local)!==canonical(merged))saveSM2Records(merged,{skipCloud:true});
+    if(canonical(merged)!==canonical(remote))scheduleCloudSave();
   },error=>console.warn('SRS sync unavailable:',error));
 };

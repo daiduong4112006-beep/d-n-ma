@@ -29,5 +29,5 @@ export async function loadAdminUserLibrary(email:string):Promise<{quizzes:Quiz[]
  requireAdmin();const target=normalizeEmail(email);
  const [quizzes,attempts]=await Promise.all(['quizzes','attempts'].map(c=>getDocsFromServer(query(collection(db,c),where('userEmail','==',target)))));
  requireAdmin();
- return {quizzes:quizzes.docs.map(d=>normalizeAdminQuiz(d.id,d.data())),attempts:attempts.docs.map(d=>normalizeAdminAttempt(d.id,d.data()))};
+ return {quizzes:quizzes.docs.filter(d=>!d.data().deletedAt).map(d=>normalizeAdminQuiz(d.id,d.data())),attempts:attempts.docs.map(d=>normalizeAdminAttempt(d.id,d.data()))};
 }

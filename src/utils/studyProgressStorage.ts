@@ -1,3 +1,5 @@
+import {accountLocalStorage,isAccountLocalKey} from './accountLocalStorage';
+import {applyAccountStateFromCloud} from './accountState';
 import { syncStudyProgressToFirestore } from '../lib/firebase';
 import { realtimeSync } from './realtimeSync';
 
@@ -49,7 +51,7 @@ const KANJI_FLASHCARD_PREFIX = 'jp_progress_kanji_';
 
 function getUserEmail(): string {
   try {
-    const raw = localStorage.getItem('mcq_user');
+    const raw = accountLocalStorage.getItem('mcq_user');
     if (raw) {
       const user = JSON.parse(raw);
       if (user?.email) return user.email.toLowerCase().trim();
@@ -64,7 +66,7 @@ function getUserEmail(): string {
  */
 function markProgressCleared(key: string): void {
   const tomb = { cleared: true, savedAt: new Date().toISOString() };
-  localStorage.setItem(key, JSON.stringify(tomb));
+  accountLocalStorage.setItem(key, JSON.stringify(tomb));
   const email = getUserEmail();
   if (email) {
     syncStudyProgressToFirestore(email, key, tomb).catch(() => {});
@@ -75,13 +77,14 @@ export function updateStudyProgressFromCloud(items: Record<string, any>): void {
   if (typeof window === 'undefined') return;
   try {
     Object.entries(items).forEach(([key, val]) => {
-      const raw=localStorage.getItem(key);const local=raw?JSON.parse(raw):null;
+      if(key.startsWith('account:')){applyAccountStateFromCloud(key.slice(8),val);return;}
+      const raw=accountLocalStorage.getItem(key);const local=raw?JSON.parse(raw):null;
       const localTime=Date.parse(local?.savedAt || '');const remoteTime=Date.parse(val?.savedAt || '');
       // Bản trên máy mới hơn HOẶC chính là bản vừa lưu (đám mây gửi lại, savedAt bằng nhau) → bỏ qua.
       // Trước đây so sánh '>' nên bản dội lại của chính mình vẫn lọt qua và làm phần gõ bị đặt lại.
       if(localTime && (!remoteTime || localTime >= remoteTime))return;
       if(raw===JSON.stringify(val))return;
-      localStorage.setItem(key, JSON.stringify(val));
+      accountLocalStorage.setItem(key, JSON.stringify(val));
       // Bản đã xóa (đã học xong / bắt đầu lại) → không báo cho màn hình đang mở
       if (val?.cleared) return;
 
@@ -118,7 +121,7 @@ export function saveFlashcardProgress(
       savedAt: new Date().toISOString(),
     };
     const key = `${FLASHCARD_PREFIX}${lessonId}`;
-    localStorage.setItem(key, JSON.stringify(data));
+    accountLocalStorage.setItem(key, JSON.stringify(data));
 
     // Broadcast to other tabs (< 5ms)
     if (!skipBroadcast) {
@@ -137,7 +140,7 @@ export function saveFlashcardProgress(
 export function getFlashcardProgress(lessonId: string): FlashcardProgressState | null {
   if (typeof window === 'undefined' || !lessonId) return null;
   try {
-    const raw = localStorage.getItem(`${FLASHCARD_PREFIX}${lessonId}`);
+    const raw = accountLocalStorage.getItem(`${FLASHCARD_PREFIX}${lessonId}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     return parsed?.cleared ? null : parsed;
@@ -169,7 +172,7 @@ export function saveTypingProgress(
       savedAt: new Date().toISOString(),
     };
     const key = `${TYPING_PREFIX}${lessonId}`;
-    localStorage.setItem(key, JSON.stringify(data));
+    accountLocalStorage.setItem(key, JSON.stringify(data));
 
     // Broadcast to other tabs (< 5ms)
     if (!skipBroadcast) {
@@ -188,7 +191,7 @@ export function saveTypingProgress(
 export function getTypingProgress(lessonId: string): TypingProgressState | null {
   if (typeof window === 'undefined' || !lessonId) return null;
   try {
-    const raw = localStorage.getItem(`${TYPING_PREFIX}${lessonId}`);
+    const raw = accountLocalStorage.getItem(`${TYPING_PREFIX}${lessonId}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     return parsed?.cleared ? null : parsed;
@@ -220,7 +223,7 @@ export function saveMultiChoiceProgress(
       savedAt: new Date().toISOString(),
     };
     const key = `${MULTICHOICE_PREFIX}${lessonId}`;
-    localStorage.setItem(key, JSON.stringify(data));
+    accountLocalStorage.setItem(key, JSON.stringify(data));
 
     // Broadcast to other tabs (< 5ms)
     if (!skipBroadcast) {
@@ -239,7 +242,7 @@ export function saveMultiChoiceProgress(
 export function getMultiChoiceProgress(lessonId: string): MultiChoiceProgressState | null {
   if (typeof window === 'undefined' || !lessonId) return null;
   try {
-    const raw = localStorage.getItem(`${MULTICHOICE_PREFIX}${lessonId}`);
+    const raw = accountLocalStorage.getItem(`${MULTICHOICE_PREFIX}${lessonId}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     return parsed?.cleared ? null : parsed;
@@ -271,7 +274,7 @@ export function saveKanjiFlashcardProgress(
       savedAt: new Date().toISOString(),
     };
     const key = `${KANJI_FLASHCARD_PREFIX}${folderId}`;
-    localStorage.setItem(key, JSON.stringify(data));
+    accountLocalStorage.setItem(key, JSON.stringify(data));
 
     // Broadcast to other tabs (< 5ms)
     if (!skipBroadcast) {
@@ -290,7 +293,7 @@ export function saveKanjiFlashcardProgress(
 export function getKanjiFlashcardProgress(folderId: string): KanjiFlashcardProgressState | null {
   if (typeof window === 'undefined' || !folderId) return null;
   try {
-    const raw = localStorage.getItem(`${KANJI_FLASHCARD_PREFIX}${folderId}`);
+    const raw = accountLocalStorage.getItem(`${KANJI_FLASHCARD_PREFIX}${folderId}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     return parsed?.cleared ? null : parsed;

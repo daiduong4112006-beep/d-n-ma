@@ -131,7 +131,9 @@ export const FlashcardViewer: React.FC<FlashcardViewerProps> = ({ quizId, quizTi
     if (!userEmail) return;
 
     const unsubscribe = subscribeFlashcardProgress(userEmail, effectiveQuizId, (progress) => {
+      if((progress.updatedAt||0)<(getFlashcardProgress(effectiveQuizId).updatedAt||0))return;
       if (typeof progress.currentIndex === 'number' && progress.currentIndex >= 0 && progress.currentIndex < questions.length) {
+        isRemoteUpdateRef.current = true;
         setCurrentIndex((prevIdx) => {
           if (prevIdx !== progress.currentIndex) {
             isRemoteUpdateRef.current = true;
@@ -158,6 +160,7 @@ export const FlashcardViewer: React.FC<FlashcardViewerProps> = ({ quizId, quizTi
       if (document.visibilityState === 'visible' && effectiveQuizId) {
         const latest = getFlashcardProgress(effectiveQuizId);
         if (latest && typeof latest.currentIndex === 'number' && latest.currentIndex < questions.length) {
+          isRemoteUpdateRef.current = true;
           setCurrentIndex((prev) => {
             if (prev !== latest.currentIndex) {
               isRemoteUpdateRef.current = true;

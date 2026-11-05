@@ -129,6 +129,7 @@ export const QuizPage: React.FC<QuizPageProps> = ({
     (currentOptions.instantFeedback === false ||
       Boolean(currentOptions.timeLimitMinutes && currentOptions.timeLimitMinutes > 0));
 
+  const syncQuizId=isWrongQuestionsQuiz?quiz.id+'_wrong':quiz.id;
   // Storage key for keeping track of active learning progress
   const progressKey = isWrongQuestionsQuiz
     ? `mcq_learning_progress_${quiz.id}_wrong`
@@ -140,7 +141,7 @@ export const QuizPage: React.FC<QuizPageProps> = ({
       return;
     }
     const saved = getQuizLearningProgress(quiz.id, isWrongQuestionsQuiz);
-    const inMemoryLatest = realtimeSync.getLatestState('MCQ_PRACTICE', quiz.id);
+    const inMemoryLatest = realtimeSync.getLatestState('MCQ_PRACTICE', syncQuizId);
     const target = inMemoryLatest?.data || saved;
 
     if (target) {
@@ -168,7 +169,7 @@ export const QuizPage: React.FC<QuizPageProps> = ({
   useEffect(() => {
     if (isExamMode || currentOptions.mode === 'flashcard') return;
 
-    const unsubscribe = realtimeSync.subscribeKey('MCQ_PRACTICE', quiz.id, (payload) => {
+    const unsubscribe = realtimeSync.subscribeKey('MCQ_PRACTICE', syncQuizId, (payload) => {
       if (typeof payload.currentIndex === 'number' && payload.currentIndex >= 0 && payload.currentIndex < quiz.questions.length) {
         isRemoteUpdateRef.current = true;
         setCurrentIndex(payload.currentIndex);
@@ -182,16 +183,18 @@ export const QuizPage: React.FC<QuizPageProps> = ({
     });
 
     return () => unsubscribe();
-  }, [quiz.id, quiz.questions.length, isExamMode, currentOptions.mode]);
+  }, [quiz.id, syncQuizId,quiz.questions.length, isExamMode, currentOptions.mode]);
 
   // 2. Cross-Device Real-time Sync via Firebase Firestore onSnapshot (Phone <-> PC)
   useEffect(() => {
-    if (isExamMode || currentOptions.mode === 'flashcard' || isWrongQuestionsQuiz) return;
+    if (isExamMode || currentOptions.mode === 'flashcard') return;
     const userEmail = getCurrentUserEmail();
     if (!userEmail) return;
 
-    const unsubscribe = subscribeQuizLearningProgress(userEmail, quiz.id, (cloudProgress) => {
+    const unsubscribe = subscribeQuizLearningProgress(userEmail, syncQuizId, (cloudProgress) => {
+      if((cloudProgress.updatedAt||0)<(getQuizLearningProgress(quiz.id,isWrongQuestionsQuiz,true)?.updatedAt||0))return;
       if (typeof cloudProgress.currentIndex === 'number' && cloudProgress.currentIndex >= 0 && cloudProgress.currentIndex < quiz.questions.length) {
+        isRemoteUpdateRef.current = true;
         setCurrentIndex((prevIdx) => {
           if (prevIdx !== cloudProgress.currentIndex) {
             isRemoteUpdateRef.current = true;
@@ -217,6 +220,7 @@ export const QuizPage: React.FC<QuizPageProps> = ({
       if (document.visibilityState === 'visible' && !isExamMode && currentOptions.mode !== 'flashcard') {
         const latest = getQuizLearningProgress(quiz.id, isWrongQuestionsQuiz);
         if (latest && typeof latest.currentIndex === 'number' && latest.currentIndex < quiz.questions.length) {
+          isRemoteUpdateRef.current = true;
           setCurrentIndex((prev) => {
             if (prev !== latest.currentIndex) {
               isRemoteUpdateRef.current = true;

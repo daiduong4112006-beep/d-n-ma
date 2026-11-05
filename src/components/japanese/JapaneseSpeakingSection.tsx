@@ -1,3 +1,5 @@
+import {readAccountState,saveAccountState,subscribeAccountState} from '../../utils/accountState';
+import {getCurrentUserEmail} from '../../utils/storage';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Mic,
@@ -40,6 +42,9 @@ type SpkWindow = Window & {
   go?: (k: string, arg?: unknown) => void;
   counts?: () => Record<string, string>;
   __dmPatched?: boolean;
+  __dmPersist?:(value:any)=>void;
+  __dmGetState?:()=>any;
+  __dmApplyState?:(value:any)=>void;
 };
 
 export const SPK_GROUPS: { label: string; items: { k: string; label: string; icon: React.ReactNode; count?: string }[] }[] = [
@@ -98,6 +103,8 @@ export const JapaneseSpeakingSection: React.FC<Props> = ({
   const setRouteRef = useRef(setRoute);
   setRouteRef.current = setRoute;
   const [counts, setCounts] = useState<Record<string, string>>({});
+  const writingState=useRef(false);
+  useEffect(()=>subscribeAccountState('jpd-speaking',()=>{if(writingState.current)return;const value=readAccountState<any>('jpd-speaking',null);if(value){frameRef.current?.contentWindow&&((frameRef.current.contentWindow as SpkWindow).__dmApplyState?.(value));refreshCounts();}}),[]);
   const [height, setHeight] = useState(900);
   const [zoomSrc, setZoomSrc] = useState<string | null>(null);
   const frameRef = useRef<HTMLIFrameElement>(null);
@@ -137,6 +144,8 @@ export const JapaneseSpeakingSection: React.FC<Props> = ({
     const w = win();
     if (!w) return;
     try {
+      w.__dmPersist=value=>{writingState.current=true;try{saveAccountState('jpd-speaking',value);}finally{writingState.current=false;}refreshCounts();};
+      const saved=readAccountState<any>('jpd-speaking',null,'jpd123_v1');if(saved)w.__dmApplyState?.(saved);
       if (w.go && !w.__dmPatched) {
         const orig = w.go;
         w.go = (k: string, arg?: unknown) => {
@@ -264,7 +273,7 @@ export const JapaneseSpeakingSection: React.FC<Props> = ({
           ref={frameRef}
           key={theme}
           title="Ôn thi nói JPD123"
-          src={doc ? undefined : `${src}?v=spk-20261104-29&theme=${theme}&embed=1#${route}`}
+          src={doc ? undefined : `${src}?v=spk-20261105-sync&theme=${theme}&embed=1&account=${encodeURIComponent(getCurrentUserEmail())}#${route}`}
           srcDoc={doc}
           onLoad={onLoad}
           allow="autoplay"

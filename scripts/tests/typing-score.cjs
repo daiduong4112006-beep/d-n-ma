@@ -135,9 +135,11 @@ async function test(name,fn){try{await fn();results.push({name,status:'PASS'})}c
   await fill(['いち']);await enter();await advance(1300);await fill(['に']);await enter();await advance(1300);
   assert.match(text(renderer.toJSON()),/Đúng lần đầu: 50%/);
  });
- await test('Resume an already accepted last card without losing or duplicating its point',async()=>{
+ await test('A previously completed saved typing session starts a fresh attempt',async()=>{
   await render(Typing,{lesson:{id:'test',title:'Test',cards}},{currentIndex:1,cardIds:['a','b'],score:2,wrongCardIds:[],acceptedCardIds:['a','b'],scoringVersion:2,seconds:5,inputVal:'に'});
-  await enter();assert.match(text(renderer.toJSON()),/Đúng lần đầu: 100%/);
+  assert.match(text(renderer.toJSON()),/Một/);
+  await fill(['いち']);await enter();await advance(1300);await fill(['に']);await enter();await advance(1300);
+  assert.match(text(renderer.toJSON()),/Đúng lần đầu: 100%/);
  });
  await test('Remote pending success preserves the first-attempt point until manual next',async()=>{
   await render(Typing,{lesson:{id:'test',title:'Test',cards}});

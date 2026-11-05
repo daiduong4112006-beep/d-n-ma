@@ -389,6 +389,8 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
   currentIndexRef.current = currentIndex;
   const cardsRef = useRef(cards);
   cardsRef.current = cards;
+  const latestTypingStateRef = useRef({score, wrongCardIds, inputVal});
+  latestTypingStateRef.current = {score, wrongCardIds, inputVal};
   const isInitialMountRef = useRef(true);
 
   // Cross-Tab & Cross-Device Real-time Sync (< 2ms)
@@ -405,7 +407,12 @@ export const JapaneseTypingMode: React.FC<JapaneseTypingModeProps> = ({
         if (
           payload.currentIndex === currentIndexRef.current &&
           (!remoteOrder.length || remoteOrder[payload.currentIndex] === curId) &&
-          remoteAccepted.has(curId) === acceptedAnswersRef.current.has(curId)
+          remoteAccepted.has(curId) === acceptedAnswersRef.current.has(curId) &&
+          (payload.data?.score ?? 0) === latestTypingStateRef.current.score &&
+          JSON.stringify([...(payload.data?.wrongCardIds || [])].sort()) === JSON.stringify([...latestTypingStateRef.current.wrongCardIds].sort()) &&
+          (payload.data?.inputVal ?? '') === latestTypingStateRef.current.inputVal &&
+          JSON.stringify([...remoteAccepted].sort()) === JSON.stringify([...acceptedAnswersRef.current].sort()) &&
+          (!remoteOrder.length || JSON.stringify(remoteOrder) === JSON.stringify(cardsRef.current.map(c => c.id)))
         ) {
           return;
         }

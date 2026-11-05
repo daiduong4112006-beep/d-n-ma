@@ -15,7 +15,8 @@
     "prebuild": "node scripts/check-react-versions.cjs",
     "test:settings-admin": "node scripts/tests/settings-admin.cjs",
     "test:admin-rules": "node scripts/tests/admin-rules.cjs",
-    "test:japanese-entry": "node scripts/tests/japanese-course-entry.cjs"
+    "test:japanese-entry": "node scripts/tests/japanese-course-entry.cjs",
+    "test:sync:devices": "node scripts/tests/device-sync.cjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

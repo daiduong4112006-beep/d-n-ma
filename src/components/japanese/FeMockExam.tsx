@@ -1,10 +1,11 @@
+import {readAccountState,saveAccountLocalState,subscribeAccountState} from '../../utils/accountState';
 import { FE_MATRIX, eligibleFeQuestion, feCategory, sampleExam } from '../../utils/feExamMatrix';
 export { sampleExam } from '../../utils/feExamMatrix';
 import { subscribeStorageKeys } from '../../utils/storageEvents';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Timer, Flag, Send, Trophy, RotateCcw, History, ChevronLeft, ChevronRight, Star, Play } from 'lucide-react';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
-import { db, auth } from '../../lib/firebase';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { db, auth, writeCloudDocument as setDoc } from '../../lib/firebase';
 import { sound } from '../../utils/audio';
 
 /* ----------------------------------------------------------------------------
@@ -36,14 +37,14 @@ const HISTORY_KEY = 'jpd-fe-mock-history';
 
 const loadHistory = (): MockAttempt[] => {
   try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    return readAccountState<MockAttempt[]>(HISTORY_KEY,[],HISTORY_KEY);
   } catch {
     return [];
   }
 };
 const saveHistory = (h: MockAttempt[]) => {
   try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(h.slice(0, 30)));
+    saveAccountLocalState(HISTORY_KEY,h.slice(0,30));
   } catch {}
   const email = (auth.currentUser?.email || '').toLowerCase();
   if (email) setDoc(doc(db, 'fe_mock_exams', email), { email, history: h.slice(0, 30), updatedAt: new Date().toISOString() }).catch(() => {});
@@ -110,13 +111,14 @@ export const FeMockExam: React.FC<{
   const [reviewIdx, setReviewIdx] = useState(0);
 
   useEffect(()=>{
-    const stopStorage=subscribeStorageKeys(key=>key===HISTORY_KEY,()=>setHistory(loadHistory()));
+    const stopStorage=subscribeAccountState(HISTORY_KEY,()=>setHistory(loadHistory()));
     const email=(auth.currentUser?.email||'').toLowerCase();
     const stopCloud=email?onSnapshot(doc(db,'fe_mock_exams',email),snapshot=>{
       const remote:MockAttempt[]=snapshot.exists()?snapshot.data().history||[]:[];
       const map=new Map([...loadHistory(),...remote].map(a=>[a.id,a]));
       const merged=[...map.values()].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,30);
-      if(JSON.stringify(merged)!==JSON.stringify(loadHistory())){localStorage.setItem(HISTORY_KEY,JSON.stringify(merged));setHistory(merged);}
+      if(JSON.stringify(merged)!==JSON.stringify(loadHistory())){saveAccountLocalState(HISTORY_KEY,merged);setHistory(merged);}
+      if(merged.some(a=>!remote.some(r=>r.id===a.id)))setDoc(doc(db,'fe_mock_exams',email),{email,history:merged,updatedAt:new Date().toISOString()}).catch(()=>{});
     },error=>console.warn('FE history sync unavailable:',error)):()=>{};
     return ()=>{stopStorage();stopCloud();};
   },[]);

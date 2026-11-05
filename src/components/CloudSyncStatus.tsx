@@ -1,0 +1,13 @@
+import React,{useEffect,useState} from 'react';
+import {Cloud,CloudOff,RefreshCw} from 'lucide-react';
+import {auth,onAuthStateChanged} from '../lib/firebase';
+import {getCloudSyncStatus,flushCloudOutbox,startCloudOutbox} from '../utils/cloudOutbox';
+export function CloudSyncStatus({email}:{email?:string}){
+ const [,refresh]=useState(0);const state=getCloudSyncStatus();
+ useEffect(()=>{const update=()=>refresh(n=>n+1);const stop=startCloudOutbox();const unAuth=onAuthStateChanged(auth,update);window.addEventListener('mcq-cloud-sync-status',update);return()=>{stop();unAuth();window.removeEventListener('mcq-cloud-sync-status',update);};},[]);
+ if(!email)return null;
+ const verified=auth.currentUser?.emailVerified&&auth.currentUser.email?.toLowerCase()===email.toLowerCase();
+ const message=!verified?'Chỉ lưu trên thiết bị: hãy đăng nhập Firebase và xác minh email để đồng bộ.':state.error?'Chưa gửi thành công lên server. Thay đổi đang được giữ trên máy để gửi lại.':state.pending?`Đang chờ đồng bộ ${state.pending} thay đổi lên server…`:state.lastAcknowledgedAt?'Đã đồng bộ thay đổi lên server.':null;
+ if(!message)return null;
+ return <div role="status" className="flex items-center flex-wrap gap-2 px-4 py-2 text-xs border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-200">{verified&&!state.error?<Cloud size={15}/>:<CloudOff size={15}/>}<span className="flex-1">{message}</span>{verified&&(state.pending>0||state.error)&&<button className="inline-flex items-center gap-1 underline" onClick={()=>void flushCloudOutbox()}><RefreshCw size={13}/>Thử gửi lại</button>}</div>;
+}

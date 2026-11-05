@@ -1,3 +1,4 @@
+import {readAccountState,saveAccountState,subscribeAccountState} from '../../utils/accountState';
 import { subscribeStorageKeys } from '../../utils/storageEvents';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -57,14 +58,7 @@ const PICK_KEY = 'jpd-bank-picks';
 
 const prettySource = (f: string) => f.replace('JPD123_', '').replace('.html', '').replace(/_/g, ' ');
 
-const loadJSON = <T,>(key: string, fallback: T): T => {
-  try {
-    const v = localStorage.getItem(key);
-    return v ? (JSON.parse(v) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-};
+const loadJSON = <T,>(key:string,fallback:T):T=>readAccountState(key,fallback,key);
 
 /* -------------------------- one question card --------------------------- */
 const QuestionCard: React.FC<{
@@ -251,9 +245,7 @@ export const JapaneseExamBankSection: React.FC<{
   const [marked, setMarked] = useState<Set<string>>(() => new Set(loadJSON<string[]>(MARK_KEY, [])));
   const [picks, setPicks] = useState<Record<string, string>>(() => loadJSON(PICK_KEY, {}));
   const topRef = useRef<HTMLDivElement>(null);
-  useEffect(()=>subscribeStorageKeys(key=>key===MARK_KEY||key===PICK_KEY,()=>{
-    setMarked(new Set(loadJSON<string[]>(MARK_KEY,[])));setPicks(loadJSON(PICK_KEY,{}));
-  }),[]);
+  useEffect(()=>{const refresh=()=>{setMarked(new Set(loadJSON<string[]>(MARK_KEY,[])));setPicks(loadJSON(PICK_KEY,{}));};const a=subscribeAccountState(MARK_KEY,refresh),b=subscribeAccountState(PICK_KEY,refresh);return()=>{a();b();};},[]);
 
 
   useEffect(() => {
@@ -324,7 +316,7 @@ export const JapaneseExamBankSection: React.FC<{
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       try {
-        localStorage.setItem(MARK_KEY, JSON.stringify([...next]));
+        saveAccountState(MARK_KEY,[...next]);
       } catch {}
       return next;
     });
@@ -337,7 +329,7 @@ export const JapaneseExamBankSection: React.FC<{
     setPicks((prev) => {
       const next = { ...prev, [q.id]: key };
       try {
-        localStorage.setItem(PICK_KEY, JSON.stringify(next));
+        saveAccountState(PICK_KEY,next);
       } catch {}
       return next;
     });
@@ -346,7 +338,7 @@ export const JapaneseExamBankSection: React.FC<{
   const resetPicks = () => {
     setPicks({});
     try {
-      localStorage.removeItem(PICK_KEY);
+      saveAccountState(PICK_KEY,{});
     } catch {}
     setOnlyWrong(false);
     sound.playClick();
@@ -525,7 +517,7 @@ export const JapaneseExamBankSection: React.FC<{
               const next = new Set(prev);
               ids.forEach((id) => next.add(id));
               try {
-                localStorage.setItem(MARK_KEY, JSON.stringify([...next]));
+                saveAccountState(MARK_KEY,[...next]);
               } catch {}
               return next;
             });

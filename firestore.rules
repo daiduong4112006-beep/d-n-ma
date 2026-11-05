@@ -71,13 +71,13 @@ service cloud.firestore {
 
     // ---- Bộ đề & lượt làm bài: khóa theo trường userEmail ----
     match /quizzes/{quizId} {
-      allow read: if isAdmin() || ownsExisting('userEmail');
+      allow read: if isAdmin() || (signedIn() && resource == null) || ownsExisting('userEmail');
       allow delete: if ownsExisting('userEmail');
       allow create: if ownsIncoming('userEmail');
       allow update: if ownsExisting('userEmail') && ownsIncoming('userEmail');
     }
     match /attempts/{attemptId} {
-      allow read: if isAdmin() || ownsExisting('userEmail');
+      allow read: if isAdmin() || (signedIn() && resource == null) || ownsExisting('userEmail');
       allow delete: if ownsExisting('userEmail');
       allow create: if ownsIncoming('userEmail');
       allow update: if ownsExisting('userEmail') && ownsIncoming('userEmail');
@@ -85,7 +85,8 @@ service cloud.firestore {
 
     // ---- Dữ liệu học tập: khóa theo trường email ----
     match /user_japanese_courses/{docId} {
-      allow read, delete: if ownsExisting('email');
+      allow read: if (signedIn() && resource == null) || ownsExisting('email');
+      allow delete: if ownsExisting('email');
       allow create: if ownsIncoming('email');
       allow update: if ownsExisting('email') && ownsIncoming('email');
     }
@@ -99,23 +100,28 @@ service cloud.firestore {
       allow read, write: if signedIn() && myEmail() == email;
     }
     match /starred_questions/{docId} {
-      allow read, delete: if ownsExisting('email');
+      allow read: if (signedIn() && resource == null) || ownsExisting('email');
+      allow delete: if ownsExisting('email');
       allow create, update: if ownsIncoming('email') && (resource == null || ownsExisting('email'));
     }
     match /flashcard_progress/{docId} {
-      allow read, delete: if ownsExisting('email');
+      allow read: if (signedIn() && resource == null) || ownsExisting('email');
+      allow delete: if ownsExisting('email');
       allow create, update: if ownsIncoming('email') && (resource == null || ownsExisting('email'));
     }
     match /quiz_learning_progress/{docId} {
-      allow read, delete: if ownsExisting('email');
+      allow read: if (signedIn() && resource == null) || ownsExisting('email');
+      allow delete: if ownsExisting('email');
       allow create, update: if ownsIncoming('email') && (resource == null || ownsExisting('email'));
     }
     match /practice_mistakes_progress/{docId} {
-      allow read, delete: if ownsExisting('email');
+      allow read: if (signedIn() && resource == null) || ownsExisting('email');
+      allow delete: if ownsExisting('email');
       allow create, update: if ownsIncoming('email') && (resource == null || ownsExisting('email'));
     }
     match /study_progress/{docId} {
-      allow read, delete: if ownsExisting('email');
+      allow read: if (signedIn() && resource == null) || ownsExisting('email');
+      allow delete: if ownsExisting('email');
       allow create, update: if ownsIncoming('email') && (resource == null || ownsExisting('email'));
     }
 

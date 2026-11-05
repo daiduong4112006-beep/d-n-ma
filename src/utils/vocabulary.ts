@@ -1,3 +1,4 @@
+import {accountLocalStorage,isAccountLocalKey} from './accountLocalStorage';
 import { syncStarredVocabularyToFirestore } from '../lib/firebase';
 
 export interface StarredWord {
@@ -17,7 +18,7 @@ const STORAGE_KEY = 'mcq_starred_vocabulary_v1';
 
 export const getStarredWords = (): StarredWord[] => {
   try {
-    const data = localStorage.getItem(STORAGE_KEY);
+    const data = accountLocalStorage.getItem(STORAGE_KEY);
     if (!data) return [];
     const parsed = JSON.parse(data);
     if (!Array.isArray(parsed)) return [];
@@ -38,13 +39,13 @@ export const getStarredWords = (): StarredWord[] => {
 
 export const saveStarredWords = (words: StarredWord[]): void => {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(words));
+    accountLocalStorage.setItem(STORAGE_KEY, JSON.stringify(words));
     window.dispatchEvent(new Event('mcq_vocabulary_updated'));
 
     // Real-time Cloud Sync across PC and Mobile
     let email = '';
     try {
-      const u = localStorage.getItem('mcq_user');
+      const u = accountLocalStorage.getItem('mcq_user');
       if (u) email = JSON.parse(u)?.email || '';
     } catch {}
     if (email) {
@@ -59,7 +60,7 @@ export const saveStarredWords = (words: StarredWord[]): void => {
 
 export const updateStarredWordsFromCloud = (cloudWords: StarredWord[]): void => {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudWords));
+    accountLocalStorage.setItem(STORAGE_KEY, JSON.stringify(cloudWords));
     window.dispatchEvent(new Event('mcq_vocabulary_updated'));
   } catch (e) {
     console.error('Error updating starred vocabulary from cloud', e);
@@ -260,10 +261,10 @@ export const getSuggestedQuizzes = (): { id?: string; title: string }[] => {
 
   // Collect from cached quizzes
   try {
-    const user = localStorage.getItem('mcq_user');
+    const user = accountLocalStorage.getItem('mcq_user');
     const userEmail = user ? JSON.parse(user)?.email : '';
     const sanitized = userEmail ? userEmail.replace(/[^a-z0-9]/g, '_') : 'guest';
-    const raw = localStorage.getItem(`mcq_master_quizzes_v1_${sanitized}`);
+    const raw = accountLocalStorage.getItem(`mcq_master_quizzes_v1_${sanitized}`);
     if (raw) {
       const list = JSON.parse(raw);
       if (Array.isArray(list)) {

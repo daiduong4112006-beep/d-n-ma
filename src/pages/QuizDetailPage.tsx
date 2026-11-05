@@ -1,3 +1,4 @@
+import {accountLocalStorage,isAccountLocalKey} from '../utils/accountLocalStorage';
 import { subscribeStorageKeys } from '../utils/storageEvents';
 import {readPreferences} from '../utils/experiencePreferences';
 import React, { useState, useEffect, useRef } from 'react';
@@ -85,7 +86,7 @@ export const QuizDetailPage: React.FC<QuizDetailPageProps> = ({
   const [activeConfigModal, setActiveConfigModal] = useState<'none' | 'practice' | 'exam'>('none');
   const [starredIds, setStarredIds] = useState<Set<string>>(() => {
     try {
-      const saved = localStorage.getItem(`mcq_starred_questions_${quiz.id}`);
+      const saved = accountLocalStorage.getItem(`mcq_starred_questions_${quiz.id}`);
       if (saved) return new Set(JSON.parse(saved));
     } catch {}
     return new Set();
@@ -100,8 +101,8 @@ export const QuizDetailPage: React.FC<QuizDetailPageProps> = ({
 
   const lastRemoteStarred = useRef<string>('');
 
-  useEffect(()=>subscribeStorageKeys(key=>key===`mcq_starred_questions_${currentQuiz.id}`,()=>{
-    try{const ids=JSON.parse(localStorage.getItem(`mcq_starred_questions_${currentQuiz.id}`)||'[]');
+  useEffect(()=>subscribeStorageKeys(key=>isAccountLocalKey(key,`mcq_starred_questions_${currentQuiz.id}`),()=>{
+    try{const ids=JSON.parse(accountLocalStorage.getItem(`mcq_starred_questions_${currentQuiz.id}`)||'[]');
       lastRemoteStarred.current=[...ids].sort().join(',');setStarredIds(new Set(ids));}catch{}
   }),[currentQuiz.id]);
 
@@ -112,7 +113,7 @@ export const QuizDetailPage: React.FC<QuizDetailPageProps> = ({
       lastRemoteStarred.current = [...ids].sort().join(',');
       setStarredIds(new Set(ids));
       try {
-        localStorage.setItem(`mcq_starred_questions_${currentQuiz.id}`, JSON.stringify(ids));
+        accountLocalStorage.setItem(`mcq_starred_questions_${currentQuiz.id}`, JSON.stringify(ids));
       } catch {}
     });
     return () => unsub();
@@ -122,7 +123,7 @@ export const QuizDetailPage: React.FC<QuizDetailPageProps> = ({
   useEffect(() => {
     const idsArray = Array.from(starredIds);
     try {
-      localStorage.setItem(`mcq_starred_questions_${currentQuiz.id}`, JSON.stringify(idsArray));
+      accountLocalStorage.setItem(`mcq_starred_questions_${currentQuiz.id}`, JSON.stringify(idsArray));
     } catch {}
     const serialized = [...idsArray].sort().join(',');
     if (serialized !== lastRemoteStarred.current && currentUser?.email && currentQuiz?.id) {

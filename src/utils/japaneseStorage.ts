@@ -919,8 +919,8 @@ export const DEFAULT_JPD123_COURSE: JapaneseCourse = {
   title: 'Tiếng Nhật JPD 123 (Bài 4 - 7)',
   description: 'Khóa học tiếng Nhật JPD123 toàn diện - Tổng hợp Từ vựng, Chữ Hán và Ngữ pháp Bài 4-7',
   level: 'N5',
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
+  createdAt: '2000-01-01T00:00:00.000Z',
+  updatedAt: '2000-01-01T00:00:00.000Z',
   grammarVersion: JPD123_GRAMMAR_VERSION,
   lessons: JPD123_VOCAB_LESSONS,
   kanjiList: ALL_KANJI_CORE_LIST,
@@ -1107,11 +1107,9 @@ export function getJapaneseCourses(email?: string | null): JapaneseCourse[] {
         }
       } else if (!getDeletedJapaneseCourseIds(targetEmail).includes('course-jpd123')) {
         // Seed only when the course was not explicitly deleted.
-        parsed.unshift(DEFAULT_JPD123_COURSE);
+        parsed.unshift(getCleanDefaultJpdCourse());
         changed = true;
-        if (isJapaneseAdmin(targetEmail)) {
-          syncJapaneseCourseToFirestore(DEFAULT_JPD123_COURSE).catch(() => {});
-        }
+        // Reading/initial seeding must never upload over the user’s cloud progress.
       }
       if (changed) {
         localStorage.setItem(userKey, JSON.stringify(parsed));
@@ -1134,9 +1132,7 @@ export function getJapaneseCourses(email?: string | null): JapaneseCourse[] {
           c.id !== 'course-jpd123' &&
           c.code?.toLowerCase().replace(/\s+/g, '') !== 'jpd123'
       );
-      if (sanitized.length !== parsed.length) {
-        localStorage.setItem(userKey, JSON.stringify(sanitized));
-      }
+      // Hide ungranted content without destroying this account's existing progress.
       return sanitized;
     }
 
@@ -1233,7 +1229,7 @@ export function mergeCourseWithLocalMastery(cloudCourse: JapaneseCourse, localCo
   };
 }
 
-export function saveJapaneseCourses(courses: JapaneseCourse[], email?: string | null, skipCloudSync = false): void {
+export function saveJapaneseCourses(courses: JapaneseCourse[], email?: string | null, skipCloudSync = false, fromCloud = false): void {
   try {
     const targetEmail = (email !== undefined ? (email || '') : getCurrentUserEmail()).toLowerCase().trim();
     const hasAccess = canAccessJpd123(targetEmail);
@@ -1241,13 +1237,16 @@ export function saveJapaneseCourses(courses: JapaneseCourse[], email?: string | 
 
     let toSave = courses;
 
-    if (!hasAccess) {
+    if (!hasAccess && !fromCloud) {
       toSave = toSave.filter(
         (c) =>
           c &&
           c.id !== 'course-jpd123' &&
           c.code?.toLowerCase().replace(/\s+/g, '') !== 'jpd123'
       );
+    }
+    if(!hasAccess&&!fromCloud){
+      try{const hidden=JSON.parse(localStorage.getItem(userKey)||'[]').filter((c:JapaneseCourse)=>c.id==='course-jpd123'||c.code?.toLowerCase().replace(/\s+/g,'')==='jpd123');toSave=[...toSave,...hidden.filter((c:JapaneseCourse)=>!toSave.some(x=>x.id===c.id))];}catch{}
     }
     toSave = toSave.filter(c => !c.deletedAt && !getDeletedJapaneseCourseIds(targetEmail).includes(c.id));
     const encoded = JSON.stringify(toSave);
@@ -1374,7 +1373,7 @@ function clearJapaneseCourseDeletion(id:string,email?:string|null):void {
 }
 // Both App and the course page use the same reconciliation instead of reseeding independently.
 export function reconcileJapaneseCoursesFromCloud(incoming:JapaneseCourse[],email?:string|null):JapaneseCourse[] {
-  const local=getJapaneseCourses(email);const byId=new Map(local.map(c=>[c.id,c]));const next:JapaneseCourse[]=[];
+  const visible=getJapaneseCourses(email);let local=visible;try{const raw=JSON.parse(localStorage.getItem(getCoursesStorageKey(email))||'null');if(Array.isArray(raw))local=raw;}catch{}const byId=new Map(local.map(c=>[c.id,c]));const next:JapaneseCourse[]=[];
   for(const remote of incoming){
     if(remote.deletedAt){
       const restored=byId.get(remote.id);
@@ -1387,13 +1386,14 @@ export function reconcileJapaneseCoursesFromCloud(incoming:JapaneseCourse[],emai
       else continue;
     }
     const cached=byId.get(remote.id);
-    const newer=cached&&Date.parse(cached.updatedAt)>Date.parse(remote.updatedAt);
+    const pristineSeed=cached&&cached.id==='course-jpd123'&&cached.title===DEFAULT_JPD123_COURSE.title&&Math.abs(Date.parse(cached.updatedAt)-Date.parse(cached.createdAt))<=5&&cached.lessons.every(l=>!l.timesPracticed&&(l.cards||[]).every(c=>!c.mastered))&&(cached.kanjiList||[]).every(k=>!k.mastered)&&(cached.kanjiVocabList||[]).every(k=>!k.mastered);
+    const newer=cached&&!pristineSeed&&Date.parse(cached.updatedAt)>Date.parse(remote.updatedAt);
     next.push(newer?cached:remote);
     if(newer&&email)syncJapaneseCourseToFirestore(cached,email).catch(()=>{});
   }
   // A course not uploaded yet remains available while the first cloud snapshot is empty.
   for(const cached of local)if(!incoming.some(c=>c.id===cached.id)&&!getDeletedJapaneseCourseIds(email).includes(cached.id)){
-    next.push(cached);if(email)syncJapaneseCourseToFirestore(cached,email).catch(()=>{});
+    next.push(cached);if(email&&Date.parse(cached.updatedAt)>Date.parse('2000-01-01T00:00:00Z'))syncJapaneseCourseToFirestore(cached,email).catch(()=>{});
   }
-  saveJapaneseCourses(next,email,true);return getJapaneseCourses(email);
+  saveJapaneseCourses(next,email,true,true);return getJapaneseCourses(email);
 }

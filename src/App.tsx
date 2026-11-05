@@ -1,3 +1,4 @@
+import {CloudSyncStatus} from './components/CloudSyncStatus';
 import { subscribeStorageKeys } from './utils/storageEvents';
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Lock } from 'lucide-react';
@@ -11,6 +12,7 @@ import {
   getQuizzes,
   saveQuiz,
   saveQuizzes,
+  reconcileQuizzesFromCloud,
   deleteQuiz,
   saveAttempt,
   getWrongQuestionsList,
@@ -82,6 +84,7 @@ import { useThemeAndSound } from './hooks/useThemeAndSound';
 
 export default function App() {
   const [accountDisabled,setAccountDisabled]=useState(false);
+  const [syncAuthIdentity,setSyncAuthIdentity]=useState('');
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [wrongQuestions, setWrongQuestions] = useState<WrongQuestionDetail[]>([]);
@@ -128,7 +131,7 @@ export default function App() {
 
   useEffect(()=>{const open=()=>setIsShortcutsOpen(true);window.addEventListener('dm-open-shortcuts',open);return()=>window.removeEventListener('dm-open-shortcuts',open);},[]);
   useEffect(()=>{document.documentElement.dataset.reading=activeTab==='japanese'?'standard':preferences.reading;document.documentElement.dataset.density=activeTab==='japanese'?'comfortable':preferences.density;document.documentElement.dataset.motion=preferences.reduceMotion?'reduce':'normal';},[preferences,activeTab]);
-  useEffect(()=>{let stop=()=>{};let previous='';const authStop=onAuthStateChanged(auth,user=>{stop();if(previous)setAccountControl(previous,null);setAccountDisabled(false);const email=user?.email?.toLowerCase();previous=email||'';if(!email||!user.emailVerified)return;stop=subscribeAccountControl(email,c=>{setAccountControl(email,c);setAccountDisabled(c?.disabled===true&&!canOpenAdmin());},()=>{});});return()=>{authStop();stop();if(previous)setAccountControl(previous,null);};},[]);
+  useEffect(()=>{let stop=()=>{};let previous='';const authStop=onAuthStateChanged(auth,user=>{stop();if(previous)setAccountControl(previous,null);setAccountDisabled(false);const email=user?.email?.toLowerCase();setSyncAuthIdentity(user?.emailVerified?email||'':'');previous=email||'';if(!email||!user.emailVerified)return;stop=subscribeAccountControl(email,c=>{setAccountControl(email,c);setAccountDisabled(c?.disabled===true&&!canOpenAdmin());},()=>{});});return()=>{authStop();stop();if(previous)setAccountControl(previous,null);};},[]);
   // Global Keyboard Shortcuts (Press '?' to show cheat sheet)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -216,6 +219,23 @@ export default function App() {
       console.warn('History navigation notice:', e);
     }
   };
+
+  useEffect(()=>{
+    const unSubAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        const userObj = {
+          email: firebaseUser.email || '',
+          name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || '',
+        };
+        setCurrentUser(userObj);
+        localStorage.setItem('mcq_user', JSON.stringify(userObj));
+        transferGuestDataToUser(userObj.email);
+        refreshData();
+      }
+    });
+
+    return()=>unSubAuth();
+  },[]);
 
   // Synchronize Browser Back / Forward buttons (popstate event)
   useEffect(() => {
@@ -338,6 +358,7 @@ export default function App() {
     refreshData();
 
     const email = currentUser?.email || auth.currentUser?.email;
+    if(accountDisabled||!syncAuthIdentity||syncAuthIdentity!==email?.toLowerCase())return;
 
     if (email) {
       let hasLoadedUserDoc = false;
@@ -416,11 +437,12 @@ export default function App() {
     if (activeUserId && activeUserId !== 'guest_user') {
       unSubQuizzes = subscribeQuizzes(
         activeUserId,
-        (cloudQuizzes) => {
+        (incomingQuizzes,deleted) => {
+          const cloudQuizzes=reconcileQuizzesFromCloud(incomingQuizzes,deleted);
           // Cloud Firestore is authoritative for logged-in users.
           // This ensures created, edited, and deleted quizzes sync instantly in real-time across all devices.
           setQuizzes(cloudQuizzes);
-          saveQuizzes(cloudQuizzes);
+          // Reconciliation above persists the safe snapshot.
           setSelectedQuizDetail((prev) => {
             if (!prev) return null;
             const updated = cloudQuizzes.find((q) => q.id === prev.id);
@@ -444,19 +466,6 @@ export default function App() {
       });
     }
 
-    const unSubAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        const userObj = {
-          email: firebaseUser.email || '',
-          name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || '',
-        };
-        setCurrentUser(userObj);
-        localStorage.setItem('mcq_user', JSON.stringify(userObj));
-        transferGuestDataToUser(userObj.email);
-        refreshData();
-      }
-    });
-
     const handleBeforeUnload = () => {
       flushQuizWrites().catch(() => {});
       flushAllPendingProgressSync().catch(() => {});
@@ -474,7 +483,6 @@ export default function App() {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      unSubAuth();
       if (unSubUserDoc) unSubUserDoc();
       if (unSubQuizzes) unSubQuizzes();
       if (unSubAttempts) unSubAttempts();
@@ -486,7 +494,7 @@ export default function App() {
       if (unSubPracticeMistakes) unSubPracticeMistakes();
       if (unSubJpd123Access) unSubJpd123Access();
     };
-  }, [currentUser?.email]);
+  }, [currentUser?.email,syncAuthIdentity,accountDisabled]);
 
   const handleStartQuizWithOptions = (quizId: string, options?: StudyOptions) => {
     const target = quizzes.find((q) => q.id === quizId);
@@ -666,6 +674,7 @@ export default function App() {
         <EmailVerifyBanner />
         {/* Scrollable Main Workspace */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+          <CloudSyncStatus email={currentUser?.email}/>
           <Suspense fallback={<PageLoading />}>
           {/* Main List: My Quizzes */}
           {(activeTab === 'dashboard' || activeTab === 'my-quizzes' || !['dashboard', 'my-quizzes', 'quiz-detail', 'create-quiz', 'edit-quiz', 'quiz-mode', 'quiz-result', 'review-mode', 'practice-mistakes', 'statistics', 'import-export', 'saved-vocabulary', 'japanese', 'settings', 'admin', 'shared'].includes(activeTab)) && (

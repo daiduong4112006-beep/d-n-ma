@@ -1,7 +1,7 @@
 import { subscribeStorageKeys } from '../utils/storageEvents';
 import { useEffect, useState } from 'react';
 import { sound } from '../utils/audio';
-import { getUserSettingsFromFirestore, saveUserSettingsToFirestore } from '../lib/firebase';
+import { auth,onAuthStateChanged,subscribeUserSettings, saveUserSettingsToFirestore } from '../lib/firebase';
 
 /** Chế độ sáng/tối và bật/tắt âm thanh, lưu trên máy và đồng bộ lên tài khoản */
 export const useThemeAndSound = (email?: string) => {
@@ -35,24 +35,8 @@ export const useThemeAndSound = (email?: string) => {
     setIsDarkMode(localStorage.getItem('mcq_theme')==='dark');setSoundEnabled(sound.isEnabled());
   }),[]);
 
-  // Load user settings from Firestore when user logs in
-  useEffect(() => {
-    let active=true;
-    if (email) {
-      getUserSettingsFromFirestore(email).then((settings) => {
-        if (active&&settings) {
-          if (typeof settings.isDarkMode === 'boolean') {
-            setIsDarkMode(settings.isDarkMode);
-          }
-          if (typeof settings.soundEnabled === 'boolean') {
-            sound.setEnabled(settings.soundEnabled);
-            setSoundEnabled(settings.soundEnabled);
-          }
-        }
-      });
-    }
-    return()=>{active=false;};
-  }, [email]);
+  // Restore/subscribe only after Firebase has validated this account.
+  useEffect(()=>{let stop=()=>{};const off=onAuthStateChanged(auth,user=>{stop();if(!email||!user?.emailVerified||user.email?.toLowerCase()!==email.toLowerCase())return;stop=subscribeUserSettings(email,settings=>{if(typeof settings.isDarkMode==='boolean')setIsDarkMode(settings.isDarkMode);if(typeof settings.soundEnabled==='boolean'){sound.setEnabled(settings.soundEnabled);setSoundEnabled(settings.soundEnabled);}});});return()=>{off();stop();};},[email]);
 
   const handleToggleDarkMode = () => {
     setIsDarkMode((prev) => {

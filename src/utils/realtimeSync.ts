@@ -1,3 +1,4 @@
+import {localAccountEmail} from './accountLocalStorage';
 /**
  * Real-time Cross-Tab & In-App Sync Engine
  * Uses modern BroadcastChannel API with ultra-low latency (< 2ms)
@@ -14,6 +15,7 @@ export type SyncEventType =
   | 'JP_MULTICHOICE';
 
 export interface SyncPayload<T = any> {
+  account?:string;
   id?: string;            // unique message identifier to force storage event triggering
   type: SyncEventType;
   key: string;            // unique identifier e.g. quizId or lessonId
@@ -69,12 +71,13 @@ class RealtimeSyncBus {
 
   private handleIncoming(payload: SyncPayload) {
     if (!payload || !payload.type || !payload.key) return;
+    if((payload.account||'')!==localAccountEmail())return;
     // Ignore messages sent by this tab itself to prevent echo loops
     if (payload.senderId === TAB_INSTANCE_ID) return;
 
     if(payload.id && this.seenMessageIds.has(payload.id))return;
     if(payload.id){this.seenMessageIds.add(payload.id);if(this.seenMessageIds.size>512)this.seenMessageIds.delete(this.seenMessageIds.values().next().value!);}
-    const cacheKey = `${payload.type}_${payload.key}`;
+    const cacheKey = `${localAccountEmail()}_${payload.type}_${payload.key}`;
     const existing = this.latestStateMap.get(cacheKey);
     // Last-Write-Wins check
     if (existing && (existing.id === payload.id || existing.timestamp > payload.timestamp)) {
@@ -106,6 +109,7 @@ class RealtimeSyncBus {
     const payload: SyncPayload<T> = {
       id: `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       type,
+      account:localAccountEmail(),
       key: String(key).trim(),
       currentIndex,
       data,
@@ -114,7 +118,7 @@ class RealtimeSyncBus {
     };
 
     // Update in-memory latest state
-    const cacheKey = `${type}_${payload.key}`;
+    const cacheKey = `${localAccountEmail()}_${type}_${payload.key}`;
     this.latestStateMap.set(cacheKey, payload);
 
     // 1. Send via BroadcastChannel
@@ -147,6 +151,7 @@ class RealtimeSyncBus {
     const payload: SyncPayload<T> = {
       id: `cloud_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       type,
+      account:localAccountEmail(),
       key: String(key).trim(),
       currentIndex,
       data,
@@ -154,7 +159,7 @@ class RealtimeSyncBus {
       senderId: 'remote_cloud', // Mark as remote cloud to bypass local sender check
     };
 
-    const cacheKey = `${type}_${payload.key}`;
+    const cacheKey = `${localAccountEmail()}_${type}_${payload.key}`;
     const existing = this.latestStateMap.get(cacheKey);
     if (existing && (existing.id === payload.id || existing.timestamp > payload.timestamp)) {
       return;
@@ -174,7 +179,7 @@ class RealtimeSyncBus {
    * Get the latest known sync state from memory
    */
   public getLatestState<T = any>(type: SyncEventType, key: string): SyncPayload<T> | null {
-    const cacheKey = `${type}_${String(key).trim()}`;
+    const cacheKey = `${localAccountEmail()}_${type}_${String(key).trim()}`;
     return (this.latestStateMap.get(cacheKey) as SyncPayload<T>) || null;
   }
 

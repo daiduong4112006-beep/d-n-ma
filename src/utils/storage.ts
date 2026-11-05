@@ -1,3 +1,5 @@
+import {pendingCloudMutation} from './cloudOutbox';
+import {accountLocalStorage,isAccountLocalKey} from './accountLocalStorage';
 import { Quiz, QuizAttempt, GlobalStatistics, WrongQuestionDetail } from '../types/quiz';
 import {
   auth,
@@ -14,7 +16,7 @@ import { notifyDataChanged } from './storageEvents';
 
 export const getCurrentUserEmail = (): string => {
   try {
-    const saved = localStorage.getItem('mcq_user');
+    const saved = accountLocalStorage.getItem('mcq_user');
     if (saved) {
       const user = JSON.parse(saved);
       if (user?.email) return user.email.toLowerCase().trim();
@@ -291,17 +293,17 @@ const DEMO_WEB_DEV_QUIZ: Quiz = {
 export const initializeStorage = (): Quiz[] => {
   const userEmail = getCurrentUserEmail();
   const key = getQuizzesKey(userEmail);
-  const existingQuizzes = localStorage.getItem(key);
+  const existingQuizzes = accountLocalStorage.getItem(key);
 
   if (!existingQuizzes) {
-    localStorage.setItem(key, JSON.stringify([]));
+    accountLocalStorage.setItem(key, JSON.stringify([]));
     return [];
   }
   try {
     return JSON.parse(existingQuizzes);
   } catch (e) {
     console.error('Error parsing stored quizzes, resetting to empty', e);
-    localStorage.setItem(key, JSON.stringify([]));
+    accountLocalStorage.setItem(key, JSON.stringify([]));
     return [];
   }
 };
@@ -312,9 +314,17 @@ export const getQuizzes = (): Quiz[] => {
 
 export const saveQuizzes = (quizzes: Quiz[]): void => {
   const key = getQuizzesKey();
-  localStorage.setItem(key, JSON.stringify(quizzes));
+  accountLocalStorage.setItem(key, JSON.stringify(quizzes));
   notifyDataChanged(key);
 };
+
+// Cache snapshots must not erase acknowledged-later local edits or resurrect pending deletions.
+export function reconcileQuizzesFromCloud(incoming:Quiz[],deleted:Record<string,string>={}){
+ const local=getQuizzes(),byId=new Map(local.map(q=>[q.id,q]));const next:Quiz[]=[];
+ for(const remote of incoming){const pending=pendingCloudMutation('quizzes/'+remote.id);if(pending?.data.deletedAt)continue;const cached=byId.get(remote.id);next.push(cached&&pending&&Date.parse(cached.updatedAt)>Date.parse(remote.updatedAt)?cached:remote);}
+ for(const cached of local){if(next.some(q=>q.id===cached.id))continue;const pending=pendingCloudMutation('quizzes/'+cached.id);if(!pending||pending.data.deletedAt)continue;if(deleted[cached.id]&&Date.parse(deleted[cached.id])>=Date.parse(cached.updatedAt))continue;next.push(cached);}
+ saveQuizzes(next);return next;
+}
 
 export const getQuizById = (id: string): Quiz | undefined => {
   const quizzes = getQuizzes();
@@ -361,7 +371,7 @@ export const saveQuiz = (quiz: Quiz): Quiz[] => {
 
 export const getDeletedQuizIds = (): string[] => {
   try {
-    const raw = localStorage.getItem('mcq_deleted_quiz_ids');
+    const raw = accountLocalStorage.getItem('mcq_deleted_quiz_ids');
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -373,7 +383,7 @@ export const markQuizAsDeleted = (id: string): void => {
     const deleted = getDeletedQuizIds();
     if (!deleted.includes(id)) {
       deleted.push(id);
-      localStorage.setItem('mcq_deleted_quiz_ids', JSON.stringify(deleted));
+      accountLocalStorage.setItem('mcq_deleted_quiz_ids', JSON.stringify(deleted));
     }
   } catch (e) {
     console.error('markQuizAsDeleted error:', e);
@@ -396,7 +406,7 @@ export const deleteQuiz = (id: string): Quiz[] => {
 
 export const getAttempts = (): QuizAttempt[] => {
   const key = getAttemptsKey();
-  const raw = localStorage.getItem(key);
+  const raw = accountLocalStorage.getItem(key);
   if (!raw) return [];
   try {
     return JSON.parse(raw);
@@ -409,7 +419,7 @@ export const saveAttempt = (attempt: QuizAttempt): void => {
   const attempts = getAttempts();
   attempts.unshift(attempt);
   const key = getAttemptsKey();
-  localStorage.setItem(key, JSON.stringify(attempts));
+  accountLocalStorage.setItem(key, JSON.stringify(attempts));
   notifyDataChanged(key);
 
   const userId = getEffectiveUserId();
@@ -550,7 +560,7 @@ export const getFlashcardProgress = (quizId: string): FlashcardProgress => {
   if (!quizId) return { currentIndex: 0, knownQuestionIds: [], updatedAt: 0 };
   try {
     const cleanId = String(quizId).trim();
-    const raw = localStorage.getItem(`flashcard_progress_${cleanId}`);
+    const raw = accountLocalStorage.getItem(`flashcard_progress_${cleanId}`);
     if (raw) {
       const parsed = JSON.parse(raw);
       return {
@@ -579,7 +589,7 @@ export const saveFlashcardProgress = (
   };
 
   try {
-    localStorage.setItem(`flashcard_progress_${cleanId}`, JSON.stringify(enrichedProgress));
+    accountLocalStorage.setItem(`flashcard_progress_${cleanId}`, JSON.stringify(enrichedProgress));
     
     // Broadcast immediately to all other tabs (< 2ms)
     if (!skipBroadcast) {
@@ -602,7 +612,7 @@ export const resetFlashcardProgress = (quizId: string): void => {
   if (!quizId) return;
   const cleanId = String(quizId).trim();
   try {
-    localStorage.removeItem(`flashcard_progress_${cleanId}`);
+    saveFlashcardProgress(cleanId,{currentIndex:0,knownQuestionIds:[],updatedAt:Date.now()});
     realtimeSync.broadcast('MCQ_FLASHCARD', cleanId, 0, { knownQuestionIds: [], updatedAt: Date.now() });
   } catch (e) {
     console.error('Error resetting flashcard progress:', e);
@@ -622,13 +632,13 @@ export const updateAllFlashcardProgressFromCloud = (
       const localTimestamp = local.updatedAt || 0;
 
       // Cloud takes precedence if newer timestamp or if local is at 0 and cloud has actual progress
-      if (cloudTimestamp >= localTimestamp || (local.currentIndex === 0 && cloudData.currentIndex > 0)) {
+      if (cloudTimestamp >= localTimestamp) {
         const merged: FlashcardProgress = {
           currentIndex: cloudData.currentIndex,
           knownQuestionIds: cloudData.knownQuestionIds || [],
           updatedAt: cloudTimestamp || Date.now(),
         };
-        localStorage.setItem(key, JSON.stringify(merged));
+        accountLocalStorage.setItem(key, JSON.stringify(merged));
         // Notify any active FlashcardViewer component
         realtimeSync.notifyLocal('MCQ_FLASHCARD', cleanQuizId, cloudData.currentIndex, merged, merged.updatedAt);
       }
@@ -647,7 +657,8 @@ export interface QuizLearningProgressState {
 
 export const getQuizLearningProgress = (
   quizId: string,
-  isWrongQuestions = false
+  isWrongQuestions = false,
+  includeCleared = false
 ): QuizLearningProgressState | null => {
   if (!quizId) return null;
   const cleanId = String(quizId).trim();
@@ -655,8 +666,8 @@ export const getQuizLearningProgress = (
     ? `mcq_learning_progress_${cleanId}_wrong`
     : `mcq_learning_progress_${cleanId}`;
   try {
-    const raw = localStorage.getItem(progressKey);
-    if (raw) return JSON.parse(raw);
+    const raw = accountLocalStorage.getItem(progressKey);
+    if (raw) {const value=JSON.parse(raw);return value.cleared&&!includeCleared?null:value;}
   } catch (e) {
     console.error('Error reading quiz learning progress:', e);
   }
@@ -680,17 +691,17 @@ export const saveQuizLearningProgress = (
       ...progress,
       updatedAt: timestamp,
     };
-    localStorage.setItem(progressKey, JSON.stringify(enriched));
+    accountLocalStorage.setItem(progressKey, JSON.stringify(enriched));
 
     // Broadcast immediately to other tabs (< 2ms)
     if (!skipBroadcast) {
-      realtimeSync.broadcast('MCQ_PRACTICE', cleanId, enriched.currentIndex, enriched, timestamp);
+      realtimeSync.broadcast('MCQ_PRACTICE', isWrongQuestions?cleanId+'_wrong':cleanId, enriched.currentIndex, enriched, timestamp);
     }
 
     // Sync to Cloud Firestore for Cross-Device sync
     const userEmail = getCurrentUserEmail();
-    if (userEmail && !isWrongQuestions) {
-      syncQuizLearningProgressToFirestore(userEmail, cleanId, enriched).catch(() => {});
+    if (userEmail) {
+      syncQuizLearningProgressToFirestore(userEmail, isWrongQuestions?cleanId+'_wrong':cleanId, enriched).catch(() => {});
     }
   } catch (e) {
     console.error('Error saving quiz learning progress:', e);
@@ -704,7 +715,10 @@ export const clearQuizLearningProgress = (quizId: string, isWrongQuestions = fal
     ? `mcq_learning_progress_${cleanId}_wrong`
     : `mcq_learning_progress_${cleanId}`;
   try {
-    localStorage.removeItem(progressKey);
+    const tomb={currentIndex:0,userAnswers:{},updatedAt:Date.now(),cleared:true};
+    accountLocalStorage.setItem(progressKey,JSON.stringify(tomb));
+    const email=getCurrentUserEmail();if(email)syncQuizLearningProgressToFirestore(email,isWrongQuestions?cleanId+'_wrong':cleanId,tomb,true).catch(()=>{});
+    realtimeSync.broadcast('MCQ_PRACTICE',isWrongQuestions?cleanId+'_wrong':cleanId,0,tomb,tomb.updatedAt);
   } catch (e) {
     console.error('Error clearing quiz learning progress:', e);
   }
@@ -720,16 +734,17 @@ export const updateAllQuizLearningProgressFromCloud = (
       const progressKey = `mcq_learning_progress_${cleanQuizId}`;
       const local = getQuizLearningProgress(cleanQuizId);
       const cloudTimestamp = cloudData.updatedAt || 0;
-      const localTimestamp = local?.updatedAt || 0;
+      const localTimestamp = local?.updatedAt || JSON.parse(accountLocalStorage.getItem(progressKey)||'{}').updatedAt || 0;
 
-      if (cloudTimestamp >= localTimestamp || (!local && cloudData.currentIndex > 0)) {
+      if (cloudTimestamp >= localTimestamp) {
         const merged: QuizLearningProgressState = {
           currentIndex: cloudData.currentIndex,
           userAnswers: cloudData.userAnswers || {},
           currentOptions: cloudData.currentOptions,
+          ...(cloudData.cleared?{cleared:true}:{}),
           updatedAt: cloudTimestamp || Date.now(),
         };
-        localStorage.setItem(progressKey, JSON.stringify(merged));
+        accountLocalStorage.setItem(progressKey, JSON.stringify(merged));
         // Notify active QuizPage component
         realtimeSync.notifyLocal('MCQ_PRACTICE', cleanQuizId, cloudData.currentIndex, merged, merged.updatedAt);
       }
@@ -750,8 +765,8 @@ export interface PracticeMistakesProgressState {
 
 export const getPracticeMistakesProgress = (): PracticeMistakesProgressState | null => {
   try {
-    const raw = localStorage.getItem('mcq_practice_mistakes_progress');
-    if (raw) return JSON.parse(raw);
+    const raw = accountLocalStorage.getItem('mcq_practice_mistakes_progress');
+    if (raw) {const value=JSON.parse(raw);return value.cleared?null:value;}
   } catch (e) {
     console.error(e);
   }
@@ -769,7 +784,7 @@ export const savePracticeMistakesProgress = (
       masteredCount,
       updatedAt: Date.now(),
     };
-    localStorage.setItem('mcq_practice_mistakes_progress', JSON.stringify(state));
+    accountLocalStorage.setItem('mcq_practice_mistakes_progress', JSON.stringify(state));
 
     if (!skipBroadcast) {
       realtimeSync.broadcast('MCQ_MISTAKES', 'global', currentIndex, state, state.updatedAt);
@@ -793,13 +808,13 @@ export const updatePracticeMistakesProgressFromCloud = (
     const cloudTimestamp = cloudData.updatedAt || 0;
     const localTimestamp = local?.updatedAt || 0;
 
-    if (cloudTimestamp >= localTimestamp || (!local && cloudData.currentIndex > 0)) {
+    if (cloudTimestamp >= localTimestamp) {
       const merged: PracticeMistakesProgressState = {
         currentIndex: cloudData.currentIndex,
         masteredCount: cloudData.masteredCount || 0,
         updatedAt: cloudTimestamp || Date.now(),
       };
-      localStorage.setItem('mcq_practice_mistakes_progress', JSON.stringify(merged));
+      accountLocalStorage.setItem('mcq_practice_mistakes_progress', JSON.stringify(merged));
       realtimeSync.notifyLocal('MCQ_MISTAKES', 'global', cloudData.currentIndex, merged, merged.updatedAt);
     }
   } catch (e) {
@@ -869,8 +884,8 @@ export const getGlobalStatistics = (): GlobalStatistics => {
 export const resetToDemoData = (): Quiz[] => {
   const quizzesKey = getQuizzesKey();
   const attemptsKey = getAttemptsKey();
-  localStorage.removeItem(quizzesKey);
-  localStorage.removeItem(attemptsKey);
+  accountLocalStorage.removeItem(quizzesKey);
+  accountLocalStorage.removeItem(attemptsKey);
   return initializeStorage();
 };
 
@@ -878,25 +893,25 @@ export const clearAllUserData = (email?: string): void => {
   if (email) {
     const cleanEmail = email.trim().toLowerCase();
     const sanitized = cleanEmail.replace(/[^a-z0-9]/g, '_');
-    localStorage.removeItem(`mcq_master_quizzes_v1_${sanitized}`);
-    localStorage.removeItem(`mcq_master_attempts_v1_${sanitized}`);
-    localStorage.removeItem(`mcq_master_quizzes_v1_usr_${sanitized}`);
-    localStorage.removeItem(`mcq_master_attempts_v1_usr_${sanitized}`);
+    accountLocalStorage.removeItem(`mcq_master_quizzes_v1_${sanitized}`);
+    accountLocalStorage.removeItem(`mcq_master_attempts_v1_${sanitized}`);
+    accountLocalStorage.removeItem(`mcq_master_quizzes_v1_usr_${sanitized}`);
+    accountLocalStorage.removeItem(`mcq_master_attempts_v1_usr_${sanitized}`);
   }
   // Clear guest and fallback keys
-  localStorage.removeItem('mcq_master_quizzes_v1_guest');
-  localStorage.removeItem('mcq_master_attempts_v1_guest');
-  localStorage.removeItem('mcq_quizzes');
-  localStorage.removeItem('mcq_attempts');
-  localStorage.removeItem('mcq_user');
-  localStorage.removeItem('mcq_registered_users');
-  localStorage.removeItem('mcq_deleted_quiz_ids');
+  accountLocalStorage.removeItem('mcq_master_quizzes_v1_guest');
+  accountLocalStorage.removeItem('mcq_master_attempts_v1_guest');
+  accountLocalStorage.removeItem('mcq_quizzes');
+  accountLocalStorage.removeItem('mcq_attempts');
+  accountLocalStorage.removeItem('mcq_user');
+  accountLocalStorage.removeItem('mcq_registered_users');
+  accountLocalStorage.removeItem('mcq_deleted_quiz_ids');
 };
 
 export const transferGuestDataToUser = (userEmail: string): void => {
   if (!userEmail) return;
   const guestKey = 'mcq_master_quizzes_v1_guest';
-  const guestRaw = localStorage.getItem(guestKey);
+  const guestRaw = accountLocalStorage.getItem(guestKey);
   if (!guestRaw) return;
 
   try {
@@ -905,7 +920,7 @@ export const transferGuestDataToUser = (userEmail: string): void => {
       const cleanEmail = userEmail.trim().toLowerCase();
       const sanitized = cleanEmail.replace(/[^a-z0-9]/g, '_');
       const userKey = `mcq_master_quizzes_v1_${sanitized}`;
-      const existingUserRaw = localStorage.getItem(userKey);
+      const existingUserRaw = accountLocalStorage.getItem(userKey);
       const existingUserQuizzes: Quiz[] = existingUserRaw ? JSON.parse(existingUserRaw) : [];
 
       const merged = [...existingUserQuizzes];
@@ -920,8 +935,8 @@ export const transferGuestDataToUser = (userEmail: string): void => {
         );
       });
 
-      localStorage.setItem(userKey, JSON.stringify(merged));
-      localStorage.removeItem(guestKey);
+      accountLocalStorage.setItem(userKey, JSON.stringify(merged));
+      accountLocalStorage.removeItem(guestKey);
     }
   } catch (e) {
     console.error('transferGuestDataToUser error:', e);
