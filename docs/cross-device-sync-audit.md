@@ -47,3 +47,15 @@ Chưa kiểm thử trên điện thoại vật lý hoặc mạng production. Upl
 ## Chạy lại
 
 Chạy các npm scripts test:sync, test:study, test:settings-admin, test:japanese-entry, lint và build. test:admin-rules cần @firebase/rules-unit-testing qua MCQ_QA_TOOLS và Firestore emulator 8380. test:sync:devices cần Auth emulator 9199 và Firestore emulator 8380 với project demo-dun-admin-qa; suite xóa và tạo lại dữ liệu CHỈ trong emulator localhost, tuyệt đối không trỏ vào production.
+
+## Bổ sung sau lỗi production hết quota
+
+Log production xác nhận resource-exhausted: hết Free daily write units, không phải thiếu quyền. Bản sửa không thể khôi phục hạn mức server đã dùng hết.
+
+- Tiến độ Nhật chỉ tăng seconds/savedAt không phát sinh thêm cloud write.
+- Dữ liệu nhập liên tục được gộp 1,5 giây, tối đa 5 giây khi nhập liên tục; hàng đợi được ghi local trước khi chờ. Flush khi rời trang có thể gửi ngay.
+- Đánh dấu đã nhớ và CRUD không bị trì hoãn bởi bộ gộp luyện tập.
+- Khi SDK trả resource-exhausted, giữ hàng đợi và tạm nghỉ gửi 15 phút, kể cả reload/đổi tài khoản trong cùng origin. Tự thử sau khoảng nghỉ; không coi 15 phút là thời điểm Firebase chắc chắn khôi phục quota.
+- Thanh trạng thái hiện đúng hết hạn mức, không chỉ báo lỗi chung.
+
+Kiểm thử bổ sung: gộp 100 cập nhật thành một lần ghi, đánh dấu gửi ngay, 20 lần retry không gửi lại khi đang nghỉ quota, retry sau hết khoảng nghỉ, 60 tick đồng hồ không thêm lượt ghi Firebase.

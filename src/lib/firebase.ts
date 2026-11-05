@@ -83,12 +83,12 @@ configureCloudOutbox({
  }
 });
 onAuthStateChanged(auth,()=>cloudIdentityChanged());
-export const writeCloudDocument=(ref:any,data:any,options?:{merge?:boolean}):Promise<void>=>{
+export const writeCloudDocument=(ref:any,data:any,options?:{merge?:boolean;delayMs?:number}):Promise<void>=>{
  const path=typeof ref==='string'?ref:ref.path;
  // Auth profiles contain Firebase field transforms (password cleanup), not JSON state.
  if(path?.startsWith('users/'))return options?sdkSetDoc(ref,data,options):sdkSetDoc(ref,data);
  const email=(data.email||data.userEmail||data.ownerEmail||currentEmail()||'').toLowerCase().trim();
- return enqueueCloudMutation(email,path,data,options?.merge===true);
+ return enqueueCloudMutation(email,path,data,options?.merge===true,options?.delayMs||0);
 };
 const setDoc=writeCloudDocument;
 
@@ -1236,6 +1236,7 @@ export const flushAllPendingProgressSync = async (): Promise<void> => {
 // ---------------------------------------------------------------------------
 // Real-time Cloud Sync for Japanese Study Progress (Typing, Flashcard, Kanji)
 // ---------------------------------------------------------------------------
+const lastStudyContent = new Map<string,string>();
 export const syncStudyProgressToFirestore = async (
   email: string,
   progressKey: string,
@@ -1246,12 +1247,20 @@ export const syncStudyProgressToFirestore = async (
     const cleanEmail = email.trim().toLowerCase();
     const docId = `${cleanEmail.replace(/[^a-z0-9]/g, '_')}_${progressKey.replace(/[^a-z0-9_-]/gi, '_')}`;
     const ref = doc(db, 'study_progress', docId);
+    const identity = cleanEmail + ':' + progressKey;
+    // The local timer still persists every second; only meaningful study changes use cloud writes.
+    if(progressKey.startsWith('jp_progress_')){
+      const {seconds,savedAt,updatedAt,...content}=data;
+      const signature=JSON.stringify(content);
+      if(lastStudyContent.get(identity)===signature)return;
+      lastStudyContent.set(identity,signature);
+    }
     await setDoc(ref, {
       email: cleanEmail,
       key: progressKey,
       data: JSON.parse(JSON.stringify(data)),
       updatedAt: new Date().toISOString(),
-    }, { merge: true });
+    }, { merge: true, delayMs: progressKey.startsWith('jp_progress_') && !data.cleared ? 1500 : 0 });
   } catch (err) {
     handleFirestoreError('syncStudyProgressToFirestore', err);
   }
