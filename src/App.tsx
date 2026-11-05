@@ -1,3 +1,4 @@
+import {projectStorage as localStorage} from './utils/projectStorage';
 import {CloudSyncStatus} from './components/CloudSyncStatus';
 import { subscribeStorageKeys } from './utils/storageEvents';
 import React, { useState, useEffect, lazy, Suspense } from 'react';
@@ -6,6 +7,8 @@ import {canOpenAdmin} from './utils/adminAccess';
 import {subscribeAccountControl} from './lib/admin';
 import {setAccountControl} from './utils/accountControls';
 import {useExperiencePreferences} from './utils/experiencePreferences';
+const ResetPasswordPage=lazy(()=>import('./pages/ResetPassword').then(m=>({default:m.ResetPasswordPage})));
+const SupabaseMigrationPage=lazy(()=>import('./pages/SupabaseMigration').then(m=>({default:m.SupabaseMigrationPage})));
 const AdminPage=lazy(()=>import('./pages/Admin').then(m=>({default:m.AdminPage})));
 import { Quiz, QuizAttempt, Question, WrongQuestionDetail, GlobalStatistics, StudyOptions } from './types/quiz';
 import {
@@ -50,7 +53,7 @@ import {
   deleteUserFromFirestore,
   syncJapaneseCourseToFirestore,
   submitSharedResult,
-} from './lib/firebase';
+} from './lib/cloud';
 import { updateStarredWordsFromCloud } from './utils/vocabulary';
 import { reconcileJapaneseCoursesFromCloud, saveJapaneseCourses, getJapaneseCourses, saveAllowedJpd123Emails, canAccessJpd123, DEFAULT_JPD123_COURSE, getCleanDefaultJpdCourse } from './utils/japaneseStorage';
 import { updateStudyProgressFromCloud } from './utils/studyProgressStorage';
@@ -230,6 +233,10 @@ export default function App() {
         setCurrentUser(userObj);
         localStorage.setItem('mcq_user', JSON.stringify(userObj));
         transferGuestDataToUser(userObj.email);
+        refreshData();
+      } else {
+        localStorage.removeItem('mcq_user');
+        setCurrentUser(null);
         refreshData();
       }
     });
@@ -575,18 +582,14 @@ export default function App() {
 
     if (
       window.confirm(
-        'XÁC NHẬN XÓA TÀI KHOẢN VÀ DỮ LIỆU CỦA BẠN:\n\nToàn bộ bộ đề, lượt làm bài, cài đặt của tài khoản này trên máy chủ và trên máy sẽ bị xóa, tài khoản sẽ bị đăng xuất. (Dữ liệu của người dùng khác không bị ảnh hưởng – muốn reset cả hệ thống hãy dùng Firebase Console.)'
+        'XÁC NHẬN XÓA TÀI KHOẢN VÀ DỮ LIỆU CỦA BẠN:\n\nToàn bộ bộ đề, lượt làm bài, cài đặt của tài khoản này trên máy chủ và trên máy sẽ bị xóa, tài khoản sẽ bị đăng xuất. (Dữ liệu của người dùng khác không bị ảnh hưởng – việc quản trị dữ liệu toàn hệ thống thực hiện trong Supabase Dashboard.)'
       )
     ) {
-      if (currentUser?.email) {
-        await deleteUserFromFirestore(currentUser.email);
-      }
-      // Xóa toàn bộ máy chủ từ trình duyệt đã bị gỡ vì lý do bảo mật (quy tắc Firestore mới chặn).
-      // Chỉ xóa dữ liệu của chính tài khoản này; muốn reset cả hệ thống hãy dùng Firebase Console.
       try {
         await deleteCurrentUserAccount();
-      } catch (e) {
-        console.warn('Firebase account delete notice:', e);
+      } catch (error) {
+        alert('Chưa xóa được tài khoản: '+(error as Error).message);
+        return;
       }
       try {
         await logoutUser();
@@ -594,7 +597,7 @@ export default function App() {
         console.error('Logout error during clear:', e);
       }
       clearAllUserData(currentUser?.email);
-      localStorage.clear();
+      localStorage.removeItem('mcq_user');
       setCurrentUser(null);
       setQuizzes([]);
       setWrongQuestions([]);
@@ -677,7 +680,7 @@ export default function App() {
           <CloudSyncStatus email={currentUser?.email}/>
           <Suspense fallback={<PageLoading />}>
           {/* Main List: My Quizzes */}
-          {(activeTab === 'dashboard' || activeTab === 'my-quizzes' || !['dashboard', 'my-quizzes', 'quiz-detail', 'create-quiz', 'edit-quiz', 'quiz-mode', 'quiz-result', 'review-mode', 'practice-mistakes', 'statistics', 'import-export', 'saved-vocabulary', 'japanese', 'settings', 'admin', 'shared'].includes(activeTab)) && (
+          {(activeTab === 'dashboard' || activeTab === 'my-quizzes' || !['dashboard', 'my-quizzes', 'quiz-detail', 'create-quiz', 'edit-quiz', 'quiz-mode', 'quiz-result', 'review-mode', 'practice-mistakes', 'statistics', 'import-export', 'saved-vocabulary', 'japanese', 'settings', 'admin', 'shared', 'sync-migration', 'reset-password'].includes(activeTab)) && (
             <Dashboard
               quizzes={quizzes}
               onStartQuizWithOptions={handleStartQuizWithOptions}
@@ -992,6 +995,8 @@ export default function App() {
             />
           )}
 
+          {activeTab==='reset-password'&&<ResetPasswordPage/>}
+          {activeTab==='sync-migration'&&<SupabaseMigrationPage/>}
           {activeTab==='admin'&&<AdminPage/>}
           {/* Settings */}
           {activeTab === 'settings' && (

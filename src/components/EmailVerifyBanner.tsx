@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { MailWarning, Loader2, RefreshCw, Send } from 'lucide-react';
-import { auth, onAuthStateChanged, resendVerificationEmail, refreshEmailVerified } from '../lib/firebase';
+import { auth, onAuthStateChanged, resendVerificationEmail, refreshEmailVerified } from '../lib/cloud';
 
 /**
  * Thanh nhắc xác minh email. Firestore chỉ cho đọc/ghi khi email đã xác minh,

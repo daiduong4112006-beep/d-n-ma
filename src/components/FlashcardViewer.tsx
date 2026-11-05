@@ -21,7 +21,7 @@ import {
   markQuestionMastered,
   getCurrentUserEmail,
 } from '../utils/storage';
-import { subscribeFlashcardProgress } from '../lib/firebase';
+import { subscribeFlashcardProgress } from '../lib/cloud';
 import { realtimeSync } from '../utils/realtimeSync';
 
 interface FlashcardViewerProps {

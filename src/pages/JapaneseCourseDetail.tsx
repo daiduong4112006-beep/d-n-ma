@@ -1,3 +1,4 @@
+import {projectStorage as localStorage} from '../utils/projectStorage';
 import React, { useState, useEffect } from 'react';
 import {useOwnJpdModules} from '../utils/accountControls';
 import {

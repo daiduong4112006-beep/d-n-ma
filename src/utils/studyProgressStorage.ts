@@ -1,6 +1,6 @@
 import {accountLocalStorage,isAccountLocalKey} from './accountLocalStorage';
 import {applyAccountStateFromCloud} from './accountState';
-import { syncStudyProgressToFirestore } from '../lib/firebase';
+import { syncStudyProgressToFirestore } from '../lib/cloud';
 import { realtimeSync } from './realtimeSync';
 
 export interface FlashcardProgressState {

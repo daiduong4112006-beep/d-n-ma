@@ -1,7 +1,8 @@
+import {projectStorage as localStorage} from '../utils/projectStorage';
 import { subscribeStorageKeys } from '../utils/storageEvents';
 import { useEffect, useState } from 'react';
 import { sound } from '../utils/audio';
-import { auth,onAuthStateChanged,subscribeUserSettings, saveUserSettingsToFirestore } from '../lib/firebase';
+import { auth,onAuthStateChanged,subscribeUserSettings, saveUserSettingsToFirestore } from '../lib/cloud';
 
 /** Chế độ sáng/tối và bật/tắt âm thanh, lưu trên máy và đồng bộ lên tài khoản */
 export const useThemeAndSound = (email?: string) => {

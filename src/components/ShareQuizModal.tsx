@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Share2, Copy, Check, X, Link as LinkIcon, Download, Loader2, AlertTriangle, Send, Eye, Users, Clock, RefreshCw } from 'lucide-react';
 import { Quiz } from '../types/quiz';
-import { createOrUpdateSharedQuiz, getSharedQuizMeta, getSharedResults, SharedQuizDoc, SharedResult } from '../lib/firebase';
+import { createOrUpdateSharedQuiz, getSharedQuizMeta, getSharedResults, SharedQuizDoc, SharedResult } from '../lib/cloud';
 
 interface ShareQuizModalProps {
   isOpen: boolean;

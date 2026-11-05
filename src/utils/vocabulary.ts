@@ -1,5 +1,5 @@
 import {accountLocalStorage,isAccountLocalKey} from './accountLocalStorage';
-import { syncStarredVocabularyToFirestore } from '../lib/firebase';
+import { syncStarredVocabularyToFirestore } from '../lib/cloud';
 
 export interface StarredWord {
   id: string;

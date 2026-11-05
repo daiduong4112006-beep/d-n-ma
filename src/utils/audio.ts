@@ -1,3 +1,4 @@
+import {projectStorage as localStorage} from './projectStorage';
 // Web Audio API Sound Synthesizer for Quizlet MCQ Master
 
 class SoundEngine {

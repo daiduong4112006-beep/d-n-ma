@@ -4,11 +4,11 @@ const root=process.argv[2]||path.resolve(__dirname,'../..');
 const cases=[];let code;
 fs.mkdirSync(path.join(root,'test-results'),{recursive:true});
 async function build(){
- const firebase=fs.readFileSync(path.join(root,'src/lib/firebase.ts'),'utf8');
+ const firebase=fs.readFileSync(path.join(root,'src/lib/cloud.ts'),'utf8');
  const exports=[...firebase.matchAll(/export (?:const|async function|function) (\w+)/g)].map(m=>m[1]);
- const stub=exports.map(n=>`export const ${n}=${n==='auth'?'{currentUser:null}':n.startsWith('subscribe')?'(...args)=>()=>{}':'async (...args)=>{}'};`).join('\n');
+ const stub='export const auth={currentUser:null};'+exports.filter(n=>n!=='auth').map(n=>`export const ${n}=${n==='auth'?'{currentUser:null}':n.startsWith('subscribe')?'(...args)=>()=>{}':'async (...args)=>{}'};`).join('\n');
  const entry=`export * as events from './src/utils/storageEvents';export * as jp from './src/utils/japaneseStorage';export * as store from './src/utils/storage';export * as vocab from './src/utils/vocabulary';export * as progress from './src/utils/studyProgressStorage';export * as bus from './src/utils/realtimeSync';`;
- const result=await esbuild.build({stdin:{contents:entry,resolveDir:root,loader:'ts'},bundle:true,write:false,format:'iife',globalName:'testApi',platform:'browser',logLevel:'silent',plugins:[{name:'offline-firebase',setup(build){build.onResolve({filter:/lib\/firebase$/},()=>({path:'firebase-mock',namespace:'mock'}));build.onLoad({filter:/.*/,namespace:'mock'},()=>({contents:stub,loader:'ts'}));}}]});code=result.outputFiles[0].text;
+ const result=await esbuild.build({stdin:{contents:entry,resolveDir:root,loader:'ts'},bundle:true,write:false,format:'iife',globalName:'testApi',platform:'browser',logLevel:'silent',plugins:[{name:'offline-firebase',setup(build){build.onResolve({filter:/lib\/cloud$/},()=>({path:'firebase-mock',namespace:'mock'}));build.onLoad({filter:/.*/,namespace:'mock'},()=>({contents:stub,loader:'ts'}));}}]});code=result.outputFiles[0].text;
 }
 function browser(){
  const shared=new Map(),tabs=[],channels=[];let clock=Date.now();

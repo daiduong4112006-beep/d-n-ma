@@ -2,7 +2,7 @@ const fs=require('fs'),path=require('path'),Module=require('module'),assert=requ
 const esbuild=require('esbuild');
 const runtime=process.env.SYNC_TEST_RUNTIME || path.resolve(__dirname,'../../node_modules');const React=require(runtime+'/react');const {create,act}=require(runtime+'/react-test-renderer');
 const root=path.resolve(__dirname,'../..');const filename=root+'/src/components/japanese/JapaneseFlashcardMode.tsx';
-const source=fs.readFileSync(filename,'utf8');const icons=source.match(/import\s*\{([\s\S]*?)\}\s*from 'lucide-react'/)[1].split(',').map(x=>x.trim()).filter(x=>/^\w+$/.test(x));
+const source=fs.readFileSync(filename,'utf8');const icons=source.match(/import\s*\{([^}]+)\}\s*from 'lucide-react'/)[1].split(',').map(x=>x.trim()).filter(x=>/^\w+$/.test(x));
 global.IS_REACT_ACT_ENVIRONMENT=true;const data=new Map();global.localStorage={getItem:k=>data.get(k)||null,setItem:(k,v)=>data.set(k,v)};global.window={addEventListener(){},removeEventListener(){}};
 global.__savedProgress=null;global.__subscribers=[];
 const mock={

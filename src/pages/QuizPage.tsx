@@ -1,3 +1,4 @@
+import {projectStorage as localStorage} from '../utils/projectStorage';
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Quiz, QuestionResult, QuizAttempt, StudyOptions } from '../types/quiz';
 import { QuestionCard } from '../components/QuestionCard';
@@ -13,7 +14,7 @@ import {
   clearQuizLearningProgress,
   getCurrentUserEmail,
 } from '../utils/storage';
-import { subscribeQuizLearningProgress } from '../lib/firebase';
+import { subscribeQuizLearningProgress } from '../lib/cloud';
 import { realtimeSync } from '../utils/realtimeSync';
 
 interface QuizPageProps {

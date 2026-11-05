@@ -1,3 +1,4 @@
+import {projectStorage as localStorage} from './projectStorage';
 import { notifyDataChanged } from './storageEvents';
 import {ownJpdModules} from './accountControls';
 import {
@@ -23,7 +24,7 @@ import {
   syncJapaneseCourseToFirestore,
   deleteJapaneseCourseFromFirestore,
   saveJpd123AccessListToFirestore,
-} from '../lib/firebase';
+} from '../lib/cloud';
 import { katakanaToHiragana } from './japaneseKana';
 
 const STORAGE_KEY = 'mcq_japanese_lessons_v2';

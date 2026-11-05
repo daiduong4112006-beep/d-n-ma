@@ -9,7 +9,7 @@ const mocks={
  'lucide-react':icons.map(n=>`export const ${n}=()=>null;`).join('\n'),
  '../utils/storageEvents':`export function subscribeStorageKeys(match,fn){global.__local.push(fn);return()=>{global.__local=global.__local.filter(x=>x!==fn)}}`,
  '../utils/japaneseStorage':`export const getJapaneseCourses=()=>structuredClone(global.__courses);export const getCoursesStorageKey=()=> 'courses';export const reconcileJapaneseCoursesFromCloud=()=>{};export const saveJapaneseCourse=x=>global.__courses;export const deleteJapaneseCourse=()=>global.__courses;export const isJapaneseAdmin=()=>global.__admin;export const canAccessJpd123=()=>global.__access;export const saveJapaneseCourses=()=>{};export const restoreDefaultJpd123Course=()=>global.__courses;export const getCleanDefaultJpdCourse=()=>global.__courses[0];export const ensureJpdCourseUpToDate=x=>x;`,
- '../lib/firebase':`export function subscribeJapaneseCourses(email,fn){global.__cloud=fn;return()=>{if(global.__cloud===fn)global.__cloud=null}}export const syncJapaneseCourseToFirestore=()=>{};`,
+ '../lib/cloud':`export function subscribeJapaneseCourses(email,fn){global.__cloud=fn;return()=>{if(global.__cloud===fn)global.__cloud=null}}export const syncJapaneseCourseToFirestore=()=>{};`,
  './JapaneseCourseDetail':`import React from 'react';export const JapaneseCourseDetail=({course,onBackToCourses})=>React.createElement('div',{'data-testid':'course-detail'},course.title,React.createElement('button',{onClick:onBackToCourses},'Về danh sách'));`,
  '../utils/audio':`export const sound={playClick(){},playSuccess(){}};`,
 };

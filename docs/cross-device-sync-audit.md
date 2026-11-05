@@ -1,3 +1,5 @@
+> Báo cáo lịch sử trước khi chuyển backend. Bản hiện tại dùng Supabase; xem docs/supabase-migration.md.
+
 # Kiểm tra đồng bộ đa thiết bị — 2026-11-05
 
 ## Phạm vi và kết quả

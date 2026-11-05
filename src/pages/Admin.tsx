@@ -4,7 +4,7 @@ import {canOpenAdmin,getAdminSessionState} from '../utils/adminAccess';
 import {AccountControl,ADMIN_EMAIL,effectiveJpdModules} from '../utils/adminPolicy';
 import {ALL_JPD_MODULES,JPD_MODULES,JpdModuleId} from '../utils/jpdModules';
 import {AdminUser,AdminLog,subscribeAdminUsers,subscribeAdminControls,subscribeAdminLogs,saveAccountControls,loadAdminUserLibrary} from '../lib/admin';
-import {auth,onAuthStateChanged,refreshEmailVerified,subscribeJpd123AccessList} from '../lib/firebase';
+import {auth,onAuthStateChanged,refreshEmailVerified,subscribeJpd123AccessList} from '../lib/cloud';
 import {Quiz,QuizAttempt} from '../types/quiz';
 import {ShareQuizModal} from '../components/ShareQuizModal';
 

@@ -1,5 +1,5 @@
-import {collection,doc,onSnapshot,query,where,getDocsFromServer,runTransaction,limit,orderBy} from 'firebase/firestore';
-import {auth,db} from './firebase';
+import {collection,doc,onSnapshot,query,where,getDocsFromServer,runTransaction,limit,orderBy} from './supabaseDocuments';
+import {auth,db} from './cloud';
 import {canOpenAdmin} from '../utils/adminAccess';
 import {AccountControl,validateControlChange,normalizeEmail} from '../utils/adminPolicy';
 import {Quiz,QuizAttempt} from '../types/quiz';

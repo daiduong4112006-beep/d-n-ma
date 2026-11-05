@@ -16,15 +16,18 @@
     "test:settings-admin": "node scripts/tests/settings-admin.cjs",
     "test:admin-rules": "node scripts/tests/admin-rules.cjs",
     "test:japanese-entry": "node scripts/tests/japanese-course-entry.cjs",
-    "test:sync:devices": "node scripts/tests/device-sync.cjs"
+    "test:sync:devices": "node scripts/tests/device-sync.cjs",
+    "test:supabase": "node scripts/tests/supabase-native-auth.cjs && node scripts/tests/supabase-auth-ui.cjs && node scripts/tests/supabase-full-sql.cjs && node scripts/tests/supabase-full-integration.cjs",
+    "test:supabase:sql": "node scripts/tests/supabase-full-sql.cjs",
+    "migrate:supabase": "node scripts/migration/firebase-to-supabase.cjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
+    "@supabase/supabase-js": "2.119.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
-    "firebase": "^12.16.0",
     "katex": "^0.18.1",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
@@ -36,14 +39,16 @@
     "vite": "^6.2.3"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.15",
+    "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
+    "firebase-admin": "14.5.0",
+    "react-test-renderer": "19.3.1",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3",
-    "@types/express": "^4.17.21",
-    "react-test-renderer": "19.3.1"
+    "vite": "^6.2.3"
   }
 }

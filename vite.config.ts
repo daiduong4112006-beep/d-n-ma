@@ -13,7 +13,7 @@ export default defineConfig(() => {
           // Tách thư viện ra file riêng: ít thay đổi nên trình duyệt giữ cache lâu, cập nhật app tải lại ít hơn
           manualChunks(id: string) {
             if (!id.includes('node_modules')) return undefined;
-            if (id.includes('/firebase/') || id.includes('/@firebase/') || id.includes('/re2js/')) return 'vendor-firebase';
+            if (id.includes('/@supabase/') || id.includes('/iceberg-js/')) return 'vendor-supabase';
             if (id.includes('/react-dom/') || id.includes('/react/') || id.includes('/scheduler/')) return 'vendor-react';
             if (id.includes('/lucide-react/')) return 'vendor-icons';
             return undefined;

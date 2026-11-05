@@ -1,4 +1,6 @@
-import {syncStudyProgressToFirestore} from '../lib/firebase';
+import {logicalProjectStorageKey,projectStoragePrefix} from './projectStorage';
+import {projectStorage as localStorage} from './projectStorage';
+import {syncStudyProgressToFirestore} from '../lib/cloud';
 import {getCurrentUserEmail} from './storage';
 const PREFIX='mcq_account_state_v1_';
 const identity=()=>getCurrentUserEmail()||'guest';
@@ -17,4 +19,4 @@ export function applyAccountStateFromCloud(key:string,data:any){
  if(!data||!('value' in data))return;
  try{const raw=localStorage.getItem(accountStateKey(key));const local=raw?JSON.parse(raw):null;if(local&&Date.parse(local.savedAt)>=Date.parse(data.savedAt))return;localStorage.setItem(accountStateKey(key),JSON.stringify(data));notify(key);}catch{}
 }
-export function subscribeAccountState(key:string,callback:()=>void){const custom=(e:Event)=>{const d=(e as CustomEvent).detail;if(d?.key===key&&d.email===identity())callback();};const storage=(e:StorageEvent)=>{if(e.key===accountStateKey(key))callback();};window.addEventListener('mcq-account-state',custom);window.addEventListener('storage',storage);return()=>{window.removeEventListener('mcq-account-state',custom);window.removeEventListener('storage',storage);};}
+export function subscribeAccountState(key:string,callback:()=>void){const custom=(e:Event)=>{const d=(e as CustomEvent).detail;if(d?.key===key&&d.email===identity())callback();};const storage=(e:StorageEvent)=>{if(logicalProjectStorageKey(e.key)===accountStateKey(key))callback();};window.addEventListener('mcq-account-state',custom);window.addEventListener('storage',storage);return()=>{window.removeEventListener('mcq-account-state',custom);window.removeEventListener('storage',storage);};}

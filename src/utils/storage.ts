@@ -10,7 +10,7 @@ import {
   syncQuizLearningProgressToFirestore,
   syncPracticeMistakesProgressToFirestore,
   PracticeMistakesProgressCloud,
-} from '../lib/firebase';
+} from '../lib/cloud';
 import { realtimeSync } from './realtimeSync';
 import { notifyDataChanged } from './storageEvents';
 

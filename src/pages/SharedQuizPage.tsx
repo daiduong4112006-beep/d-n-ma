@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Share2, Loader2, AlertTriangle, BookOpen, Download, CheckCircle2, ArrowLeft, Eye } from 'lucide-react';
 import { Quiz } from '../types/quiz';
-import { getSharedQuiz, SharedQuizDoc, bumpSharedCounter } from '../lib/firebase';
+import { getSharedQuiz, SharedQuizDoc, bumpSharedCounter } from '../lib/cloud';
 
 interface Props {
   /** Bộ đề hiện có trên máy – để biết link này đã được lưu chưa */

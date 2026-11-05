@@ -1,3 +1,4 @@
+import {projectStoragePrefix} from '../../utils/projectStorage';
 import {readAccountState,saveAccountState,subscribeAccountState} from '../../utils/accountState';
 import {getCurrentUserEmail} from '../../utils/storage';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -273,7 +274,7 @@ export const JapaneseSpeakingSection: React.FC<Props> = ({
           ref={frameRef}
           key={theme}
           title="Ôn thi nói JPD123"
-          src={doc ? undefined : `${src}?v=spk-20261105-sync&theme=${theme}&embed=1&account=${encodeURIComponent(getCurrentUserEmail())}#${route}`}
+          src={doc ? undefined : `${src}?v=spk-20261105-sync&theme=${theme}&embed=1&workspace=${encodeURIComponent(projectStoragePrefix())}&account=${encodeURIComponent(getCurrentUserEmail())}#${route}`}
           srcDoc={doc}
           onLoad={onLoad}
           allow="autoplay"

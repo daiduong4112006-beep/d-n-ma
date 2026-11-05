@@ -1,3 +1,4 @@
+import {projectStorage as localStorage} from '../utils/projectStorage';
 import React, { useState, useEffect } from 'react';
 import {
   GraduationCap,
@@ -23,7 +24,7 @@ import {
 } from 'lucide-react';
 import { sound } from '../utils/audio';
 import {canShowAdminEntry} from '../utils/adminAccess';
-import {auth,onAuthStateChanged} from '../lib/firebase';
+import {auth,onAuthStateChanged} from '../lib/cloud';
 import {readPreferences} from '../utils/experiencePreferences';
 
 interface SidebarProps {

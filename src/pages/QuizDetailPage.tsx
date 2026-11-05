@@ -45,7 +45,7 @@ import {
 import { sound } from '../utils/audio';
 import { saveQuiz } from '../utils/storage';
 import { compressImage } from '../utils/imageCompressor';
-import { subscribeStarredQuestions, syncStarredQuestionsToFirestore } from '../lib/firebase';
+import { subscribeStarredQuestions, syncStarredQuestionsToFirestore } from '../lib/cloud';
 
 interface QuizDetailPageProps {
   quiz: Quiz;

@@ -1,3 +1,4 @@
+import {projectStorage as localStorage} from '../../utils/projectStorage';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   X,

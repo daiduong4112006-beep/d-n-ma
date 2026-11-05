@@ -1,8 +1,9 @@
+import {projectStorage as localStorage} from './projectStorage';
 import {readAccountState,saveAccountState} from './accountState';
 // Ôn tập ngắt quãng (SRS) – dựa trên SM-2, có bước "học lại" ngắn cho thẻ quên.
 // Lưu trên máy theo từng tài khoản và đồng bộ lên Firestore: srs_progress/{email}.
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
-import { db, auth, currentEmail, writeCloudDocument as setDoc } from '../lib/firebase';
+import { doc, getDoc, onSnapshot } from '../lib/supabaseDocuments';
+import { db, auth, currentEmail, writeCloudDocument as setDoc } from '../lib/cloud';
 
 export type SM2Grade = 1 | 2 | 3 | 4; // 1: Quên, 2: Khó, 3: Nhớ, 4: Dễ
 

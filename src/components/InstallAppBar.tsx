@@ -1,3 +1,4 @@
+import {projectStorage as localStorage} from '../utils/projectStorage';
 import React, { useEffect, useState } from 'react';
 import { Download, X } from 'lucide-react';
 

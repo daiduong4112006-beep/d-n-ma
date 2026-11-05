@@ -1,3 +1,4 @@
+import {projectStorage as localStorage} from '../../utils/projectStorage';
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Volume2, CheckCircle2, AlertCircle, Award, RotateCcw, Shuffle, Sparkles, BookOpen } from 'lucide-react';
 import { JapaneseKanjiCard } from '../../types/japanese';

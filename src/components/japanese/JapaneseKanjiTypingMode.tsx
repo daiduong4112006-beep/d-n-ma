@@ -1,3 +1,4 @@
+import {projectStorage as localStorage} from '../../utils/projectStorage';
 import { firstAttemptAccuracy } from '../../utils/typingScore';
 import React, { useState, useEffect, useRef } from 'react';
 import {

@@ -1,3 +1,5 @@
+import {logicalProjectStorageKey,projectStoragePrefix} from './projectStorage';
+import {projectStorage as localStorage} from './projectStorage';
 import {localAccountEmail} from './accountLocalStorage';
 /**
  * Real-time Cross-Tab & In-App Sync Engine
@@ -28,7 +30,7 @@ export interface SyncPayload<T = any> {
 // Generate unique ID for this browser tab instance
 export const TAB_INSTANCE_ID = `tab_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
-const CHANNEL_NAME = 'mcq_master_realtime_sync_channel';
+const channelName = ()=>'mcq_master_realtime_sync_channel'+projectStoragePrefix();
 type SyncCallback = (payload: SyncPayload) => void;
 
 class RealtimeSyncBus {
@@ -45,7 +47,7 @@ class RealtimeSyncBus {
     // Initialize BroadcastChannel if supported
     if (this.hasBroadcastChannel) {
       try {
-        this.channel = new BroadcastChannel(CHANNEL_NAME);
+        this.channel = new BroadcastChannel(channelName());
         this.channel.onmessage = (event: MessageEvent<SyncPayload>) => {
           this.handleIncoming(event.data);
         };
@@ -57,7 +59,7 @@ class RealtimeSyncBus {
 
     // Storage Event fallback (also ensures cross-tab communication on older browsers or background tabs)
     window.addEventListener('storage', (event: StorageEvent) => {
-      if (event.key === '__mcq_bus_message__' && event.newValue) {
+      if (logicalProjectStorageKey(event.key) === '__mcq_bus_message__' && event.newValue) {
         try {
           const payload: SyncPayload = JSON.parse(event.newValue);
           this.handleIncoming(payload);

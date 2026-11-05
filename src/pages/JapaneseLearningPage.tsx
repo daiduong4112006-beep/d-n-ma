@@ -30,7 +30,7 @@ import {
   getCleanDefaultJpdCourse,
   ensureJpdCourseUpToDate,
 } from '../utils/japaneseStorage';
-import { subscribeJapaneseCourses, syncJapaneseCourseToFirestore } from '../lib/firebase';
+import { subscribeJapaneseCourses, syncJapaneseCourseToFirestore } from '../lib/cloud';
 import { JapaneseCourseDetail } from './JapaneseCourseDetail';
 import { sound } from '../utils/audio';
 

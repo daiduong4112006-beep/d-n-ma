@@ -1,17 +1,13 @@
+import {projectStorage as localStorage} from '../utils/projectStorage';
 import React, { useState } from 'react';
-import { User, Lock, Mail, ShieldCheck, LogIn, UserPlus, X, CheckCircle, Loader2 } from 'lucide-react';
+import { ShieldCheck, X, CheckCircle, Loader2 } from 'lucide-react';
 import { sound } from '../utils/audio';
 import {
-  registerUser,
-  loginUser,
   loginWithGoogle,
   logoutUser,
   deleteCurrentUserAccount,
   saveUserToFirestore,
-  getUserFromFirestore,
-  deleteUserFromFirestore,
-  sendResetPassword,
-} from '../lib/firebase';
+} from '../lib/cloud';
 import { clearAllUserData, transferGuestDataToUser } from '../utils/storage';
 
 interface AuthModalProps {
@@ -22,45 +18,6 @@ interface AuthModalProps {
   onLogout: () => void;
 }
 
-const isFirebaseUnconfiguredError = (err: any) => {
-  if (!err) return true;
-  const code = String(err.code || '');
-  const msg = String(err.message || '');
-  return (
-    code.includes('api-key') ||
-    msg.includes('api-key') ||
-    msg.includes('timed out') ||
-    code === 'auth/operation-not-allowed' ||
-    code === 'auth/network-request-failed' ||
-    code === 'auth/internal-error' ||
-    code === 'auth/invalid-api-key' ||
-    code === 'auth/api-key-not-valid.-please-pass-a-valid-api-key.'
-  );
-};
-
-/** Tài khoản dự phòng khi mất mạng – chỉ lưu MÃ BĂM mật khẩu trên máy, không lưu mật khẩu */
-type LocalAccount = { email: string; name: string; passwordHash?: string; password?: string };
-const LOCAL_ACCOUNTS_KEY = 'mcq_registered_users';
-const readLocalAccounts = (): Record<string, LocalAccount> => {
-  try {
-    return JSON.parse(localStorage.getItem(LOCAL_ACCOUNTS_KEY) || '{}');
-  } catch {
-    return {};
-  }
-};
-const writeLocalAccounts = (a: Record<string, LocalAccount>) => {
-  try {
-    localStorage.setItem(LOCAL_ACCOUNTS_KEY, JSON.stringify(a));
-  } catch {}
-};
-const hashPassword = async (email: string, password: string): Promise<string> => {
-  const data = new TextEncoder().encode(`dunmaster:${email}:${password}`);
-  const buf = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-};
-
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
@@ -68,149 +25,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onLoginSuccess,
   onLogout,
 }) => {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim() || !password.trim()) {
-      setMessage('Vui lòng điền đầy đủ email và mật khẩu.');
-      return;
-    }
-
-    if (password.length < 6) {
-      setMessage('Mật khẩu phải có ít nhất 6 ký tự.');
-      return;
-    }
-
-    setLoading(true);
-    setMessage(null);
-
-    const cleanEmail = email.trim().toLowerCase();
-    const displayName = name.trim() || email.split('@')[0];
-
-    try {
-      if (mode === 'register') {
-        let userObj = { email: email.trim(), name: displayName };
-        try {
-          const u = await registerUser(email.trim(), password, displayName);
-          userObj = { email: u.email || email.trim(), name: u.displayName || displayName };
-        } catch (firebaseErr: any) {
-          // Chỉ dùng tài khoản trên máy khi KHÔNG kết nối được Firebase (mất mạng / chưa cấu hình)
-          if (!isFirebaseUnconfiguredError(firebaseErr)) throw firebaseErr;
-          const accounts = readLocalAccounts();
-          if (accounts[cleanEmail]) throw { code: 'auth/email-already-in-use' };
-          accounts[cleanEmail] = { email: email.trim(), name: displayName, passwordHash: await hashPassword(cleanEmail, password) };
-          writeLocalAccounts(accounts);
-        }
-
-        // Hồ sơ trên Firestore chỉ còn email + tên (KHÔNG lưu mật khẩu)
-        await saveUserToFirestore(cleanEmail, displayName);
-
-        sound.playCorrect();
-        localStorage.setItem('mcq_user', JSON.stringify(userObj));
-        transferGuestDataToUser(userObj.email);
-        onLoginSuccess(userObj);
-        onClose();
-      } else {
-        let userObj = { email: email.trim(), name: displayName };
-
-        try {
-          const u = await loginUser(email.trim(), password);
-          userObj = { email: u.email || email.trim(), name: u.displayName || displayName };
-        } catch (firebaseErr: any) {
-          if (isFirebaseUnconfiguredError(firebaseErr)) {
-            // Mất mạng / chưa cấu hình Firebase → tài khoản lưu trên máy này
-            const accounts = readLocalAccounts();
-            const localAcc = accounts[cleanEmail];
-            if (!localAcc) throw { code: 'auth/user-not-found' };
-            const ok = localAcc.passwordHash
-              ? localAcc.passwordHash === (await hashPassword(cleanEmail, password))
-              : localAcc.password === password;
-            if (!ok) throw { code: 'auth/wrong-password' };
-            if (!localAcc.passwordHash) {
-              // nâng cấp bản cũ lưu mật khẩu dạng chữ → mã băm
-              accounts[cleanEmail] = { email: localAcc.email, name: localAcc.name, passwordHash: await hashPassword(cleanEmail, password) };
-              writeLocalAccounts(accounts);
-            }
-            userObj.name = localAcc.name || userObj.name;
-          } else {
-            // Tài khoản cũ chỉ có trên Firestore (đăng ký khi Firebase Auth lỗi, mật khẩu lưu dạng chữ):
-            // nếu đúng mật khẩu → tạo tài khoản Firebase Auth thật rồi xóa mật khẩu khỏi Firestore.
-            const legacy = await getUserFromFirestore(cleanEmail);
-            const legacyPass = legacy?.password && legacy.password !== 'google_auth' ? legacy.password : '';
-            if (!legacyPass) {
-              throw firebaseErr?.code ? firebaseErr : { code: 'auth/wrong-password' };
-            }
-            if (legacyPass !== password) throw { code: 'auth/wrong-password' };
-            try {
-              const u = await registerUser(email.trim(), password, legacy?.name || displayName);
-              userObj = { email: u.email || email.trim(), name: u.displayName || legacy?.name || displayName };
-            } catch (createErr: any) {
-              // Đã có tài khoản Firebase Auth với mật khẩu khác → mật khẩu cũ không còn hiệu lực
-              if (createErr?.code === 'auth/email-already-in-use') throw { code: 'auth/wrong-password' };
-              throw createErr;
-            }
-          }
-        }
-
-        saveUserToFirestore(cleanEmail, userObj.name).catch(() => {});
-        sound.playCorrect();
-        localStorage.setItem('mcq_user', JSON.stringify(userObj));
-        transferGuestDataToUser(userObj.email);
-        onLoginSuccess(userObj);
-        onClose();
-      }
-    } catch (err: any) {
-      sound.playWrong();
-      console.error('Auth error detail:', err);
-      let errMsg = 'Đã xảy ra lỗi khi đăng nhập / đăng ký.';
-      if (err.code === 'auth/user-not-found') {
-        errMsg = 'Tài khoản này chưa tồn tại hoặc đã bị xóa. Vui lòng chuyển sang tab "Đăng ký"!';
-      } else if (
-        err.code === 'auth/wrong-password' ||
-        err.code === 'auth/invalid-credential'
-      ) {
-        errMsg = 'Email hoặc mật khẩu không chính xác!';
-      } else if (err.code === 'auth/email-already-in-use') {
-        errMsg = 'Email này đã được sử dụng. Vui lòng chuyển sang tab "Đăng nhập".';
-      } else if (err.code === 'auth/weak-password') {
-        errMsg = 'Mật khẩu quá ngắn, phải có ít nhất 6 ký tự.';
-      } else if (err.code === 'auth/invalid-email') {
-        errMsg = 'Định dạng Email không hợp lệ.';
-      } else if (err.message) {
-        errMsg = `Lỗi: ${err.message}`;
-      }
-      setMessage(errMsg);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleForgotPassword = async () => {
-    const target = email.trim();
-    if (!target) {
-      setMessage('Nhập email của bạn vào ô Email trước, rồi bấm "Quên mật khẩu?".');
-      return;
-    }
-    setLoading(true);
-    setMessage(null);
-    try {
-      await sendResetPassword(target);
-      setMessage(`Đã gửi email đặt lại mật khẩu tới ${target}. Mở hộp thư (kể cả mục Spam) và làm theo hướng dẫn.`);
-    } catch (err: any) {
-      if (err?.code === 'auth/invalid-email') setMessage('Định dạng Email không hợp lệ.');
-      else setMessage(`Không gửi được email đặt lại mật khẩu: ${err?.message || 'Có lỗi xảy ra'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -239,7 +57,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       } else if (err?.code === 'auth/popup-blocked') {
         setMessage('Trình duyệt đã chặn cửa sổ bật lên (popup). Vui lòng cho phép popup để đăng nhập Google.');
       } else {
-        setMessage(`Đăng nhập Google không thành công: ${err?.message || 'Có lỗi xảy ra'}. Bạn có thể đăng nhập bằng Email/Mật khẩu bên trên!`);
+        setMessage(`Đăng nhập Google không thành công: ${err?.message || 'Có lỗi xảy ra'}. Vui lòng thử lại.`);
       }
     } finally {
       setLoading(false);
@@ -268,16 +86,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       try {
         const targetEmail = (currentUser?.email || '').trim().toLowerCase();
         
-        // Delete user record & all data from Firestore
-        if (targetEmail) {
-          await deleteUserFromFirestore(targetEmail);
-        }
-
-        try {
-          await deleteCurrentUserAccount();
-        } catch (e) {
-          console.warn('Firebase user delete note:', e);
-        }
+        await deleteCurrentUserAccount();
         try {
           await logoutUser();
         } catch (e) {
@@ -318,7 +127,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
 
           <h3 className="text-xl font-extrabold tracking-tight">
-            {currentUser ? 'Tài khoản cá nhân' : mode === 'login' ? 'Đăng nhập tài khoản' : 'Đăng ký tài khoản mới'}
+            {currentUser ? 'Tài khoản cá nhân' : 'Đăng nhập tài khoản'}
           </h3>
           <p className="text-xs text-indigo-100 mt-1 leading-relaxed">
             Quyền riêng tư tuyệt đối cho bộ đề, tiến độ học tập & danh sách câu sai của bạn.
@@ -379,124 +188,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           ) : (
             <>
-              {/* Tab Selector */}
-              <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => setMode('login')}
-                  className={`flex-1 py-2 text-xs font-extrabold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                    mode === 'login'
-                      ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs'
-                      : 'text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  <LogIn className="w-3.5 h-3.5" />
-                  <span>Đăng nhập</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode('register')}
-                  className={`flex-1 py-2 text-xs font-extrabold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                    mode === 'register'
-                      ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs'
-                      : 'text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  <span>Đăng ký</span>
-                </button>
-              </div>
-
               {message && (
                 <p className="text-xs text-rose-500 font-bold bg-rose-50 dark:bg-rose-950/40 p-2.5 rounded-xl border border-rose-200">
                   {message}
                 </p>
               )}
 
-              {/* Form inputs */}
-              <form onSubmit={handleSubmit} className="space-y-3.5">
-                {mode === 'register' && (
-                  <div>
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1">
-                      Họ và tên
-                    </label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <input
-                        type="text"
-                        placeholder="Nhập tên của bạn"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2.5 text-xs font-medium bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1">
-                    Địa chỉ Email
-                  </label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input
-                      type="email"
-                      required
-                      placeholder="email@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2.5 text-xs font-medium bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1">
-                    Mật khẩu
-                  </label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input
-                      type="password"
-                      required
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2.5 text-xs font-medium bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                </div>
-                {mode === 'login' && (
-                  <div className="-mt-2 text-right">
-                    <button
-                      type="button"
-                      disabled={loading}
-                      onClick={handleForgotPassword}
-                      className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer disabled:opacity-60"
-                    >
-                      Quên mật khẩu?
-                    </button>
-                  </div>
-                )}
-                {mode === 'register' && (
-                  <p className="-mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-                    Sau khi đăng ký, bạn sẽ nhận email xác minh. Cần bấm link trong email thì dữ liệu mới được lưu lên đám mây.
-                  </p>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 font-extrabold text-xs text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 rounded-xl shadow-md shadow-indigo-500/20 transition-all cursor-pointer active:scale-[0.98] flex items-center justify-center gap-2"
-                >
-                  {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                  <span>{mode === 'login' ? 'Xác nhận Đăng nhập' : 'Tạo tài khoản cá nhân'}</span>
-                </button>
-              </form>
-
               {/* Quick Google Sign-In Option */}
               <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-center space-y-2">
-                <span className="text-[11px] text-slate-400 font-medium">Hoặc đăng nhập nhanh bằng tài khoản Google:</span>
+                <span className="text-[11px] text-slate-400 font-medium">Dùng tài khoản Google để lưu và đồng bộ tiến độ học tập.</span>
                 <button
                   type="button"
                   disabled={loading}

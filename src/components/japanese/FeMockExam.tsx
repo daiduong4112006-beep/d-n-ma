@@ -4,8 +4,8 @@ export { sampleExam } from '../../utils/feExamMatrix';
 import { subscribeStorageKeys } from '../../utils/storageEvents';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Timer, Flag, Send, Trophy, RotateCcw, History, ChevronLeft, ChevronRight, Star, Play } from 'lucide-react';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
-import { db, auth, writeCloudDocument as setDoc } from '../../lib/firebase';
+import { doc, getDoc, onSnapshot } from '../../lib/supabaseDocuments';
+import { db, auth, writeCloudDocument as setDoc } from '../../lib/cloud';
 import { sound } from '../../utils/audio';
 
 /* ----------------------------------------------------------------------------
