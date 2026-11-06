@@ -1,4 +1,4 @@
-import React,{useEffect,useRef,useState} from 'react';
+import React,{useEffect,useRef,useState,useLayoutEffect} from 'react';
 import {auth} from '../lib/cloud';
 import {ArrowLeft,BookOpen} from 'lucide-react';
 import {SubjectCode,subjectInfo,readSubjectQuestions,readSubjectChapter,saveSubjectQuestion,saveSubjectChapter,subscribeSubjectProgress} from '../utils/subjectProgress';
@@ -6,6 +6,15 @@ const protocol='dun-study-v1';
 interface ExamView {questionId:string;selected?:string;reveal:boolean;onAnswer:(id:string,choice:string)=>void}
 export function SubjectNotebook({code,email,onBack,exam}:{code:SubjectCode;email?:string;onBack:()=>void;exam?:ExamView}){
  const frame=useRef<HTMLIFrameElement>(null),snapshot=useRef<Record<string,string>>({}),navigation=useRef('');
+ const section=useRef<HTMLElement>(null);
+ const [readingHeight,setReadingHeight]=useState<number>();
+ useLayoutEffect(()=>{
+  if(exam)return;
+  const fit=()=>{if(section.current)setReadingHeight(Math.max(240,window.innerHeight-section.current.getBoundingClientRect().top));};
+  fit();window.addEventListener('resize',fit);window.visualViewport?.addEventListener('resize',fit);
+  const observer=new ResizeObserver(fit);if(section.current?.parentElement)observer.observe(section.current.parentElement);
+  return()=>{observer.disconnect();window.removeEventListener('resize',fit);window.visualViewport?.removeEventListener('resize',fit);};
+ },[!!exam]);
  const subject=subjectInfo(code);
  const [html,setHtml]=useState(''),[loadError,setLoadError]=useState('');
  useEffect(()=>{const abort=new AbortController();setHtml('');setLoadError('');void(async()=>{try{const token=await auth.currentUser?.getIdToken();if(!token)throw new Error('Cần đăng nhập để mở môn học.');const response=await fetch('/api/study-notebooks/'+code,{headers:{Authorization:'Bearer '+token},cache:'no-store',signal:abort.signal});if(!response.ok)throw new Error(response.status===403?'Bạn chưa được cấp quyền môn này.':'Không tải được môn học. Vui lòng mở lại khi có mạng.');const content=await response.text();if(!abort.signal.aborted)setHtml(content);}catch(e){if(!abort.signal.aborted)setLoadError((e as Error).message);}})();return()=>abort.abort();},[code,email]);
@@ -32,5 +41,5 @@ export function SubjectNotebook({code,email,onBack,exam}:{code:SubjectCode;email
   const el=frame.current;el?.addEventListener('load',initialize);
   return()=>{stopped=true;window.removeEventListener('message',receive);unsubscribe();observer.disconnect();el?.removeEventListener('load',initialize);};
  },[code,email,subject]);
- return <section className="w-full min-w-0 flex flex-col"><header hidden={!!exam} className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-800"><div className="flex items-center gap-3"><button onClick={onBack} className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700"><ArrowLeft size={16}/>Môn học</button><div><h1 className="font-extrabold text-base flex items-center gap-2"><BookOpen size={17} className="text-indigo-500"/>{code}</h1><p className="text-xs text-slate-500 dark:text-slate-400">{subject.title}</p></div></div><span className="text-xs text-slate-500 dark:text-slate-400">{subject.chapters.length} chương · {subject.questionIds.length} câu hỏi</span></header>{loadError?<p role="alert" className="p-5 text-rose-500">{loadError}</p>:!html?<p className="p-5 text-slate-500">Đang tải môn học…</p>:<iframe ref={frame} key={`${code}:${email||'guest'}`} title={`Sổ ôn ${code}`} sandbox="allow-scripts" srcDoc={html||undefined} className="w-full border-0 bg-slate-50 dark:bg-slate-950" style={{height:exam?'calc(100dvh - 285px)':'calc(100dvh - 105px)',minHeight:exam?360:540}}/>}</section>;
+ return <section ref={section} data-subject-notebook={exam?'exam':'reading'} className="w-full min-w-0 flex flex-col overflow-hidden" style={exam?undefined:{height:readingHeight??'100dvh'}}><header hidden={!!exam} className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-4 py-2 shrink-0 border-b border-slate-200 dark:border-slate-800"><div className="flex items-center gap-3"><button onClick={onBack} className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700"><ArrowLeft size={16}/>Môn học</button><div><h1 className="font-extrabold text-base flex items-center gap-2"><BookOpen size={17} className="text-indigo-500"/>{code}</h1><p className="text-xs text-slate-500 dark:text-slate-400">{subject.title}</p></div></div><span className="text-xs text-slate-500 dark:text-slate-400">{subject.chapters.length} chương · {subject.questionIds.length} câu hỏi</span></header>{loadError?<p role="alert" className="p-5 text-rose-500">{loadError}</p>:!html?<p className="p-5 text-slate-500">Đang tải môn học…</p>:<iframe ref={frame} key={`${code}:${email||'guest'}`} title={`Sổ ôn ${code}`} sandbox="allow-scripts" srcDoc={html||undefined} className={`w-full border-0 bg-slate-50 dark:bg-slate-950 ${exam?'':'flex-1 min-h-0'}`} style={{height:exam?'calc(100dvh - 285px)':'100%',minHeight:exam?360:0}}/>}</section>;
 }

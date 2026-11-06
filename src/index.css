@@ -185,3 +185,6 @@ html.dark, html.dark body, html.dark #root {
 .fe-question ol { list-style: decimal; padding-left: 20px; }
 .fe-question img { max-width: 100%; border-radius: 12px; }
 .fe-question .katex-html, .fe-question annotation { display: none; }
+
+/* Embedded subject reader owns the remaining viewport; keep other workspaces unchanged. */
+.mcq-experience main:has([data-subject-notebook="reading"]) { padding: 0; overflow: hidden; min-height: 0; }
