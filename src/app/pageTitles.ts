@@ -23,5 +23,5 @@ export const getPageTitle = (activeTab: string): string =>
       : activeTab === 'saved-vocabulary'
       ? 'Từ cần lưu ý ghi nhớ'
       : activeTab === 'japanese'
-      ? 'Học Tiếng Nhật - Luyện Từ Vựng'
+      ? 'Môn học'
       : 'Cài đặt hệ thống';

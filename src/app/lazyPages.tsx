@@ -12,6 +12,7 @@ export const Statistics = lazy(() => import('../pages/Statistics').then((m) => (
 export const ImportQuiz = lazy(() => import('../pages/ImportQuiz').then((m) => ({ default: m.ImportQuiz })));
 export const SettingsPage = lazy(() => import('../pages/Settings').then((m) => ({ default: m.SettingsPage })));
 export const SavedVocabularyPage = lazy(() => import('../pages/SavedVocabularyPage').then((m) => ({ default: m.SavedVocabularyPage })));
+export const SubjectsPage = lazy(() => import('../pages/SubjectsPage').then((m) => ({ default: m.SubjectsPage })));
 export const JapaneseLearningPage = lazy(() => import('../pages/JapaneseLearningPage').then((m) => ({ default: m.JapaneseLearningPage })));
 
 export const PageLoading: React.FC = () => (

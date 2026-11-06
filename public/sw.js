@@ -45,16 +45,18 @@ self.addEventListener('fetch', (event) => {
 
   // Trang (điều hướng): ưu tiên mạng, mất mạng thì dùng bản đã lưu
   if (req.mode === 'navigate') {
+    // Embedded study documents must not replace the main app's offline shell.
+    const navigationKey = url.pathname.startsWith('/study-notebooks/') || url.pathname.startsWith('/jpd123-speaking/') ? url.pathname : '/';
     event.respondWith(
       fetch(req)
         .then(async (res) => {
           // Do not replace the working offline app with a proxy/server error page.
           if (res.ok && res.headers.get('content-type')?.includes('text/html')) {
-            await remember(SHELL, '/', res);
+            await remember(SHELL, navigationKey, res);
           }
           return res;
         })
-        .catch(() => caches.match('/', { cacheName: SHELL }))
+        .catch(() => caches.match(navigationKey, { cacheName: SHELL }))
     );
     return;
   }

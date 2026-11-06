@@ -4,6 +4,15 @@ const caches={open:async name=>{if(!stores.has(name))stores.set(name,new Map());
 vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../../public/sw.js'),'utf8'),{URL,caches,fetch:(...args)=>network(...args),self:{location:{origin:'https://qa.test'},addEventListener:(k,fn)=>handlers[k]=fn},console});
 async function request(url,mode='navigate'){let response;const waits=[];handlers.fetch({request:{method:'GET',url,mode},respondWith:p=>response=p,waitUntil:p=>waits.push(p)});const result=await response;await Promise.all(waits);return result;}
 (async()=>{
+ network=async()=>new Response('main shell',{headers:{'content-type':'text/html'}});await request('https://qa.test/');
+ network=async()=>new Response('MAI notebook',{headers:{'content-type':'text/html'}});await request('https://qa.test/study-notebooks/mai391.html');
+ network=async()=>new Response('MAS notebook',{headers:{'content-type':'text/html'}});await request('https://qa.test/study-notebooks/mas291.html');
+ network=async()=>{throw Error('offline')};
+ assert.equal(await (await request('https://qa.test/')).text(),'main shell');
+ assert.equal(await (await request('https://qa.test/study-notebooks/mai391.html')).text(),'MAI notebook');
+ assert.equal(await (await request('https://qa.test/study-notebooks/mas291.html')).text(),'MAS notebook');
+ console.log('PASS embedded subjects keep independent offline shells without replacing the app');
+ network=async()=>new Response('app',{headers:{'content-type':'text/html'}});
  await request('https://qa.test/');network=async()=>new Response('server error',{status:503,headers:{'content-type':'text/html'}});await request('https://qa.test/');network=async()=>{throw Error('offline')};assert.equal(await (await request('https://qa.test/')).text(),'app');console.log('PASS server errors cannot overwrite the working offline shell');
  network=async()=>new Response('asset');await request('https://qa.test/assets/app-hash.js','cors');network=async()=>{throw Error('offline')};assert.equal(await (await request('https://qa.test/assets/app-hash.js','cors')).text(),'asset');console.log('PASS visited build assets are cached before returning and reopen offline');
  failCache=true;network=async()=>new Response('still online',{headers:{'content-type':'text/html'}});assert.equal(await (await request('https://qa.test/')).text(),'still online');console.log('PASS full cache does not break successful online navigation');

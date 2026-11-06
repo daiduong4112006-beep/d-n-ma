@@ -110,7 +110,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems = [
     { id: 'dashboard', label: 'Bộ đề của tôi', icon: BookOpen, color: 'indigo' },
     { id: 'saved-vocabulary', label: 'Từ cần ghi nhớ', icon: Star, color: 'amber' },
-    { id: 'japanese', label: 'Học Tiếng Nhật', icon: Languages, color: 'rose' },
+    { id: 'japanese', label: 'Môn học', icon: BookOpen, color: 'indigo' },
     { id: 'import-export', label: 'Nhập / Xuất đề', icon: FileSpreadsheet, color: 'cyan' },
   ];
 

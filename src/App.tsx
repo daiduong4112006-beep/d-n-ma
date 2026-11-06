@@ -79,7 +79,7 @@ import {
   ImportQuiz,
   SettingsPage,
   SavedVocabularyPage,
-  JapaneseLearningPage,
+  SubjectsPage,
   PageLoading,
 } from './app/lazyPages';
 import { getPageTitle } from './app/pageTitles';
@@ -989,7 +989,7 @@ export default function App() {
 
           {/* Japanese Learning Section */}
           {activeTab === 'japanese' && (
-            <JapaneseLearningPage
+            <SubjectsPage
               currentUser={currentUser}
               onBackToDashboard={() => navigateTo('dashboard')}
             />
