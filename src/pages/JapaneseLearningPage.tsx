@@ -186,7 +186,7 @@ export const JapaneseLearningPage: React.FC<Props> = ({ currentUser, onBackToDas
   // If a course is selected, show its detail view
   if (selectedCourse && (hasJpdAccess||!isJpd123Course(selectedCourse))) {
     return (
-      <div className="w-full max-w-[1680px] mx-auto px-3 sm:px-5 lg:px-6 py-4">
+      <div className="w-full max-w-[1680px] mx-auto px-0 py-0">
         <JapaneseCourseDetail
           course={selectedCourse}
           onBackToCourses={() => setSelectedCourse(null)}
@@ -233,7 +233,7 @@ export const JapaneseLearningPage: React.FC<Props> = ({ currentUser, onBackToDas
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <div className="w-full max-w-7xl mx-auto px-0 py-0 space-y-6">
       {/* Top Banner */}
       <div className="p-6 sm:p-8 rounded-3xl bg-linear-to-br from-slate-900 via-indigo-950 to-slate-900 text-white shadow-xl relative overflow-hidden border border-slate-800">
         <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-orange-500/10 to-transparent rounded-full blur-3xl pointer-events-none"></div>

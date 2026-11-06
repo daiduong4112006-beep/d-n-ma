@@ -676,7 +676,7 @@ export default function App() {
       <div className="flex-1 flex flex-col min-h-screen md:h-screen overflow-hidden">
         <EmailVerifyBanner />
         {/* Scrollable Main Workspace */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pt-2 pb-4 sm:pb-6 lg:pb-8">
           <CloudSyncStatus email={currentUser?.email}/>
           <Suspense fallback={<PageLoading />}>
           {/* Main List: My Quizzes */}
