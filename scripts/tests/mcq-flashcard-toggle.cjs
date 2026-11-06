@@ -15,4 +15,11 @@ const mocks={
  await act(async()=>toggle().props.onClick());assert.deepEqual(global.__toggleQA.progress.knownQuestionIds,['a']);assert.deepEqual(global.__toggleQA.marks.at(-1),['q','a',true]);assert.equal(finished,1);console.log('PASS unmarked card can be marked again and retains next-card behavior');
  await act(async()=>global.__toggleQA.remote({currentIndex:0,knownQuestionIds:[],updatedAt:Date.now()+100}));assert.equal(toggle().props['aria-pressed'],false);await act(async()=>toggle().props.onClick());assert.deepEqual(global.__toggleQA.progress.knownQuestionIds,['a']);console.log('PASS local action after remote update is persisted rather than skipped');
  await act(async()=>view.unmount());
+ global.__toggleQA.progress={currentIndex:0,knownQuestionIds:[],updatedAt:1};
+ await act(async()=>{view=create(React.createElement(FlashcardViewer,{quizId:'q',questions:[{...q,mastered:false},{...q,id:'b',mastered:false}],onFinish(){}}))});
+ await act(async()=>toggle().props.onClick());const acknowledged={...global.__toggleQA.progress};assert.equal(acknowledged.currentIndex,1);assert.equal(toggle().props['aria-pressed'],false);
+ await act(async()=>global.__toggleQA.remote(acknowledged));assert.equal(toggle().props['aria-pressed'],false);
+ await act(async()=>global.__toggleQA.remote({...acknowledged,currentIndex:0,updatedAt:acknowledged.updatedAt-1}));assert.equal(toggle().props['aria-pressed'],false);
+ await act(async()=>toggle().props.onClick());assert.deepEqual(global.__toggleQA.marks.at(-1),['q','b',true]);console.log('PASS marking advances and persists the next card; server acknowledgement and older echo cannot jump back');
+ await act(async()=>view.unmount());
 })().catch(e=>{console.error(e);process.exitCode=1});

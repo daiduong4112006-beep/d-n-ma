@@ -131,7 +131,7 @@ export const FlashcardViewer: React.FC<FlashcardViewerProps> = ({ quizId, quizTi
     if (!userEmail) return;
 
     const unsubscribe = subscribeFlashcardProgress(userEmail, effectiveQuizId, (progress) => {
-      if((progress.updatedAt||0)<(getFlashcardProgress(effectiveQuizId).updatedAt||0))return;
+      if((progress.updatedAt||0)<=(getFlashcardProgress(effectiveQuizId).updatedAt||0))return;
       if (typeof progress.currentIndex === 'number' && progress.currentIndex >= 0 && progress.currentIndex < questions.length) {
         isRemoteUpdateRef.current = true;
         setCurrentIndex((prevIdx) => {
@@ -230,7 +230,8 @@ export const FlashcardViewer: React.FC<FlashcardViewerProps> = ({ quizId, quizTi
     else next.delete(currentQ.id);
     // Persist the action immediately, even after an incoming cloud update or before closing the tab.
     isRemoteUpdateRef.current = true;
-    saveFlashcardProgress(effectiveQuizId, { currentIndex, knownQuestionIds: [...next], updatedAt: Date.now() });
+    const nextIndex = mastered ? Math.min(currentIndex + 1, questions.length - 1) : currentIndex;
+    saveFlashcardProgress(effectiveQuizId, { currentIndex: nextIndex, knownQuestionIds: [...next], updatedAt: Date.now() });
     setKnownQuestionIds(next);
     markQuestionMastered(effectiveQuizId, currentQ.id, mastered);
     if (mastered) {
