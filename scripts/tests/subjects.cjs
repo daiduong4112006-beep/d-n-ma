@@ -24,7 +24,7 @@ const root=path.resolve(__dirname,'../..');
  }
  const manifest=JSON.parse(fs.readFileSync(path.join(root,'src/data/studySubjects.json'),'utf8'));
  for(const subject of manifest.subjects){
-  const html=fs.readFileSync(path.join(root,'public/study-notebooks',subject.code.toLowerCase()+'.html'),'utf8');
+  const html=fs.readFileSync(path.join(root,'server-data/study-notebooks',subject.code.toLowerCase()+'.html'),'utf8');
   const payloads=[...html.matchAll(/<script\b[^>]*type="application\/json"[^>]*>([\s\S]*?)<\/script>/g)].map(m=>JSON.parse(m[1]));
   assert.equal(payloads.length,3);assert.deepEqual(Object.keys(payloads[0].data),[subject.code]);
   assert.equal(payloads[0].index.length,subject.questionIds.length);assert.equal(Object.keys(payloads[2]).length,subject.answers);

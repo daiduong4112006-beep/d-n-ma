@@ -3,13 +3,37 @@ import path from 'path';
 import fs from 'fs';
 import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import dotenv from 'dotenv';
+import {createClient} from '@supabase/supabase-js';
+import {effectiveStudySubjects} from './src/utils/adminPolicy';
 
 dotenv.config();
+dotenv.config({path:'.env.local'});
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '25mb' }));
+app.get('/api/study-notebooks/:code',async(req,res)=>{
+ res.setHeader('Cache-Control','private, no-store');
+ const code=req.params.code.toUpperCase();
+ if(code!=='MAS291'&&code!=='MAI391'){res.sendStatus(404);return;}
+ const token=req.headers.authorization?.match(/^Bearer (.+)$/)?.[1];
+ if(!token){res.sendStatus(401);return;}
+ try{
+  const url=process.env.VITE_SUPABASE_URL,key=process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  if(!url||!key){res.status(503).json({error:'Chưa cấu hình Supabase trên server.'});return;}
+  const client=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false},global:{headers:{Authorization:`Bearer ${token}`}}});
+  const user=await client.auth.getUser(token);
+  if(user.error||!user.data.user?.email_confirmed_at){res.sendStatus(401);return;}
+  const email=user.data.user.email!.toLowerCase();
+  const control=await client.rpc('dun_read_documents',{p_path:'admin_controls/'+email,p_collection:false});
+  if(control.error){res.sendStatus(403);return;}
+  if(!effectiveStudySubjects(email,control.data?.[0]?.data||null).includes(code)){res.sendStatus(403);return;}
+  res.type('html').send(fs.readFileSync(path.join(process.cwd(),'server-data/study-notebooks',code.toLowerCase()+'.html'),'utf8'));
+ }catch{res.status(503).json({error:'Không tải được môn học. Vui lòng thử lại.'});}
+});
+// The legacy public URLs must never fall through to the static file server.
+app.use(['/study-notebooks/mai391.html','/study-notebooks/mas291.html','/server-data'],(_req,res)=>{res.sendStatus(404);});
 
 // Giới hạn số lượt gọi AI theo IP để tránh bị lạm dụng khóa Gemini của server
 const AI_RATE_LIMIT = Number(process.env.AI_RATE_LIMIT_PER_MIN || 20);

@@ -6,6 +6,8 @@ source = Path(sys.argv[1]).read_text(encoding='utf-8')
 root = Path(__file__).resolve().parents[1]
 out = root / 'public' / 'study-notebooks'
 out.mkdir(exist_ok=True)
+private = root / 'server-data' / 'study-notebooks'
+private.mkdir(parents=True, exist_ok=True)
 scripts = list(re.finditer(r'<script\b([^>]*)>([\s\S]*?)</script\s*>', source, re.I))
 assert len(scripts) == 6, 'Source format changed: inspect before importing'
 content, notes, answers = [json.loads(scripts[i].group(2)) for i in range(3)]
@@ -108,7 +110,7 @@ for code, chapters in content['data'].items():
     html = re.sub(r'<title>.*?</title>', '<title>Sổ ôn '+code+'</title>', html, count=1)
     html += '<script nonce="dun-study-math">'+scripts[3].group(2)+'</script><script nonce="dun-study-math" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.min.js"></script><script nonce="dun-study-math" src="/study-notebooks/notebook.js"></script>'
     # Nonce permits our reviewed runtime URL while sandbox prevents access to parent/storage.
-    (out / (code.lower()+'.html')).write_text(html,encoding='utf-8')
+    (private / (code.lower()+'.html')).write_text(html,encoding='utf-8')
     exam=[]
     for ch in chapters:
         markers=list(re.finditer(r'<p class="qh" id="([^"]+)"',ch['html']))

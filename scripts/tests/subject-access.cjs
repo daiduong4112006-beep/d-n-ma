@@ -1,0 +1,25 @@
+const fs=require('node:fs'),path=require('node:path'),Module=require('node:module'),assert=require('node:assert/strict'),esbuild=require('esbuild');
+const root=path.resolve(__dirname,'../..'),React=require('react'),{create,act}=require('react-test-renderer');global.IS_REACT_ACT_ENVIRONMENT=true;global.__grants=[];
+(async()=>{
+ const mocks={ '../utils/accountControls':`export const useOwnStudySubjects=()=>global.__grants;`, './SubjectNotebook':`export const SubjectNotebook=()=> 'OPEN_NOTEBOOK';`, './SubjectExam':`export const SubjectExam=()=> 'OPEN_EXAM';`, './JapaneseLearningPage':`export const JapaneseLearningPage=()=> 'JAPANESE';`, '../utils/accountState':`export const readAccountState=(k,d)=>d,saveAccountState=()=>{},accountStateKey=x=>x;`, './projectStorage':`export const logicalProjectStorageKey=x=>x;`};
+ mocks['./accountState']=mocks['../utils/accountState'];
+ const result=await esbuild.build({entryPoints:[path.join(root,'src/pages/SubjectsPage.tsx')],bundle:true,write:false,platform:'node',format:'cjs',plugins:[{name:'adapters',setup(b){b.onResolve({filter:/.*/},a=>a.path==='react'?{path:require.resolve('react'),external:true}:a.path in mocks?{path:a.path,namespace:'mock'}:undefined);b.onLoad({filter:/.*/,namespace:'mock'},a=>({contents:mocks[a.path]}));}}]});
+ const mod=new Module(__filename,module);mod.paths=module.paths;mod._compile(result.outputFiles[0].text,__filename);const Component=mod.exports.SubjectsPage;
+ const listeners=new Map();global.window={addEventListener:(k,f)=>listeners.set(k,f),removeEventListener:k=>listeners.delete(k)};
+ let renderer;const props={currentUser:{email:'learner@example.com',name:'Learner'}};
+ const text=n=>n==null?'':typeof n==='string'?n:Array.isArray(n)?n.map(text).join(''):text(n.children);
+ await act(async()=>{renderer=create(React.createElement(Component,props))});
+ assert.equal(renderer.root.findAllByType('article').length,0);
+ global.__grants=['MAI391'];await act(async()=>renderer.update(React.createElement(Component,{...props})));
+ assert.equal(renderer.root.findAllByType('article').length,1);assert(text(renderer.toJSON()).includes('MAI391'));assert(!text(renderer.toJSON()).includes('MAS291'));
+ await act(async()=>renderer.root.findAllByType('button').find(b=>text(b.children)==='Vào học').props.onClick());assert(text(renderer.toJSON()).includes('OPEN_NOTEBOOK'));
+ global.__grants=[];await act(async()=>renderer.update(React.createElement(Component,{...props})));
+ assert(!text(renderer.toJSON()).includes('OPEN_NOTEBOOK'));assert.equal(renderer.root.findAllByType('article').length,0);
+ global.__grants=['MAS291'];await act(async()=>renderer.update(React.createElement(Component,{...props})));
+ await act(async()=>renderer.root.findAllByType('button').find(b=>text(b.children)==='Kiểm tra').props.onClick());assert(text(renderer.toJSON()).includes('OPEN_EXAM'));
+ global.__grants=[];await act(async()=>renderer.update(React.createElement(Component,{...props})));assert(!text(renderer.toJSON()).includes('OPEN_EXAM'));
+ await act(async()=>renderer.unmount());console.log('PASS actual SubjectsPage hides ungranted subjects and closes notebook/exam on revocation');
+ const server=fs.readFileSync(path.join(root,'server.ts'),'utf8');assert(server.includes("getUser(token)"));assert(server.includes("private, no-store"));
+ assert(!fs.existsSync(path.join(root,'public/study-notebooks/mai391.html')));assert(!fs.existsSync(path.join(root,'public/study-notebooks/mas291.html')));
+ console.log('PASS subject HTML is outside public assets and authenticated API bypasses shared cache');
+})().catch(e=>{console.error(e);process.exitCode=1});

@@ -1,5 +1,5 @@
 /* DUN MASTER – Service worker: cho phép mở app và ôn tập khi mất mạng. */
-const SHELL = 'dun-shell-v1';
+const SHELL = 'dun-shell-v2';
 const ASSETS = 'dun-assets-v1';
 const MEDIA = 'dun-media-v1';
 const KEEP = [SHELL, ASSETS, MEDIA];

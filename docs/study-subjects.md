@@ -25,3 +25,9 @@ Chạy `python scripts/import-study-notebook.py "đường dẫn HTML nguồn"` 
 `npm run test:sync`: gồm hai client độc lập với transport Supabase giả lập và PostgreSQL/RLS thực; kiểm tra đáp án MAI/MAS, reset, bài đang làm, quyền riêng tư, cùng các kiểm thử đồng bộ hiện có. Có kiểm tra cache iframe không ghi đè shell của ứng dụng.
 
 Đã kiểm thử trình duyệt localhost: bốc đề 40/50, chọn/chuyển câu, tải lại khôi phục bài, nộp và xem lời giải, tiến độ riêng từng môn và hai tab. Chưa xác nhận hai môn mới trên điện thoại vật lý hoặc bản Render sau triển khai.
+
+## Quyền môn học
+
+Admin cấp MAS291/MAI391 độc lập trong hồ sơ → Quyền & bảo mật, hỗ trợ chọn nhiều học viên. Mặc định học viên/khách chưa được cấp; chủ hệ thống luôn có cả hai môn. Thu hồi đóng màn hình đang học, không xóa tiến độ. SQL `202611060001_subject_permissions.sql` mở rộng trường admin_controls và đã được áp dụng trên project DUN MASTER.
+
+HTML được chuyển ra `server-data/study-notebooks`, tải qua API kiểm tra JWT và quyền hiện tại bằng Supabase; không dùng service-role key. Link HTML công khai cũ trả 404. API dùng no-store, không cache nội dung có phân quyền bằng service worker; mở sổ ôn cần có mạng. Đáp án/tiến độ đã lưu tại máy vẫn có cơ chế outbox hiện có.
