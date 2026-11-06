@@ -223,16 +223,20 @@ export const FlashcardViewer: React.FC<FlashcardViewerProps> = ({ quizId, quizTi
   }, [currentIndex]);
 
   const handleMarkKnown = () => {
-    sound.playCorrect();
-    if (currentQ) {
-      setKnownQuestionIds((prev) => {
-        const next = new Set(prev);
-        next.add(currentQ.id);
-        return next;
-      });
-      markQuestionMastered(effectiveQuizId, currentQ.id, true);
+    if (!currentQ) return;
+    const next = new Set(knownQuestionIds);
+    const mastered = !next.has(currentQ.id);
+    if (mastered) next.add(currentQ.id);
+    else next.delete(currentQ.id);
+    // Persist the action immediately, even after an incoming cloud update or before closing the tab.
+    isRemoteUpdateRef.current = true;
+    saveFlashcardProgress(effectiveQuizId, { currentIndex, knownQuestionIds: [...next], updatedAt: Date.now() });
+    setKnownQuestionIds(next);
+    markQuestionMastered(effectiveQuizId, currentQ.id, mastered);
+    if (mastered) {
+      sound.playCorrect();
+      handleNext();
     }
-    handleNext();
   };
 
   const handleFlipCard = () => {
@@ -253,7 +257,6 @@ export const FlashcardViewer: React.FC<FlashcardViewerProps> = ({ quizId, quizTi
       setKnownQuestionIds(new Set());
       saveFlashcardProgress(effectiveQuizId, { currentIndex: 0, knownQuestionIds: [] });
       questions.forEach((q) => {
-        q.mastered = false;
         markQuestionMastered(effectiveQuizId, q.id, false);
       });
     } else {
@@ -563,6 +566,8 @@ export const FlashcardViewer: React.FC<FlashcardViewerProps> = ({ quizId, quizTi
         <button
           type="button"
           onClick={handleMarkKnown}
+          aria-pressed={knownQuestionIds.has(currentQ.id)}
+          title={knownQuestionIds.has(currentQ.id) ? 'Bấm để bỏ nhớ thẻ này' : 'Bấm để đánh dấu đã nhớ'}
           className={`inline-flex items-center gap-2 px-4 sm:px-5 py-2.5 font-extrabold text-xs rounded-xl transition-all shadow-xs cursor-pointer ${
             knownQuestionIds.has(currentQ.id)
               ? 'bg-emerald-600 text-white hover:bg-emerald-700'
@@ -570,7 +575,7 @@ export const FlashcardViewer: React.FC<FlashcardViewerProps> = ({ quizId, quizTi
           }`}
         >
           <CheckCircle2 className="w-4 h-4" />
-          <span>{knownQuestionIds.has(currentQ.id) ? '✓ Đã thuộc' : 'Đã nhớ thẻ này (+1)'}</span>
+          <span>{knownQuestionIds.has(currentQ.id) ? '✓ Đã thuộc · Bỏ nhớ' : 'Đã nhớ thẻ này (+1)'}</span>
         </button>
 
         <button

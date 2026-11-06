@@ -23,6 +23,16 @@ async function trim(cacheName, max) {
   for (let i = 0; i < keys.length - max; i++) await cache.delete(keys[i]);
 }
 
+async function remember(cacheName, key, response, max) {
+  try {
+    const cache = await caches.open(cacheName);
+    await cache.put(key, response.clone());
+    if (max) await trim(cacheName, max);
+  } catch {
+    // Cache quota/private mode must never turn a successful network request into an error.
+  }
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
@@ -30,16 +40,18 @@ self.addEventListener('fetch', (event) => {
 
   // Google Fonts: dùng bản đã lưu, cập nhật ngầm
   const isFont = url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com';
-  if (url.origin !== self.location.origin && !isFont) return; // Firebase, Gemini… đi thẳng mạng
+  if (url.origin !== self.location.origin && !isFont) return; // Auth, Supabase, AI: always use the network.
   if (url.pathname.startsWith('/api/')) return;
 
   // Trang (điều hướng): ưu tiên mạng, mất mạng thì dùng bản đã lưu
   if (req.mode === 'navigate') {
     event.respondWith(
       fetch(req)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(SHELL).then((c) => c.put('/', copy));
+        .then(async (res) => {
+          // Do not replace the working offline app with a proxy/server error page.
+          if (res.ok && res.headers.get('content-type')?.includes('text/html')) {
+            await remember(SHELL, '/', res);
+          }
           return res;
         })
         .catch(() => caches.match('/', { cacheName: SHELL }))
@@ -52,11 +64,8 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches.match(req).then((hit) =>
         hit ||
-        fetch(req).then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(ASSETS).then((c) => c.put(req, copy)).then(() => trim(ASSETS, 150));
-          }
+        fetch(req).then(async (res) => {
+          if (res.ok) await remember(ASSETS, req, res, 150);
           return res;
         })
       )
@@ -69,11 +78,12 @@ self.addEventListener('fetch', (event) => {
     caches.open(MEDIA).then(async (cache) => {
       const hit = await caches.match(req);
       const network = fetch(req)
-        .then((res) => {
-          if (res.ok || res.type === 'opaque') cache.put(req, res.clone()).then(() => trim(MEDIA, 400));
+        .then(async (res) => {
+          if (res.ok || res.type === 'opaque') await remember(MEDIA, req, res, 400);
           return res;
         })
         .catch(() => hit);
+      event.waitUntil(network.then(() => undefined));
       return hit || network;
     })
   );

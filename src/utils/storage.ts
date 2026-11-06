@@ -525,6 +525,7 @@ export const markQuestionMastered = (quizId: string, questionId: string, mastere
   const question = quiz.questions.find((q) => q.id === questionId);
   if (question) {
     question.mastered = mastered;
+    quiz.updatedAt = new Date().toISOString();
     saveQuizzes(quizzes);
     const userId = getEffectiveUserId();
     syncQuizToFirestore(userId, quiz).catch((err) =>

@@ -25,3 +25,11 @@ Production: https://d-n-ma.onrender.com/. Backend: wjqajawefmdzvijqbnkj.
 - General document conflicts use newest updatedAt. SRS/FE history merge per item. This is not a guarantee of merging simultaneous content edits.
 - Google-only sign-in is enforced in application UI; Email provider remains enabled in Supabase dashboard for compatibility. No custom SMTP configured.
 - Microphone recordings and device-specific presentation options are not cloud data.
+
+## Follow-up: 2026-11-06
+
+- Fixed MCQ flashcard mastery control: the known state can now be toggled off. Unmark stays on the current card; mark retains next-card behavior. The action persists immediately after incoming remote updates and does not mutate question props.
+- Updated quiz timestamp on mastery changes so conflict comparison does not treat the action as older content.
+- Hardened offline shell cache: only successful HTML navigation replaces the cached shell; wait for shell/assets writes; cache failures do not break online navigation; background media refresh extends worker lifetime.
+- Added regression cases for mark/unmark, local action after remote change, timestamp, offline shell after server error, cached assets, quota failures, and bypass of Auth/database/AI requests.
+- The earlier phone offline test was not completed because the old known button could not unmark. Do not count that as a passed physical offline test. User confirmed deleting/changing QA data during follow-up; it was not restored.
