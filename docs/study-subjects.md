@@ -31,3 +31,9 @@ Chạy `python scripts/import-study-notebook.py "đường dẫn HTML nguồn"` 
 Admin cấp MAS291/MAI391 độc lập trong hồ sơ → Quyền & bảo mật, hỗ trợ chọn nhiều học viên. Mặc định học viên/khách chưa được cấp; chủ hệ thống luôn có cả hai môn. Thu hồi đóng màn hình đang học, không xóa tiến độ. SQL `202611060001_subject_permissions.sql` mở rộng trường admin_controls và đã được áp dụng trên project DUN MASTER.
 
 HTML được chuyển ra `server-data/study-notebooks`, tải qua API kiểm tra JWT và quyền hiện tại bằng Supabase; không dùng service-role key. Link HTML công khai cũ trả 404. API dùng no-store, không cache nội dung có phân quyền bằng service worker; mở sổ ôn cần có mạng. Đáp án/tiến độ đã lưu tại máy vẫn có cơ chế outbox hiện có.
+
+## Điện thoại và danh sách đề
+
+Thanh công cụ có Chương, Trong chương này và Kiểm tra. Hai mục lục mở riêng, có cuộn nội bộ theo chiều cao iframe, nút đóng và Escape. Bấm toàn thẻ môn vào học; nút Kiểm tra riêng không bị kích hoạt nhầm vào học.
+
+Vào Kiểm tra mở danh sách đề cũ trước; có thể làm tiếp, xem kết quả hoặc tạo đề mới. Mặc định MAI391 40 câu / MAS291 50 câu, 60 phút. Tùy chỉnh đề là mục thu gọn riêng: số câu và thời gian; số câu mới được phân bổ theo tỉ lệ chương, giới hạn theo số câu đủ điều kiện trong ngân hàng. Mỗi đề có bản ghi riêng nên tạo đề mới không ghi đè đề trước. Đề cũ đã lưu ở active/result được đọc lại tương thích.

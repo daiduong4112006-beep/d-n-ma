@@ -4,7 +4,7 @@ import {ArrowLeft,BookOpen} from 'lucide-react';
 import {SubjectCode,subjectInfo,readSubjectQuestions,readSubjectChapter,saveSubjectQuestion,saveSubjectChapter,subscribeSubjectProgress} from '../utils/subjectProgress';
 const protocol='dun-study-v1';
 interface ExamView {questionId:string;selected?:string;reveal:boolean;onAnswer:(id:string,choice:string)=>void}
-export function SubjectNotebook({code,email,onBack,exam}:{code:SubjectCode;email?:string;onBack:()=>void;exam?:ExamView}){
+export function SubjectNotebook({code,email,onBack,exam,onOpenExam}:{code:SubjectCode;email?:string;onBack:()=>void;exam?:ExamView;onOpenExam?:()=>void}){
  const frame=useRef<HTMLIFrameElement>(null),snapshot=useRef<Record<string,string>>({}),navigation=useRef('');
  const section=useRef<HTMLElement>(null);
  const [readingHeight,setReadingHeight]=useState<number>();
@@ -33,6 +33,7 @@ export function SubjectNotebook({code,email,onBack,exam}:{code:SubjectCode;email
    else if(message.kind==='ready'&&examRef.current){const e=examRef.current;send({kind:'exam-view',id:e.questionId,selected:e.selected,reveal:e.reveal});}
    else if(message.kind==='exam-answer'&&examRef.current&&!examRef.current.reveal&&message.id===examRef.current.questionId&&typeof message.choice==='string'&&/^(?:[A-E]|i{1,3}|iv|v|vi)$/.test(message.choice))examRef.current.onAnswer(message.id,message.choice);
    else if(message.kind==='question'&&typeof message.id==='string')saveSubjectQuestion(code,message.id,message.value);
+   else if(message.kind==='open-exam'&&!examRef.current)onOpenExam?.();
    else if(message.kind==='navigation')saveSubjectChapter(code,message.chapter);
   };
   window.addEventListener('message',receive);const unsubscribe=subscribeSubjectProgress(code,refresh);
@@ -40,6 +41,6 @@ export function SubjectNotebook({code,email,onBack,exam}:{code:SubjectCode;email
   // Cover cached iframe loads that complete before the parent's effect is installed.
   const el=frame.current;el?.addEventListener('load',initialize);
   return()=>{stopped=true;window.removeEventListener('message',receive);unsubscribe();observer.disconnect();el?.removeEventListener('load',initialize);};
- },[code,email,subject]);
+ },[code,email,subject,onOpenExam]);
  return <section ref={section} data-subject-notebook={exam?'exam':'reading'} className="w-full min-w-0 flex flex-col overflow-hidden" style={exam?undefined:{height:readingHeight??'100dvh'}}><header hidden={!!exam} className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-4 py-2 shrink-0 border-b border-slate-200 dark:border-slate-800"><div className="flex items-center gap-3"><button onClick={onBack} className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700"><ArrowLeft size={16}/>Môn học</button><div><h1 className="font-extrabold text-base flex items-center gap-2"><BookOpen size={17} className="text-indigo-500"/>{code}</h1><p className="text-xs text-slate-500 dark:text-slate-400">{subject.title}</p></div></div><span className="text-xs text-slate-500 dark:text-slate-400">{subject.chapters.length} chương · {subject.questionIds.length} câu hỏi</span></header>{loadError?<p role="alert" className="p-5 text-rose-500">{loadError}</p>:!html?<p className="p-5 text-slate-500">Đang tải môn học…</p>:<iframe ref={frame} key={`${code}:${email||'guest'}`} title={`Sổ ôn ${code}`} sandbox="allow-scripts" srcDoc={html||undefined} className={`w-full border-0 bg-slate-50 dark:bg-slate-950 ${exam?'':'flex-1 min-h-0'}`} style={{height:exam?'calc(100dvh - 285px)':'100%',minHeight:exam?360:0}}/>}</section>;
 }

@@ -5,6 +5,19 @@ body[data-mode="exam"] .hdr,body[data-mode="exam"] .rail,body[data-mode="exam"] 
 :root[data-theme="dark"]{--bg:#020617;--paper:#0f172a;--sunk:#1e293b;--ink:#f1f5f9;--muted:#94a3b8;--rule:#334155;--pen:#a5b4fc;--grid:transparent;--shadow:none}
 body{font-size:14px;line-height:1.75}.hdr{backdrop-filter:none;background:var(--paper)}.hdr-in{padding:8px 18px}.brand b{font-size:14px}.brand small{font-size:11px}.search{max-width:440px}.wrap{max-width:1600px;gap:20px;padding:20px}.page,.sheet,.qboard{border-radius:20px;box-shadow:none}.page{border:1px solid var(--rule)}.bank{border-radius:14px}.side{font-size:12px}.chead h1{font-size:clamp(23px,3vw,32px)}.page>h1{font-size:24px}.page>h2{font-size:20px}table{max-width:100%}.doc{min-width:0;overflow-wrap:anywhere}.rail .lbl{letter-spacing:.06em}.total{gap:8px;flex-wrap:wrap}.brand{flex-shrink:1;min-width:0}.brand small{display:none}
 @media(max-width:700px){.wrap{padding:12px;gap:12px}.hdr-in{padding:8px 12px}.page{padding:18px!important}.search{flex-basis:100%;max-width:none;margin:0}.search input{font-size:13px}.brand b{font-size:13px}.chead .num{font-size:40px}.side{display:none}}
+:root{scroll-padding-top:calc(var(--notebook-header-height,56px) + 16px)}.rail,.side{top:calc(var(--notebook-header-height,56px) + 12px);max-height:calc(100dvh - var(--notebook-header-height,56px) - 24px)}.tocbtn,.drawer-controls{display:none}.rail,.side{overscroll-behavior-y:contain;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+@media(max-width:1180px){.tocbtn{display:inline-flex}}
+@media(min-width:901px) and (max-width:1180px){.rail[data-panel="toc"] .sheet,.rail[data-panel="toc"] .qboard{display:none}.rail[data-panel="chapters"] .toc-m{display:none}.rail.open .drawer-controls{display:flex}}
+@media(max-width:900px){
+ .hdr-in{gap:6px}.brand{order:-1;flex-basis:100%}.navbtn,.tocbtn,#exambtn{min-height:40px;font-size:11px;padding:6px 8px;white-space:nowrap}.search{margin:0!important}
+ .rail{top:0!important;bottom:0!important;height:100dvh!important;max-height:100dvh!important;box-sizing:border-box;overflow-y:auto!important;overflow-x:hidden;padding-top:0!important;padding-bottom:max(24px,env(safe-area-inset-bottom))!important;scrollbar-gutter:stable;align-self:stretch}
+ .rail.open .drawer-controls{display:flex;position:sticky;top:0;background:var(--bg);z-index:2;justify-content:flex-end;padding:10px 0;border-bottom:1px solid var(--rule);margin-bottom:12px}
+ .rail[data-panel="toc"] .sheet,.rail[data-panel="toc"] .qboard{display:none}
+ .rail[data-panel="chapters"] .toc-m{display:none}.rail[data-panel="toc"] .toc-m{display:block!important}.rail .toc-m>.lbl{margin-top:8px!important}
+ .rail .toc a{padding:9px 0;line-height:1.55}.rail .chlist a,.rail .chlist button{min-height:44px}
+ body:has(.rail.open){overflow:hidden}.totop{bottom:12px;right:12px}
+}
+body[data-mode="exam"] .tocbtn,body[data-mode="exam"] #exambtn{display:none!important}
 </style></head><body data-subject="MAS291">
 <title>Sổ ôn MAS291</title>
 <meta name="claude:viewport-fit-sides" content="cover">
@@ -306,7 +319,7 @@ details.plain{margin:14px 0;padding:10px 14px;border:1px dashed var(--rule);bord
 
 <header class="hdr"><div class="hdr-in">
   <button class="navbtn" id="navbtn" type="button" aria-controls="rail" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>Chương</button>
-  <a class="brand" href="#" id="home"><span class="mk" aria-hidden="true"></span><span><b>MAS291</b><small>Ôn thi trắc nghiệm FE · RE</small></span></a>
+  <button class="navbtn tocbtn" id="tocbtn" type="button" aria-controls="rail" aria-expanded="false">Trong chương này</button><button class="iconbtn" id="exambtn" type="button">Kiểm tra</button><a class="brand" href="#" id="home"><span class="mk" aria-hidden="true"></span><span><b>MAS291</b><small>Ôn thi trắc nghiệm FE · RE</small></span></a>
   <div class="seg" role="group" aria-label="Chọn môn">
     <button type="button" data-s="MAI391" aria-pressed="false">MAI391</button>
     <button type="button" data-s="MAS291" aria-pressed="true">MAS291</button>
@@ -321,7 +334,7 @@ details.plain{margin:14px 0;padding:10px 14px;border:1px dashed var(--rule);bord
 </div><div class="readbar" id="readbar"></div></header>
 
 <div class="wrap">
-  <nav class="rail" id="rail" aria-label="Chương">
+  <nav class="rail" id="rail" aria-label="Mục lục học tập" data-panel="chapters"><div class="drawer-controls"><button class="iconbtn" id="drawerclose" type="button">Đóng mục lục ✕</button></div>
     <div class="sheet">
       <p class="lbl" id="subjname">Chương</p>
       <ul class="chlist" id="chlist"></ul>
@@ -350,6 +363,19 @@ body[data-mode="exam"] .hdr,body[data-mode="exam"] .rail,body[data-mode="exam"] 
 :root[data-theme="dark"]{--bg:#020617;--paper:#0f172a;--sunk:#1e293b;--ink:#f1f5f9;--muted:#94a3b8;--rule:#334155;--pen:#a5b4fc;--grid:transparent;--shadow:none}
 body{font-size:14px;line-height:1.75}.hdr{backdrop-filter:none;background:var(--paper)}.hdr-in{padding:8px 18px}.brand b{font-size:14px}.brand small{font-size:11px}.search{max-width:440px}.wrap{max-width:1600px;gap:20px;padding:20px}.page,.sheet,.qboard{border-radius:20px;box-shadow:none}.page{border:1px solid var(--rule)}.bank{border-radius:14px}.side{font-size:12px}.chead h1{font-size:clamp(23px,3vw,32px)}.page>h1{font-size:24px}.page>h2{font-size:20px}table{max-width:100%}.doc{min-width:0;overflow-wrap:anywhere}.rail .lbl{letter-spacing:.06em}.total{gap:8px;flex-wrap:wrap}.brand{flex-shrink:1;min-width:0}.brand small{display:none}
 @media(max-width:700px){.wrap{padding:12px;gap:12px}.hdr-in{padding:8px 12px}.page{padding:18px!important}.search{flex-basis:100%;max-width:none;margin:0}.search input{font-size:13px}.brand b{font-size:13px}.chead .num{font-size:40px}.side{display:none}}
+:root{scroll-padding-top:calc(var(--notebook-header-height,56px) + 16px)}.rail,.side{top:calc(var(--notebook-header-height,56px) + 12px);max-height:calc(100dvh - var(--notebook-header-height,56px) - 24px)}.tocbtn,.drawer-controls{display:none}.rail,.side{overscroll-behavior-y:contain;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+@media(max-width:1180px){.tocbtn{display:inline-flex}}
+@media(min-width:901px) and (max-width:1180px){.rail[data-panel="toc"] .sheet,.rail[data-panel="toc"] .qboard{display:none}.rail[data-panel="chapters"] .toc-m{display:none}.rail.open .drawer-controls{display:flex}}
+@media(max-width:900px){
+ .hdr-in{gap:6px}.brand{order:-1;flex-basis:100%}.navbtn,.tocbtn,#exambtn{min-height:40px;font-size:11px;padding:6px 8px;white-space:nowrap}.search{margin:0!important}
+ .rail{top:0!important;bottom:0!important;height:100dvh!important;max-height:100dvh!important;box-sizing:border-box;overflow-y:auto!important;overflow-x:hidden;padding-top:0!important;padding-bottom:max(24px,env(safe-area-inset-bottom))!important;scrollbar-gutter:stable;align-self:stretch}
+ .rail.open .drawer-controls{display:flex;position:sticky;top:0;background:var(--bg);z-index:2;justify-content:flex-end;padding:10px 0;border-bottom:1px solid var(--rule);margin-bottom:12px}
+ .rail[data-panel="toc"] .sheet,.rail[data-panel="toc"] .qboard{display:none}
+ .rail[data-panel="chapters"] .toc-m{display:none}.rail[data-panel="toc"] .toc-m{display:block!important}.rail .toc-m>.lbl{margin-top:8px!important}
+ .rail .toc a{padding:9px 0;line-height:1.55}.rail .chlist a,.rail .chlist button{min-height:44px}
+ body:has(.rail.open){overflow:hidden}.totop{bottom:12px;right:12px}
+}
+body[data-mode="exam"] .tocbtn,body[data-mode="exam"] #exambtn{display:none!important}
 </style><script nonce="dun-study-math">
 window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']],processEscapes:false},
   svg:{fontCache:'global'},startup:{typeset:false},options:{enableMenu:false}};

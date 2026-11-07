@@ -208,8 +208,12 @@ function search(v){
   r.hidden=false;
 }
 // ngăn kéo mục lục trên điện thoại
-function closeNav(){$('#rail').classList.remove('open');$('#scrim').hidden=true;$('#navbtn').setAttribute('aria-expanded','false')}
-$('#navbtn').onclick=()=>{const o=$('#rail').classList.toggle('open');$('#scrim').hidden=!o;$('#navbtn').setAttribute('aria-expanded',o?'true':'false')};
+function closeNav(){$('#rail').classList.remove('open');$('#scrim').hidden=true;$('#navbtn').setAttribute('aria-expanded','false');$('#tocbtn').setAttribute('aria-expanded','false')}
+function toggleDrawer(mode){const rail=$('#rail'),same=rail.classList.contains('open')&&rail.dataset.panel===mode;closeNav();if(same)return;rail.dataset.panel=mode;rail.classList.add('open');rail.scrollTop=0;$('#scrim').hidden=false;$(mode==='toc'?'#tocbtn':'#navbtn').setAttribute('aria-expanded','true');$('#drawerclose').focus();}
+$('#navbtn').onclick=()=>toggleDrawer('chapters');
+$('#tocbtn').onclick=()=>toggleDrawer('toc');
+$('#exambtn').onclick=()=>send('open-exam');
+$('#drawerclose').onclick=()=>{const trigger=$('#rail').dataset.panel==='toc'?'#tocbtn':'#navbtn';closeNav();$(trigger).focus()};
 $('#scrim').onclick=closeNav;
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeNav()});
 // cuộn: thanh đọc, nút lên đầu, mục lục đang xem
@@ -276,7 +280,9 @@ addEventListener('message',event=>{
  if(m.kind==='init'&&!initialized){
   const done={},picks={};for(const [id,value]of Object.entries(m.questions||{})){if(!window.__notebookIds.has(id))continue;if(value.done)done[id]=value.done;if(value.pick)picks[id]=value.pick;baseline[id]=JSON.stringify({done:value.done||null,pick:value.pick||null});}
   window.__notebookState={done,picks,theme:m.theme,['ch_'+subject]:m.chapter};lastNavigation=m.chapter||'';
-  document.documentElement.dataset.theme=m.theme;runNotebook();initialized=true;send('ready');
+  document.documentElement.dataset.theme=m.theme;runNotebook();
+  const header=document.querySelector('.hdr');if(header){const measureHeader=()=>document.documentElement.style.setProperty('--notebook-header-height',header.getBoundingClientRect().height+'px');new ResizeObserver(measureHeader).observe(header);measureHeader();}
+  initialized=true;send('ready');
  }else if(m.kind==='question'&&initialized&&window.__notebookIds.has(m.id)){
   baseline[m.id]=JSON.stringify({done:m.value?.done||null,pick:m.value?.pick||null});window.__applyNotebookPatch(m.id,m.value||{});
  }else if(m.kind==='navigation'&&initialized){lastNavigation=m.chapter;window.__applyNotebookNavigation(m.chapter);

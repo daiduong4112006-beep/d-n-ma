@@ -20,6 +20,14 @@ runtime = runtime.replace(old_store, "const store={get:(k,d)=>window.__notebookS
 runtime = runtime.replace("let subj=store.get('subj','MAS291')", "let subj=document.body.dataset.subject")
 runtime = runtime.replace("const hs=location.hash.slice(1);", "const hs='';")
 runtime = runtime.replace("o.setAttribute('aria-pressed',!A&&pk===L?'true':'false')", "o.setAttribute('aria-pressed',pk===L?'true':'false')")
+runtime = runtime.replace("$('#navbtn').setAttribute('aria-expanded','false')", "$('#navbtn').setAttribute('aria-expanded','false');$('#tocbtn').setAttribute('aria-expanded','false')")
+nav_handler = "$('#navbtn').onclick=()=>{const o=$('#rail').classList.toggle('open');$('#scrim').hidden=!o;$('#navbtn').setAttribute('aria-expanded',o?'true':'false')};"
+assert nav_handler in runtime
+runtime = runtime.replace(nav_handler, """function toggleDrawer(mode){const rail=$('#rail'),same=rail.classList.contains('open')&&rail.dataset.panel===mode;closeNav();if(same)return;rail.dataset.panel=mode;rail.classList.add('open');rail.scrollTop=0;$('#scrim').hidden=false;$(mode==='toc'?'#tocbtn':'#navbtn').setAttribute('aria-expanded','true');$('#drawerclose').focus();}
+$('#navbtn').onclick=()=>toggleDrawer('chapters');
+$('#tocbtn').onclick=()=>toggleDrawer('toc');
+$('#exambtn').onclick=()=>send('open-exam');
+$('#drawerclose').onclick=()=>{const trigger=$('#rail').dataset.panel==='toc'?'#tocbtn':'#navbtn';closeNav();$(trigger).focus()};""")
 assert runtime.count('renderRail();open(cur);') >= 1
 runtime = runtime.replace('renderRail();open(cur);\n\n}', r'''window.__applyNotebookPatch=(id,value)=>{
   if(!window.__notebookIds.has(id))return;
@@ -70,7 +78,9 @@ addEventListener('message',event=>{
  if(m.kind==='init'&&!initialized){
   const done={},picks={};for(const [id,value]of Object.entries(m.questions||{})){if(!window.__notebookIds.has(id))continue;if(value.done)done[id]=value.done;if(value.pick)picks[id]=value.pick;baseline[id]=JSON.stringify({done:value.done||null,pick:value.pick||null});}
   window.__notebookState={done,picks,theme:m.theme,['ch_'+subject]:m.chapter};lastNavigation=m.chapter||'';
-  document.documentElement.dataset.theme=m.theme;runNotebook();initialized=true;send('ready');
+  document.documentElement.dataset.theme=m.theme;runNotebook();
+  const header=document.querySelector('.hdr');if(header){const measureHeader=()=>document.documentElement.style.setProperty('--notebook-header-height',header.getBoundingClientRect().height+'px');new ResizeObserver(measureHeader).observe(header);measureHeader();}
+  initialized=true;send('ready');
  }else if(m.kind==='question'&&initialized&&window.__notebookIds.has(m.id)){
   baseline[m.id]=JSON.stringify({done:m.value?.done||null,pick:m.value?.pick||null});window.__applyNotebookPatch(m.id,m.value||{});
  }else if(m.kind==='navigation'&&initialized){lastNavigation=m.chapter;window.__applyNotebookNavigation(m.chapter);
@@ -87,6 +97,19 @@ body[data-mode="exam"] .hdr,body[data-mode="exam"] .rail,body[data-mode="exam"] 
 :root[data-theme="dark"]{--bg:#020617;--paper:#0f172a;--sunk:#1e293b;--ink:#f1f5f9;--muted:#94a3b8;--rule:#334155;--pen:#a5b4fc;--grid:transparent;--shadow:none}
 body{font-size:14px;line-height:1.75}.hdr{backdrop-filter:none;background:var(--paper)}.hdr-in{padding:8px 18px}.brand b{font-size:14px}.brand small{font-size:11px}.search{max-width:440px}.wrap{max-width:1600px;gap:20px;padding:20px}.page,.sheet,.qboard{border-radius:20px;box-shadow:none}.page{border:1px solid var(--rule)}.bank{border-radius:14px}.side{font-size:12px}.chead h1{font-size:clamp(23px,3vw,32px)}.page>h1{font-size:24px}.page>h2{font-size:20px}table{max-width:100%}.doc{min-width:0;overflow-wrap:anywhere}.rail .lbl{letter-spacing:.06em}.total{gap:8px;flex-wrap:wrap}.brand{flex-shrink:1;min-width:0}.brand small{display:none}
 @media(max-width:700px){.wrap{padding:12px;gap:12px}.hdr-in{padding:8px 12px}.page{padding:18px!important}.search{flex-basis:100%;max-width:none;margin:0}.search input{font-size:13px}.brand b{font-size:13px}.chead .num{font-size:40px}.side{display:none}}
+:root{scroll-padding-top:calc(var(--notebook-header-height,56px) + 16px)}.rail,.side{top:calc(var(--notebook-header-height,56px) + 12px);max-height:calc(100dvh - var(--notebook-header-height,56px) - 24px)}.tocbtn,.drawer-controls{display:none}.rail,.side{overscroll-behavior-y:contain;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+@media(max-width:1180px){.tocbtn{display:inline-flex}}
+@media(min-width:901px) and (max-width:1180px){.rail[data-panel="toc"] .sheet,.rail[data-panel="toc"] .qboard{display:none}.rail[data-panel="chapters"] .toc-m{display:none}.rail.open .drawer-controls{display:flex}}
+@media(max-width:900px){
+ .hdr-in{gap:6px}.brand{order:-1;flex-basis:100%}.navbtn,.tocbtn,#exambtn{min-height:40px;font-size:11px;padding:6px 8px;white-space:nowrap}.search{margin:0!important}
+ .rail{top:0!important;bottom:0!important;height:100dvh!important;max-height:100dvh!important;box-sizing:border-box;overflow-y:auto!important;overflow-x:hidden;padding-top:0!important;padding-bottom:max(24px,env(safe-area-inset-bottom))!important;scrollbar-gutter:stable;align-self:stretch}
+ .rail.open .drawer-controls{display:flex;position:sticky;top:0;background:var(--bg);z-index:2;justify-content:flex-end;padding:10px 0;border-bottom:1px solid var(--rule);margin-bottom:12px}
+ .rail[data-panel="toc"] .sheet,.rail[data-panel="toc"] .qboard{display:none}
+ .rail[data-panel="chapters"] .toc-m{display:none}.rail[data-panel="toc"] .toc-m{display:block!important}.rail .toc-m>.lbl{margin-top:8px!important}
+ .rail .toc a{padding:9px 0;line-height:1.55}.rail .chlist a,.rail .chlist button{min-height:44px}
+ body:has(.rail.open){overflow:hidden}.totop{bottom:12px;right:12px}
+}
+body[data-mode="exam"] .tocbtn,body[data-mode="exam"] #exambtn{display:none!important}
 </style>'''
 manifest = {'sourceSha256': hashlib.sha256(source.encode()).hexdigest(), 'subjects': []}
 for code, chapters in content['data'].items():
@@ -107,6 +130,8 @@ for code, chapters in content['data'].items():
     # Original export closes head before app styles: skin goes last to win the cascade.
     html += skin
     html = html.replace('<b>Sổ ôn</b>', '<b>'+code+'</b>')
+    html = html.replace('<a class="brand"', '<button class="navbtn tocbtn" id="tocbtn" type="button" aria-controls="rail" aria-expanded="false">Trong chương này</button><button class="iconbtn" id="exambtn" type="button">Kiểm tra</button><a class="brand"',1)
+    html = html.replace('<nav class="rail" id="rail" aria-label="Chương">', '<nav class="rail" id="rail" aria-label="Mục lục học tập" data-panel="chapters"><div class="drawer-controls"><button class="iconbtn" id="drawerclose" type="button">Đóng mục lục ✕</button></div>',1)
     html = re.sub(r'<title>.*?</title>', '<title>Sổ ôn '+code+'</title>', html, count=1)
     html += '<script nonce="dun-study-math">'+scripts[3].group(2)+'</script><script nonce="dun-study-math" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.min.js"></script><script nonce="dun-study-math" src="/study-notebooks/notebook.js"></script>'
     # Nonce permits our reviewed runtime URL while sandbox prevents access to parent/storage.

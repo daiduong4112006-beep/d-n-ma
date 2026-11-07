@@ -12,7 +12,7 @@ const root=path.resolve(__dirname,'../..'),React=require('react'),{create,act}=r
  assert.equal(renderer.root.findAllByType('article').length,0);
  global.__grants=['MAI391'];await act(async()=>renderer.update(React.createElement(Component,{...props})));
  assert.equal(renderer.root.findAllByType('article').length,1);assert(text(renderer.toJSON()).includes('MAI391'));assert(!text(renderer.toJSON()).includes('MAS291'));
- await act(async()=>renderer.root.findAllByType('button').find(b=>text(b.children)==='Vào học').props.onClick());assert(text(renderer.toJSON()).includes('OPEN_NOTEBOOK'));
+ await act(async()=>renderer.root.findAllByType('article')[0].props.onClick());assert(text(renderer.toJSON()).includes('OPEN_NOTEBOOK'));
  global.__grants=[];await act(async()=>renderer.update(React.createElement(Component,{...props})));
  assert(!text(renderer.toJSON()).includes('OPEN_NOTEBOOK'));assert.equal(renderer.root.findAllByType('article').length,0);
  global.__grants=['MAS291'];await act(async()=>renderer.update(React.createElement(Component,{...props})));

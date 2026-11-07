@@ -3,7 +3,7 @@ const root=path.resolve(__dirname,'../..');
 (async()=>{
  const result=await esbuild.build({entryPoints:[path.join(root,'src/utils/subjectExamMatrix.ts')],bundle:true,write:false,platform:'node',format:'cjs',plugins:[{name:'isolate-cloud',setup(b){b.onResolve({filter:/accountState|projectStorage/},a=>({path:a.path,namespace:'mock'}));b.onLoad({filter:/.*/,namespace:'mock'},()=>({contents:'export const readAccountState=()=>null, saveAccountState=()=>{}, accountStateKey=x=>x, logicalProjectStorageKey=x=>x;'}));}}]});
  const mod=new Module(__filename);mod._compile(result.outputFiles[0].text,__filename);
- const {buildSubjectExam,subjectMatrices,validSubjectAttempt,gradeSubjectExam}=mod.exports;
+ const {buildSubjectExam,subjectMatrices,validSubjectAttempt,gradeSubjectExam,planSubjectExam,maxSubjectExamQuestions}=mod.exports;
  for(const code of ['MAI391','MAS291']){
   const fingerprints=new Set();
   for(let seed=1;seed<=300;seed++){
@@ -21,6 +21,17 @@ const root=path.resolve(__dirname,'../..');
    fingerprints.add(ids.join(','));
   }
   assert(fingerprints.size>290);console.log('PASS '+code+': 300 random exams, chapter quotas, eligible types, uniqueness, grading and resume validation');
+ }
+ for(const code of ['MAI391','MAS291']){
+  const max=maxSubjectExamQuestions(code);
+  for(const count of [1,7,25,40,50,max]){
+   const rows=planSubjectExam(code,count),questions=buildSubjectExam(code,()=>0.37,count);
+   assert.equal(questions.length,count);assert.equal(new Set(questions.map(q=>q.id)).size,count);
+   for(const row of rows)assert.equal(questions.filter(q=>q.chapter===row.chapter).length,row.count);
+   const attempt={id:'custom',code,questionCount:count,questionIds:questions.map(q=>q.id),answers:{},currentIndex:0,startedAt:1000,deadline:61000};assert(validSubjectAttempt(attempt,code));
+  }
+  assert.throws(()=>planSubjectExam(code,0));assert.throws(()=>planSubjectExam(code,max+1));assert.throws(()=>planSubjectExam(code,1.5));
+  console.log('PASS '+code+': custom question counts scale matrix quotas, stay unique and restore correctly');
  }
  const manifest=JSON.parse(fs.readFileSync(path.join(root,'src/data/studySubjects.json'),'utf8'));
  for(const subject of manifest.subjects){
