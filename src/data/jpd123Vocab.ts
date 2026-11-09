@@ -1,4 +1,15 @@
-import { JapaneseLesson } from '../types/japanese';
+import { JapaneseLesson, JapaneseVocabCard } from '../types/japanese';
+
+export const L7_NIKU_VOCAB: JapaneseVocabCard = {
+  id: 'v7-slot28-niku',
+  term: '肉',
+  reading: 'にく',
+  romaji: 'niku',
+  partOfSpeech: 'Danh từ',
+  definition: 'Thịt',
+  example: '肉を切ります。',
+  exampleMeaning: 'Tôi cắt thịt.',
+};
 
 export const JPD123_VOCAB_LESSONS: JapaneseLesson[] = [
   // ==================== BÀI 4 ====================
@@ -335,6 +346,7 @@ export const JPD123_VOCAB_LESSONS: JapaneseLesson[] = [
       { id: 'v7-22', term: 'テーブル', reading: 'てーぶる', romaji: 'teeburu', partOfSpeech: 'Danh từ', definition: 'Cái bàn', example: 'テーブルの上に置いてください。', exampleMeaning: 'Xin hãy đặt lên trên bàn.' },
       { id: 'v7-23', term: '電子レンジ', reading: 'でんしれんじ', romaji: 'denshirenji', partOfSpeech: 'Danh từ', definition: 'Lò vi sóng', example: '電子レンジで温めます。', exampleMeaning: 'Tôi hâm nóng thức ăn bằng lò vi sóng.' },
       { id: 'v7-24', term: '冷蔵庫', reading: 'れいぞうこ', romaji: 'reizouko', partOfSpeech: 'Danh từ', definition: 'Tủ lạnh', example: '冷蔵庫からジュースを出します。', exampleMeaning: 'Tôi lấy nước ngọt ra từ tủ lạnh.' },
+      L7_NIKU_VOCAB,
       { id: 'v7-25', term: '砂糖', reading: 'さとう', romaji: 'satou', partOfSpeech: 'Danh từ', definition: 'Đường ăn', example: '砂糖を少し入れます。', exampleMeaning: 'Tôi cho một chút đường vào.' },
       { id: 'v7-26', term: '塩', reading: 'しお', romaji: 'shio', partOfSpeech: 'Danh từ', definition: 'Muối', example: '塩を取ってください。', exampleMeaning: 'Xin hãy lấy giúp tôi lọ muối.' },
       { id: 'v7-27', term: 'しょうゆ', reading: 'しょうゆ', romaji: 'shouyu', partOfSpeech: 'Danh từ', definition: 'Nước tương, xì dầu', example: 'しょうゆをつけて食べます。', exampleMeaning: 'Tôi chấm nước tương rồi ăn.' },

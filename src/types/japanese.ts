@@ -115,6 +115,8 @@ export interface JapaneseCourse {
   createdAt: string;
   updatedAt: string;
   grammarVersion?: string;             // Phiên bản dữ liệu ngữ pháp mặc định
+  kanjiVocabVersion?: number;          // Phiên bản bổ sung từ vựng chữ Hán mặc định
+  kanjiCoreVersion?: number;           // Phiên bản bổ sung chữ Hán cốt lõi mặc định
   lessons: JapaneseLesson[];          // 1. Từ vựng (12 bài học 4.1 - 7.3)
   kanjiList: JapaneseKanjiCard[];     // 2. Chữ Hán (Kanji Core)
   kanjiVocabList?: JapaneseVocabCard[]; // 2. Từ vựng Chữ Hán (Kanji Compound Vocab)

@@ -441,6 +441,18 @@ export const L6_VOCABULARY: JapaneseVocabCard[] = [
 // LESSON 7 (jpd123 • L7) - Tự nhiên và Cơ bản
 // ===========================================================================
 
+export const L7_NIKU_KANJI: JapaneseKanjiCard = {
+  id: 'k-l7-7',
+  kanji: '肉',
+  hanViet: 'NHỤC',
+  meaning: 'Thịt',
+  onyomi: 'ニク',
+  strokeCount: 6,
+  lessonTag: 'L7',
+  examples: [{ word: '肉', reading: 'にく', meaning: 'Thịt' }],
+  createdAt: new Date().toISOString(),
+};
+
 export const L7_KANJI_CORE: JapaneseKanjiCard[] = [
   {
     id: 'k-l7-1',
@@ -508,10 +520,96 @@ export const L7_KANJI_CORE: JapaneseKanjiCard[] = [
     lessonTag: 'L7',
     createdAt: new Date().toISOString(),
   },
+  L7_NIKU_KANJI,
+  // Slide 9–17 (Slot 28 · Chữ Hán Bài 7)
+  {
+    id: 'k-l7-8',
+    kanji: '料',
+    hanViet: 'LIỆU',
+    meaning: 'Nguyên liệu, tiền phí',
+    onyomi: 'リョウ',
+    strokeCount: 10,
+    lessonTag: 'L7',
+    examples: [{ word: '料金', reading: 'りょうきん', meaning: 'Tiền phí' }, { word: '料理', reading: 'りょうり', meaning: 'Món ăn' }],
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'k-l7-9',
+    kanji: '理',
+    hanViet: 'LÝ',
+    meaning: 'Lý lẽ, xử lý',
+    onyomi: 'リ',
+    strokeCount: 11,
+    lessonTag: 'L7',
+    examples: [{ word: '料理', reading: 'りょうり', meaning: 'Món ăn' }],
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'k-l7-10',
+    kanji: '野',
+    hanViet: 'DÃ',
+    meaning: 'Cánh đồng, hoang dã',
+    kunyomi: 'の',
+    onyomi: 'ヤ',
+    strokeCount: 11,
+    lessonTag: 'L7',
+    examples: [{ word: '野菜', reading: 'やさい', meaning: 'Rau' }, { word: '野', reading: 'の', meaning: 'Cánh đồng' }],
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'k-l7-11',
+    kanji: '半',
+    hanViet: 'BÁN',
+    meaning: 'Một nửa',
+    kunyomi: 'なか.ば',
+    onyomi: 'ハン',
+    strokeCount: 5,
+    lessonTag: 'L7',
+    examples: [{ word: '半ば', reading: 'なかば', meaning: 'Giữa' }, { word: '半年', reading: 'はんとし', meaning: 'Nửa năm' }, { word: '半月', reading: 'はんつき', meaning: 'Nửa tháng' }, { word: '半日', reading: 'はんにち', meaning: 'Nửa ngày' }, { word: '半分', reading: 'はんぶん', meaning: 'Một nửa' }, { word: '七時半', reading: 'しちじはん', meaning: '7 giờ 30' }],
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'k-l7-12',
+    kanji: '大',
+    hanViet: 'ĐẠI',
+    meaning: 'To, lớn',
+    kunyomi: 'おお.きい',
+    onyomi: 'ダイ、タイ',
+    strokeCount: 3,
+    lessonTag: 'L7',
+    examples: [{ word: '大きい', reading: 'おおきい', meaning: 'To' }, { word: '大学生', reading: 'だいがくせい', meaning: 'Sinh viên đại học' }, { word: '大人', reading: 'おとな', meaning: 'Người lớn' }, { word: '大会', reading: 'たいかい', meaning: 'Đại hội' }, { word: '大半', reading: 'たいはん', meaning: 'Phần lớn' }],
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'k-l7-13',
+    kanji: '小',
+    hanViet: 'TIỂU',
+    meaning: 'Nhỏ, bé',
+    kunyomi: 'ちい.さい',
+    onyomi: 'ショウ、コ',
+    strokeCount: 3,
+    lessonTag: 'L7',
+    examples: [{ word: '小さい', reading: 'ちいさい', meaning: 'Bé, nhỏ' }, { word: '小人', reading: 'こびと', meaning: 'Trẻ em, người tí hon' }, { word: '小学校', reading: 'しょうがっこう', meaning: 'Trường tiểu học' }],
+    createdAt: new Date().toISOString(),
+  },
 ];
 
+export const L7_SLIDE_VOCABULARY_ADDITIONS: JapaneseVocabCard[] = [
+  { id: 'v7-34', reading: 'たなかさん', term: '田中さん', definition: 'Anh/chị Tanaka' },
+  { id: 'v7-35', reading: 'だいがくのもん', term: '大学の門', definition: 'Cổng trường đại học' },
+  { id: 'v7-36', reading: 'の', term: '野', definition: 'Cánh đồng' },
+  { id: 'v7-37', reading: 'なかば', term: '半ば', definition: 'Giữa, phần giữa' },
+];
+
+export const L7_NIKU_KANJI_VOCAB: JapaneseVocabCard = {
+  id: 'v7-1',
+  reading: 'にく',
+  term: '肉',
+  definition: 'thịt',
+};
+
 export const L7_VOCABULARY: JapaneseVocabCard[] = [
-  { id: 'v7-1', reading: 'にく', term: '肉', definition: 'thịt' },
+  L7_NIKU_KANJI_VOCAB,
   { id: 'v7-2', reading: 'ぎゅうにく', term: '牛肉', definition: 'thịt bò' },
   { id: 'v7-3', reading: 'ぶたにく', term: '豚肉', definition: 'thịt heo' },
   { id: 'v7-4', reading: 'とりにく', term: '鶏肉', definition: 'thịt gà' },
@@ -544,6 +642,7 @@ export const L7_VOCABULARY: JapaneseVocabCard[] = [
   { id: 'v7-31', reading: 'すいりょく', term: '水力', definition: 'sức nước' },
   { id: 'v7-32', reading: 'かりょく', term: '火力', definition: 'công suất nhiệt, hỏa lực' },
   { id: 'v7-33', reading: 'もん', term: '門', definition: 'cổng, cửa' },
+  ...L7_SLIDE_VOCABULARY_ADDITIONS,
 ];
 
 // ===========================================================================
@@ -597,7 +696,7 @@ export const JPD123_KANJI_FOLDERS: JapaneseKanjiFolder[] = [
     lessonTag: 'L7',
     code: 'jpd123 • L7',
     title: 'Tự nhiên và Cơ bản',
-    description: '6 Hán tự cốt lõi & 33 từ vựng chữ Hán về kích thước, tự nhiên, đồ ăn và đời sống',
+    description: `${L7_KANJI_CORE.length} Hán tự cốt lõi & ${L7_VOCABULARY.length} từ vựng chữ Hán về kích thước, tự nhiên, đồ ăn và đời sống`,
     kanjiCore: L7_KANJI_CORE,
     kanjiVocab: L7_VOCABULARY,
   },

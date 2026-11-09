@@ -11,12 +11,15 @@ import {
   AttachedFile,
 } from '../types/japanese';
 import { JPD123_GRAMMAR_POINTS } from '../data/jpd123Grammar';
-import { JPD123_VOCAB_LESSONS } from '../data/jpd123Vocab';
+import { JPD123_VOCAB_LESSONS, L7_NIKU_VOCAB } from '../data/jpd123Vocab';
 import { JPD123_KANJI_LIST, JPD123_MATERIALS } from '../data/jpd123KanjiAndMaterials';
 import {
   STRUCTURED_JPD123_LESSONS,
   ALL_KANJI_CORE_LIST,
   ALL_KANJI_VOCAB_LIST,
+  L7_KANJI_CORE,
+  L7_NIKU_KANJI_VOCAB,
+  L7_SLIDE_VOCABULARY_ADDITIONS,
   JPD123_KANJI_FOLDERS,
 } from '../data/jpd123StructuredLessons';
 import { getCurrentUserEmail } from './storage';
@@ -901,18 +904,15 @@ export function updateJapaneseCardMastery(lessonId: string, cardId: string, mast
 // Japanese Courses Management (e.g. JPD123)
 // ---------------------------------------------------------------------------
 
-// Chữ Hán đã bỏ khỏi giáo trình: 南 (L4), 肉 料 理 野 半 (L7)
+// Chữ Hán đã bỏ khỏi giáo trình: 南 (L4). (料 理 野 半 của Bài 7 đã được đưa lại theo slide Slot 28)
 export const REMOVED_JPD123_KANJI_IDS: string[] = [
   'k-l4-6',
   'k-minami',
-  'k-l7-7',
-  'k-l7-8',
-  'k-l7-9',
-  'k-l7-10',
-  'k-l7-11',
 ];
 
 export const JPD123_GRAMMAR_VERSION = '20261103_v5_docx_rebuild';
+const JPD123_KANJI_VOCAB_VERSION = 2;
+const JPD123_KANJI_CORE_VERSION = 2;
 
 export const DEFAULT_JPD123_COURSE: JapaneseCourse = {
   id: 'course-jpd123',
@@ -923,6 +923,8 @@ export const DEFAULT_JPD123_COURSE: JapaneseCourse = {
   createdAt: '2000-01-01T00:00:00.000Z',
   updatedAt: '2000-01-01T00:00:00.000Z',
   grammarVersion: JPD123_GRAMMAR_VERSION,
+  kanjiVocabVersion: JPD123_KANJI_VOCAB_VERSION,
+  kanjiCoreVersion: JPD123_KANJI_CORE_VERSION,
   lessons: JPD123_VOCAB_LESSONS,
   kanjiList: ALL_KANJI_CORE_LIST,
   kanjiVocabList: ALL_KANJI_VOCAB_LIST,
@@ -1007,9 +1009,39 @@ export function ensureJpdCourseUpToDate(course: JapaneseCourse): { course: Japan
     updated.kanjiList = ALL_KANJI_CORE_LIST;
     changed = true;
   }
+  if ((updated.kanjiCoreVersion ?? 0) < JPD123_KANJI_CORE_VERSION) {
+    // Bổ sung các chữ Hán Bài 7 còn thiếu (肉 料 理 野 半 大 小), giữ nguyên trạng thái đã nhớ của chữ đã có
+    const missing = L7_KANJI_CORE.filter((core) =>
+      !updated.kanjiList.some((card) => card.id === core.id || (card.lessonTag === 'L7' && card.kanji === core.kanji))
+    );
+    if (missing.length) updated.kanjiList = [...updated.kanjiList, ...missing.map((c) => ({ ...c }))];
+    updated.kanjiCoreVersion = JPD123_KANJI_CORE_VERSION;
+    changed = true;
+  }
 
   if (!Array.isArray(updated.kanjiVocabList)) {
     updated.kanjiVocabList = ALL_KANJI_VOCAB_LIST;
+    changed = true;
+  }
+
+  const savedVocabVersion = updated.kanjiVocabVersion ?? 0;
+  if (savedVocabVersion < JPD123_KANJI_VOCAB_VERSION) {
+    const savedWords = updated.kanjiVocabList;
+    const slideWords = savedVocabVersion < 1
+      ? [...L7_SLIDE_VOCABULARY_ADDITIONS, L7_NIKU_KANJI_VOCAB]
+      : [L7_NIKU_KANJI_VOCAB];
+    const additions = slideWords.filter((word) =>
+      !savedWords.some((saved) => saved.id === word.id || saved.term.trim() === word.term)
+    );
+    updated.kanjiVocabList = [...savedWords, ...additions];
+    updated.lessons = updated.lessons.map((lesson) => {
+      if (lesson.id !== 'jp-lesson-7-2') return lesson;
+      if (lesson.cards.some((card) => card.id === L7_NIKU_VOCAB.id || card.term.trim() === '肉')) {
+        return lesson;
+      }
+      return { ...lesson, cards: [...lesson.cards, { ...L7_NIKU_VOCAB }] };
+    });
+    updated.kanjiVocabVersion = JPD123_KANJI_VOCAB_VERSION;
     changed = true;
   }
 
