@@ -29,6 +29,17 @@ app.get('/api/study-notebooks/:code',async(req,res)=>{
   const control=await client.rpc('dun_read_documents',{p_path:'admin_controls/'+email,p_collection:false});
   if(control.error){res.sendStatus(403);return;}
   if(!effectiveStudySubjects(email,control.data?.[0]?.data||null).includes(code)){res.sendStatus(403);return;}
+  const loadingEmails = (process.env.STUDY_SUBJECTS_LOADING_EMAILS ?? '')
+    .split(',')
+    .map(value => value.trim().toLowerCase());
+  if (loadingEmails.includes(email)) {
+    res.status(204).end();
+    return;
+  }
+  if (req.method === 'HEAD') {
+    res.status(200).end();
+    return;
+  }
   res.type('html').send(fs.readFileSync(path.join(process.cwd(),'server-data/study-notebooks',code.toLowerCase()+'.html'),'utf8'));
  }catch{res.status(503).json({error:'Không tải được môn học. Vui lòng thử lại.'});}
 });

@@ -3,6 +3,13 @@ const root=path.resolve(__dirname,'../..'),React=require('react'),{create,act}=r
 (async()=>{
  const mocks={ '../utils/accountControls':`export const useOwnStudySubjects=()=>global.__grants;`, './SubjectNotebook':`export const SubjectNotebook=()=> 'OPEN_NOTEBOOK';`, './SubjectExam':`export const SubjectExam=()=> 'OPEN_EXAM';`, './JapaneseLearningPage':`export const JapaneseLearningPage=()=> 'JAPANESE';`, '../utils/accountState':`export const readAccountState=(k,d)=>d,saveAccountState=()=>{},accountStateKey=x=>x;`, './projectStorage':`export const logicalProjectStorageKey=x=>x;`};
  mocks['./accountState']=mocks['../utils/accountState'];
+ mocks['../lib/cloud']="export const auth={currentUser:{getIdToken:async()=> 'test-token'}};";
+ let statusCode = 200;
+ global.fetch = async (url, options) => {
+  assert.match(url, /^\/api\/study-notebooks\/(MAI391|MAS291)$/);
+  assert.equal(options.method, 'HEAD');
+  return { status: statusCode };
+ };
  const result=await esbuild.build({entryPoints:[path.join(root,'src/pages/SubjectsPage.tsx')],bundle:true,write:false,platform:'node',format:'cjs',plugins:[{name:'adapters',setup(b){b.onResolve({filter:/.*/},a=>a.path==='react'?{path:require.resolve('react'),external:true}:a.path in mocks?{path:a.path,namespace:'mock'}:undefined);b.onLoad({filter:/.*/,namespace:'mock'},a=>({contents:mocks[a.path]}));}}]});
  const mod=new Module(__filename,module);mod.paths=module.paths;mod._compile(result.outputFiles[0].text,__filename);const Component=mod.exports.SubjectsPage;
  const listeners=new Map();global.window={addEventListener:(k,f)=>listeners.set(k,f),removeEventListener:k=>listeners.delete(k)};
@@ -19,6 +26,24 @@ const root=path.resolve(__dirname,'../..'),React=require('react'),{create,act}=r
  await act(async()=>renderer.root.findAllByType('button').find(b=>text(b.children)==='Kiểm tra').props.onClick());assert(text(renderer.toJSON()).includes('OPEN_EXAM'));
  global.__grants=[];await act(async()=>renderer.update(React.createElement(Component,{...props})));assert(!text(renderer.toJSON()).includes('OPEN_EXAM'));
  await act(async()=>renderer.unmount());console.log('PASS actual SubjectsPage hides ungranted subjects and closes notebook/exam on revocation');
+ global.__grants=['MAI391','MAS291'];
+ statusCode=204;
+ for (const code of global.__grants) {
+  for (const label of ['Vào học', 'Kiểm tra']) {
+   await act(async()=>{renderer=create(React.createElement(Component,props))});
+   const card=renderer.root.findByProps({'aria-label':`Mở môn ${code}`});
+   await act(async()=>card.findAllByType('button').find(button=>text(button.children)===label).props.onClick());
+   assert.equal(renderer.root.findByProps({role:'status'}).props['aria-label'],'Đang tải môn học');
+   assert(!text(renderer.toJSON()).includes('OPEN_NOTEBOOK'));
+   assert(!text(renderer.toJSON()).includes('OPEN_EXAM'));
+   await act(async()=>renderer.unmount());
+  }
+ }
+ await act(async()=>{renderer=create(React.createElement(Component,props))});
+ await act(async()=>renderer.root.findAllByType('button').find(button=>text(button.children).includes('Xem học phần')).props.onClick());
+ assert(text(renderer.toJSON()).includes('JAPANESE'));
+ await act(async()=>renderer.unmount());
+ console.log('PASS server loading response keeps both study and exam openings on a spinner, with Japanese still accessible');
  const server=fs.readFileSync(path.join(root,'server.ts'),'utf8');assert(server.includes("getUser(token)"));assert(server.includes("private, no-store"));
  assert(!fs.existsSync(path.join(root,'public/study-notebooks/mai391.html')));assert(!fs.existsSync(path.join(root,'public/study-notebooks/mas291.html')));
  console.log('PASS subject HTML is outside public assets and authenticated API bypasses shared cache');

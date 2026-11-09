@@ -4,15 +4,54 @@ import {JapaneseLearningPage} from './JapaneseLearningPage';
 import {SubjectNotebook} from './SubjectNotebook';
 import {useOwnStudySubjects} from '../utils/accountControls';
 import {SubjectExam} from './SubjectExam';
+import {auth} from '../lib/cloud';
 import {SubjectCode,studySubjects,readSubjectQuestions,subscribeSubjectProgress} from '../utils/subjectProgress';
 interface Props{currentUser?:{email:string;name:string}|null;onBackToDashboard?:()=>void}
 export function SubjectsPage({currentUser,onBackToDashboard}:Props){
  const allowed=useOwnStudySubjects(currentUser?.email||'');
  const [examSubject,setExamSubject]=useState<SubjectCode|null>(null);
  const [selected,setSelected]=useState<'japanese'|SubjectCode|null>(null),[,refresh]=useState(0);
+ const [entryCheck, setEntryCheck] = useState<{ key: string; ready: boolean }>();
+ const requestedSubject = examSubject ?? (selected === 'japanese' ? null : selected);
+ const openedSubject = requestedSubject && allowed.includes(requestedSubject) ? requestedSubject : null;
+ const entryKey = openedSubject ? `${currentUser?.email ?? ''}:${openedSubject}` : null;
  useEffect(()=>{setSelected(null);setExamSubject(null);},[currentUser?.email]);
  useEffect(()=>{const stop=studySubjects.map(s=>subscribeSubjectProgress(s.code as SubjectCode,()=>refresh(n=>n+1)));return()=>stop.forEach(fn=>fn());},[currentUser?.email]);
  useEffect(()=>{if(examSubject&&!allowed.includes(examSubject))setExamSubject(null);if(selected&&selected!=='japanese'&&!allowed.includes(selected))setSelected(null);},[allowed.join(','),examSubject,selected]);
+ useEffect(() => {
+   if (!openedSubject || !entryKey) {
+     setEntryCheck(undefined);
+     return;
+   }
+   const abort = new AbortController();
+   const checkEntry = async () => {
+     let ready = true;
+     try {
+       const token = await auth.currentUser?.getIdToken();
+       if (token && !abort.signal.aborted) {
+         const response = await fetch('/api/study-notebooks/' + openedSubject, {
+           method: 'HEAD',
+           headers: { Authorization: 'Bearer ' + token },
+           cache: 'no-store',
+           signal: abort.signal,
+         });
+         ready = response.status !== 204;
+       }
+     } catch {
+       // Keep the normal subject flow available when the status check fails.
+     }
+     if (!abort.signal.aborted) setEntryCheck({ key: entryKey, ready });
+   };
+   void checkEntry();
+   return () => abort.abort();
+ }, [openedSubject, entryKey]);
+ if (entryKey && (entryCheck?.key !== entryKey || !entryCheck.ready)) {
+   return (
+     <div className="grid min-h-[50vh] place-items-center" role="status" aria-label="Đang tải môn học">
+       <span className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" aria-hidden="true" />
+     </div>
+   );
+ }
  if(examSubject&&allowed.includes(examSubject))return <SubjectExam code={examSubject} email={currentUser?.email} onBack={()=>setExamSubject(null)}/>;
  if(selected==='japanese')return <div><button onClick={()=>setSelected(null)} className="inline-flex items-center gap-2 mt-0 mb-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-semibold"><ArrowLeft size={16}/>Môn học</button><JapaneseLearningPage currentUser={currentUser} onBackToDashboard={onBackToDashboard}/></div>;
  if(selected&&allowed.includes(selected))return <SubjectNotebook code={selected} email={currentUser?.email} onBack={()=>setSelected(null)} onOpenExam={()=>setExamSubject(selected)}/>;
