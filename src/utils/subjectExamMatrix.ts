@@ -5,20 +5,56 @@ export const subjectMatrices={
 };
 export const subjectMatrixNote=(code:SubjectCode)=>code==='MAI391'?'Tài liệu cho số câu xấp xỉ cộng thành 39. Bản thi thử dùng 7–8–11–8–6 để đủ 40 câu; không lấy Chương 9, 10, 12.':'Đề 50 câu theo phân bổ 10 chương trong tài liệu.';
 export type ExamQuestion=ReturnType<typeof subjectInfo>['examQuestions'][number];
+export type SubjectProTestId = 'pt1' | 'pt2' | 'pt3';
+
+interface SubjectProTest {
+  id: SubjectProTestId;
+  label: string;
+  chapters: readonly string[];
+}
+
+export const subjectProTests: Record<SubjectCode, readonly SubjectProTest[]> = {
+  MAS291: [
+    { id: 'pt1', label: 'Pro Test 1', chapters: ['1', '2', '3'] },
+    { id: 'pt2', label: 'Pro Test 2', chapters: ['4', '6', '7'] },
+    { id: 'pt3', label: 'Pro Test 3', chapters: ['8', '9', '10', '11'] },
+  ],
+  MAI391: [
+    { id: 'pt1', label: 'Pro Test 1', chapters: ['3', '4', '5'] },
+    { id: 'pt2', label: 'Pro Test 2', chapters: ['6', '7'] },
+  ],
+};
+
+export const PRO_TEST_QUESTION_COUNT = 15;
+export const PRO_TEST_MINUTES = 20;
+
 export function maxSubjectExamQuestions(code:SubjectCode){return subjectInfo(code).examQuestions.filter(q=>q.verified&&subjectMatrices[code].some(row=>row.chapter===q.chapter&&(row.weights as Record<number,number>)[q.group]>0)).length;}
-export function planSubjectExam(code:SubjectCode,count=code==='MAI391'?40:50){
- if(!Number.isInteger(count)||count<1||count>maxSubjectExamQuestions(code))throw new Error('Số câu vượt giới hạn ngân hàng đề.');
- const total=subjectMatrices[code].reduce((n,r)=>n+r.count,0);
- const rows=subjectMatrices[code].map(row=>{const exact=row.count*count/total;const capacity=subjectInfo(code).examQuestions.filter(q=>q.verified&&q.chapter===row.chapter&&(row.weights as Record<number,number>)[q.group]>0).length;return {...row,count:Math.min(Math.floor(exact),capacity),capacity,fraction:exact-Math.floor(exact)};});
+export function planSubjectExam(code:SubjectCode,count=code==='MAI391'?40:50,presetId?:SubjectProTestId){
+ const preset = subjectProTests[code].find(test => test.id === presetId);
+ if (presetId !== undefined && (!preset || count !== PRO_TEST_QUESTION_COUNT)) {
+   throw new Error('Cấu hình Pro Test không hợp lệ.');
+ }
+ const matrix = subjectMatrices[code].filter(row => !preset || preset.chapters.includes(row.chapter));
+ const total = matrix.reduce((sum, row) => sum + row.count, 0);
+ const bank = subjectInfo(code).examQuestions;
+ const rows = matrix.map(row => {
+   const exact = row.count * count / total;
+   const weights = row.weights as Record<number, number>;
+   const capacity = bank.filter(q => q.verified && q.chapter === row.chapter && weights[q.group] > 0).length;
+   return { ...row, count: Math.min(Math.floor(exact), capacity), capacity, fraction: exact - Math.floor(exact) };
+ });
+ if (!Number.isInteger(count) || count < 1 || count > rows.reduce((sum, row) => sum + row.capacity, 0)) {
+   throw new Error('Số câu vượt giới hạn ngân hàng đề.');
+ }
  let remaining=count-rows.reduce((n,r)=>n+r.count,0);
  const ordered=[...rows].sort((a,b)=>b.fraction-a.fraction);
  while(remaining){let changed=false;for(const row of ordered){if(remaining&&row.count<row.capacity){row.count++;remaining--;changed=true;}}if(!changed)throw new Error('Ngân hàng chưa đủ câu.');}
  return rows;
 }
 function shuffle<T>(list:T[],random:()=>number){const result=[...list];for(let i=result.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[result[i],result[j]]=[result[j],result[i]];}return result;}
-export function buildSubjectExam(code:SubjectCode,random=()=>crypto.getRandomValues(new Uint32Array(1))[0]/4294967296,count=code==='MAI391'?40:50){
+export function buildSubjectExam(code:SubjectCode,random=()=>crypto.getRandomValues(new Uint32Array(1))[0]/4294967296,count=code==='MAI391'?40:50,presetId?:SubjectProTestId){
  const bank=subjectInfo(code).examQuestions,selected:ExamQuestion[]=[];
- for(const row of planSubjectExam(code,count)){
+ for(const row of planSubjectExam(code,count,presetId)){
   const groups=Object.entries(row.weights as Record<string,number>).filter(([,weight])=>weight!>0).map(([group,weight])=>({group:Number(group),weight:weight!,questions:shuffle(bank.filter(q=>q.verified&&q.chapter===row.chapter&&q.group===Number(group)),random),quota:0,fraction:0}));
   const available=groups.reduce((sum,g)=>sum+g.questions.length,0);if(available<row.count)throw new Error(`Chương ${row.chapter} chưa đủ câu có đáp án xác định (${available}/${row.count}).`);
   const totalWeight=groups.reduce((sum,g)=>sum+g.weight,0);
@@ -31,9 +67,10 @@ export function buildSubjectExam(code:SubjectCode,random=()=>crypto.getRandomVal
  if(new Set(selected.map(q=>q.id)).size!==selected.length)throw new Error('Ngân hàng có mã câu bị trùng.');
  return selected;
 }
-export interface SubjectExamAttempt{id:string;code:SubjectCode;questionIds:string[];questionCount?:number;answers:Record<string,string>;currentIndex:number;startedAt:number;deadline:number;submittedAt?:number;correct?:number;}
+export interface SubjectExamAttempt{id:string;code:SubjectCode;questionIds:string[];questionCount?:number;presetId?:SubjectProTestId;answers:Record<string,string>;currentIndex:number;startedAt:number;deadline:number;submittedAt?:number;correct?:number;}
 export function gradeSubjectExam(attempt:SubjectExamAttempt){const bank=new Map(subjectInfo(attempt.code).examQuestions.map(q=>[q.id,q]));return attempt.questionIds.filter(id=>bank.get(id)?.answer===attempt.answers[id]).length;}
 export function validSubjectAttempt(value:any,code:SubjectCode):value is SubjectExamAttempt{
- const bank=new Map(subjectInfo(code).examQuestions.map(q=>[q.id,q]));let rows;try{rows=planSubjectExam(code,value?.questionCount??(code==='MAI391'?40:50));}catch{return false;}
+ if (value?.presetId !== undefined && value.deadline - value.startedAt !== PRO_TEST_MINUTES * 60000) return false;
+ const bank=new Map(subjectInfo(code).examQuestions.map(q=>[q.id,q]));let rows;try{rows=planSubjectExam(code,value?.questionCount??(code==='MAI391'?40:50),value?.presetId);}catch{return false;}
  return !!value&&value.code===code&&typeof value.id==='string'&&Number.isFinite(value.startedAt)&&Number.isFinite(value.deadline)&&value.deadline>value.startedAt&&Number.isInteger(value.currentIndex)&&value.currentIndex>=0&&value.currentIndex<value.questionIds?.length&&Array.isArray(value.questionIds)&&new Set(value.questionIds).size===value.questionIds.length&&value.questionIds.length===rows.reduce((n,r)=>n+r.count,0)&&value.questionIds.every((id:string)=>bank.get(id)?.verified)&&rows.every(r=>value.questionIds.filter((id:string)=>bank.get(id)?.chapter===r.chapter).length===r.count)&&value.answers&&typeof value.answers==='object'&&!Array.isArray(value.answers)&&Object.entries(value.answers).every(([id,pick])=>value.questionIds.includes(id)&&typeof pick==='string'&&/^(?:[A-E]|i{1,3}|iv|v|vi)$/.test(pick));
 }

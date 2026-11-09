@@ -33,6 +33,30 @@ const root=path.resolve(__dirname,'../..');
   assert.throws(()=>planSubjectExam(code,0));assert.throws(()=>planSubjectExam(code,max+1));assert.throws(()=>planSubjectExam(code,1.5));
   console.log('PASS '+code+': custom question counts scale matrix quotas, stay unique and restore correctly');
  }
+ const proTests = {
+  MAS291: { pt1: ['1','2','3'], pt2: ['4','6','7'], pt3: ['8','9','10','11'] },
+  MAI391: { pt1: ['3','4','5'], pt2: ['6','7'] },
+ };
+ for (const [code, presets] of Object.entries(proTests)) {
+  for (const [presetId, chapters] of Object.entries(presets)) {
+   const questions = buildSubjectExam(code, () => 0.37, 15, presetId);
+   const ids = questions.map(q => q.id);
+   assert.equal(ids.length, 15);
+   assert.equal(new Set(ids).size, 15);
+   assert.deepEqual([...new Set(questions.map(q => q.chapter))], chapters);
+   const attempt = {
+    id: 'pro-test', code, presetId, questionCount: 15, questionIds: ids,
+    answers: {}, currentIndex: 0, startedAt: 1000, deadline: 1201000,
+   };
+   assert(validSubjectAttempt(attempt, code));
+   assert(!validSubjectAttempt({...attempt, deadline: 61000}, code));
+   const outside = buildSubjectExam(code, () => 0.37).find(q => !chapters.includes(q.chapter));
+   assert(!validSubjectAttempt({...attempt, questionIds: [outside.id, ...ids.slice(1)]}, code));
+   assert.throws(() => planSubjectExam(code, 14, presetId));
+   console.log('PASS '+code+' '+presetId+': 15 unique questions, exact chapter scope, 20 minutes and restore');
+  }
+ }
+ assert.throws(() => planSubjectExam('MAI391', 15, 'pt3'));
  const manifest=JSON.parse(fs.readFileSync(path.join(root,'src/data/studySubjects.json'),'utf8'));
  for(const subject of manifest.subjects){
   const html=fs.readFileSync(path.join(root,'server-data/study-notebooks',subject.code.toLowerCase()+'.html'),'utf8');
