@@ -10,23 +10,38 @@ const authMock=`export const auth={get currentUser(){return bridge.user}};export
 const build=await esbuild.build({stdin:{contents:`export * from './src/lib/cloud';export * as outbox from './src/utils/cloudOutbox';export * as docs from './src/lib/supabaseDocuments';export * as admin from './src/lib/admin';export * as subjects from './src/utils/subjectProgress';export * as account from './src/utils/accountState';`,resolveDir:root,loader:'ts'},bundle:true,write:false,platform:'node',format:'iife',globalName:'api',define:{'import.meta.env':'{}'},plugins:[{name:'transport',setup(b){b.onResolve({filter:/supabaseClient$|supabaseAuth$/},a=>({path:a.path.endsWith('supabaseAuth')?'auth':'client',namespace:'qa'}));b.onLoad({filter:/.*/,namespace:'qa'},a=>({contents:a.path==='auth'?authMock:`export const supabase=()=>bridge.sdk;export const isSupabaseConfigured=()=>true;export const cloudFailure=e=>Object.assign(new Error(e.message),{code:e.code});`}));}}]});
 const devices=[];
 function device(email=owner,storage=new Map()){
-let online=true,closed=false;const events=new Map(),stops=[];const user={uid:email===owner?uidOwner:uidLearner,email,emailVerified:true,displayName:'QA'};storage.set('mcq_user',JSON.stringify({email,name:'QA'}));
+let online=true,closed=false;const events=new Map(),stops=[],reads=new Map();const user={uid:email===owner?uidOwner:uidLearner,email,emailVerified:true,displayName:'QA'};storage.set('mcq_user',JSON.stringify({email,name:'QA'}));
 const bridge={user,sdk:{rpc:async(name,args={})=>{if(!online)return {error:{code:'cloud/offline',message:'offline'}};return serialize(async()=>{try{await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[user.uid]);await db.exec('set role authenticated');let result;
-if(name==='dun_read_documents')result=await db.query('select * from public.dun_read_documents($1,$2,$3,$4)',[args.p_path,args.p_collection||false,args.p_offset||0,args.p_limit||500]);
-else if(name==='dun_commit_documents'){await db.query('select public.dun_commit_documents($1::jsonb,$2::jsonb)',[JSON.stringify(args.p_reads),JSON.stringify(args.p_writes)]);for(const c of channels)if(!c.closed&&!c.device.closed)queueMicrotask(()=>c.callback({eventType:'UPDATE',new:{}}));}
+if(name==='dun_read_documents'){
+ reads.set(args.p_path,(reads.get(args.p_path)||0)+1);
+ result=await db.query('select * from public.dun_read_documents($1,$2,$3,$4)',[args.p_path,args.p_collection||false,args.p_offset||0,args.p_limit||500]);
+}
+else if(name==='dun_commit_documents'){
+ const changes=[];
+ for(const write of args.p_writes.filter(write=>write.delete)){
+  const {rows:[row]}=await db.query('select id from public.dun_documents where path=$1',[write.path]);
+  if(row)changes.push({eventType:'DELETE',new:{},old:{id:row.id}});
+ }
+ await db.query('select public.dun_commit_documents($1::jsonb,$2::jsonb)',[JSON.stringify(args.p_reads),JSON.stringify(args.p_writes)]);
+ for(const write of args.p_writes.filter(write=>!write.delete)){
+  const {rows:[row]}=await db.query('select id,path,collection_path from public.dun_documents where path=$1',[write.path]);
+  if(row)changes.push({eventType:'UPDATE',new:row,old:{}});
+ }
+ for(const c of channels)if(!c.closed&&!c.device.closed)for(const change of changes)queueMicrotask(()=>c.callback(change));
+}
 else if(name==='dun_shared_action'){await db.query('select public.dun_shared_action($1,$2,$3,$4,$5)',[args.p_share,args.p_action,args.p_score??null,args.p_total??null,args.p_name||'']);}
 else if(name==='dun_delete_my_data')await db.exec('select public.dun_delete_my_data()');else throw Error('Unknown RPC '+name);
 return {data:result?.rows||null,error:null};}catch(e){return {data:null,error:{code:e.code,message:e.message}};}});},
 channel:()=>{
- const c={closed:false,device:null,callback:()=>{}};
- return {on:(event,filter,fn)=>{
-  c.callback=fn;
-  return {subscribe:fn=>{c.device=d;channels.add(c);queueMicrotask(()=>fn('SUBSCRIBED'));return c;}};
- }};
+ const c={closed:false,device:null,callback:()=>{},
+  on:(event,filter,fn)=>{c.callback=fn;return c;},
+  subscribe:fn=>{c.device=d;channels.add(c);queueMicrotask(()=>fn('SUBSCRIBED'));return c;},
+ };
+ return c;
 },removeChannel:async c=>{c.closed=true;channels.delete(c);},storage:{from:()=>({upload:async()=>({error:null}),getPublicUrl:()=>({data:{publicUrl:'https://qa.supabase.co/storage/v1/object/public/quiz-images/qa.png'}})})}}};
 const win={addEventListener:(n,f)=>{if(!events.has(n))events.set(n,new Set());events.get(n).add(f)},removeEventListener:(n,f)=>events.get(n)?.delete(f),dispatchEvent:e=>{for(const f of events.get(e.type)||[])f(e)}};
 const ctx=vm.createContext({bridge,console,require:createRequire(path.join(root,'package.json')),structuredClone,crypto:require('node:crypto').webcrypto,Blob,Uint8Array,atob,btoa,TextEncoder,URL,setTimeout,clearTimeout,setInterval,clearInterval,queueMicrotask,window:win,navigator:{get onLine(){return online}},localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,String(v)),removeItem:k=>storage.delete(k)},CustomEvent:class{constructor(type,opts){this.type=type;this.detail=opts?.detail}},Promise,Map,Set,Date});
-const d={email,storage,get closed(){return closed},api:null,watch:f=>{const stop=f();stops.push(stop);return stop;},offline:()=>online=false,online:async()=>{online=true;await d.api.outbox.flushCloudOutbox()},close:()=>{closed=true;stops.forEach(f=>f());},flush:async()=>{await d.api.flushAllPendingProgressSync();await d.api.outbox.flushCloudOutbox();await sleep(15)}};vm.runInContext(build.outputFiles[0].text,ctx);d.api=ctx.api;devices.push(d);return d;
+const d={email,storage,reads,get closed(){return closed},api:null,watch:f=>{const stop=f();stops.push(stop);return stop;},offline:()=>online=false,online:async()=>{online=true;await d.api.outbox.flushCloudOutbox()},close:()=>{closed=true;stops.forEach(f=>f());},flush:async()=>{await d.api.flushAllPendingProgressSync();await d.api.outbox.flushCloudOutbox();await sleep(15)}};vm.runInContext(build.outputFiles[0].text,ctx);d.api=ctx.api;devices.push(d);return d;
 }
 async function until(fn,predicate,label){for(let n=0;n<150;n++){const v=await fn();if(predicate(v))return v;await sleep(15);}throw Error('Timeout '+label);}
 const pc=device(),phone=device(),student=device(learner);let courses=[],quizzes=[],settings={},words=[],stars=[],flash={},study={},attempts=[],learning={};
@@ -52,6 +67,25 @@ await test('MAI/MAS answers, resets and exam state synchronize independently and
 });
 await test('SRS and FE history preserve records from both clients',async()=>{const doc=(c)=>pc.api.docs.doc(pc.api.db,c,owner);await pc.api.writeCloudDocument(doc('srs_progress'),{email:owner,records:{a:{lastReviewedDate:'2026-11-05'}},updatedAt:new Date().toISOString()});await phone.api.writeCloudDocument(doc('srs_progress'),{email:owner,records:{b:{lastReviewedDate:'2026-11-05'}},updatedAt:new Date().toISOString()});const s=await pc.api.docs.getDoc(doc('srs_progress'));assert.equal(Object.keys(s.data().records).length,2);for(const [device,id]of [[pc,'h1'],[phone,'h2']])await device.api.writeCloudDocument(doc('fe_mock_exams'),{email:owner,history:[{id,date:new Date().toISOString()}],updatedAt:new Date().toISOString()});assert.equal((await pc.api.docs.getDoc(doc('fe_mock_exams'))).data().history.length,2);});
 await test('Course deletion reaches the other device',async()=>{await pc.api.deleteJapaneseCourseFromFirestore('c',owner);await pc.flush();await until(()=>courses,v=>v.length===1&&!!v[0].deletedAt,'course tombstone');});
+await test('Realtime coalesces startup reads and routes edits and hard deletes to the matching snapshots',async()=>{
+ const reader=device(),writer=pc.api.docs,{collection,doc,onSnapshot,db:refDb}=reader.api.docs;
+ const target=doc(refDb,'quizzes','realtime-target'),other=doc(refDb,'quizzes','realtime-other');
+ await writer.setDoc(target,{userEmail:owner,title:'Target'});
+ await writer.setDoc(other,{userEmail:owner,title:'Other'});
+ let targetDoc,otherDoc,quizzes;
+ reader.watch(()=>onSnapshot(target,v=>targetDoc=v));
+ reader.watch(()=>onSnapshot(other,v=>otherDoc=v));
+ reader.watch(()=>onSnapshot(collection(refDb,'quizzes'),v=>quizzes=v));
+ await until(()=>targetDoc?.exists()&&otherDoc?.exists()&&quizzes?.docs.some(d=>d.id==='realtime-target'),Boolean,'initial snapshots');
+ assert.equal(reader.reads.get(target.path),1);
+ await writer.updateDoc(target,{title:'Edited'});
+ await until(()=>targetDoc?.data().title,v=>v==='Edited','target edit');
+ await writer.deleteDoc(target);
+ await until(()=>!targetDoc?.exists()&&!quizzes?.docs.some(d=>d.id==='realtime-target'),Boolean,'hard delete reaches document and collection');
+ assert.equal(reader.reads.get(other.path),1);
+ assert.equal(otherDoc.data().title,'Other');
+ reader.close();
+});
 await test('Admin user library, granular rights and immutable audit work through the real SQL backend',async()=>{await student.api.syncQuizToFirestore('qa',{id:'student-q',title:'Student',questions:[],updatedAt:new Date().toISOString()});await student.flush();const library=await pc.api.admin.loadAdminUserLibrary(learner);assert.equal(library.quizzes.length,1);let control;student.watch(()=>student.api.admin.subscribeAccountControl(learner,v=>control=v,()=>{}));await pc.api.admin.saveAccountControls([learner],{jpdModules:['vocabulary','grammar'],studySubjects:['MAS291']});await until(()=>control,v=>v?.jpdModules.length===2,'grant');assert.equal(control.studySubjects.join(','),'MAS291');await assert.rejects(student.api.admin.saveAccountControls([learner],{studySubjects:['MAI391']}));const logs=await pc.api.docs.getDocs(pc.api.docs.collection(pc.api.db,'admin_audit'));assert.equal(logs.docs.length,1);await assert.rejects(student.api.admin.saveAccountControls([owner],{disabled:true}));});
 await test('Disabled account is denied instead of receiving an empty destructive snapshot; unlock resumes writes',async()=>{await pc.api.admin.saveAccountControls([learner],{disabled:true});await assert.rejects(student.api.docs.getDoc(student.api.docs.doc(student.api.db,'quizzes','student-q')),e=>e.code==='42501');await pc.api.admin.saveAccountControls([learner],{disabled:false});assert.equal((await student.api.docs.getDoc(student.api.docs.doc(student.api.db,'quizzes','student-q'))).exists(),true);});
 await test('Offline mutation survives destroying and reopening its independent device context',async()=>{const offline=device();offline.offline();await offline.api.syncStudyProgressToFirestore(owner,'offline',{currentIndex:3,savedAt:new Date().toISOString()});assert.ok(offline.api.outbox.getCloudSyncStatus().pending);const cache=new Map(offline.storage);offline.close();const reopened=device(owner,cache);await reopened.flush();await until(()=>study,v=>v.offline?.currentIndex===3,'offline replay');});
