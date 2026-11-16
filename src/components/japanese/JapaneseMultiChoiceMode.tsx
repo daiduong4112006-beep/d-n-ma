@@ -27,6 +27,8 @@ interface JapaneseMultiChoiceModeProps {
   lesson: JapaneseLesson;
   onExit: () => void;
   onCardMastered?: (cardId: string, mastered: boolean) => void;
+  /** Mục Chữ Hán: hỏi chữ Hán → chọn cách đọc (kana), và ngược lại; không dùng nghĩa tiếng Việt */
+  kanjiReadingMode?: boolean;
 }
 
 interface QuestionItem {
@@ -42,8 +44,14 @@ export const JapaneseMultiChoiceMode: React.FC<JapaneseMultiChoiceModeProps> = (
   lesson,
   onExit,
   onCardMastered,
+  kanjiReadingMode = false,
 }) => {
-  const [cards, setCards] = useState<JapaneseVocabCard[]>(lesson.cards);
+  const hasKanji = (t: string) => /[\u4E00-\u9FAF々]/.test(t);
+  // Chế độ chữ Hán chỉ lấy các từ có chữ Hán và có cách đọc
+  const sourceCards = kanjiReadingMode
+    ? lesson.cards.filter((c) => hasKanji(c.term) && !!c.reading && c.reading !== c.term)
+    : lesson.cards;
+  const [cards, setCards] = useState<JapaneseVocabCard[]>(sourceCards);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [score, setScore] = useState(0);
@@ -59,12 +67,18 @@ export const JapaneseMultiChoiceMode: React.FC<JapaneseMultiChoiceModeProps> = (
   const [autoSpeechEnabled, setAutoSpeechEnabled] = useState(() => {
     return localStorage.getItem('multichoice_auto_speech') === 'true';
   });
+  // Chế độ chữ Hán: 'jp-to-vi' = Chữ Hán → chọn cách đọc; 'vi-to-jp' = Cách đọc → chọn chữ Hán
+  const directionKey = kanjiReadingMode ? 'multichoice_direction_kanji' : 'multichoice_direction';
   const [direction, setDirection] = useState<'vi-to-jp' | 'jp-to-vi'>(() => {
-    const saved = localStorage.getItem('multichoice_direction');
+    const saved = localStorage.getItem(directionKey);
+    if (kanjiReadingMode) return saved === 'vi-to-jp' ? 'vi-to-jp' : 'jp-to-vi';
     return saved === 'jp-to-vi' ? 'jp-to-vi' : 'vi-to-jp';
   });
+  const dirLabel = kanjiReadingMode
+    ? (direction === 'jp-to-vi' ? 'CHỮ HÁN → CÁCH ĐỌC' : 'CÁCH ĐỌC → CHỮ HÁN')
+    : (direction === 'vi-to-jp' ? 'VIỆT → NHẬT' : 'NHẬT → VIỆT');
 
-  const storageId = `lesson_${lesson.id}`;
+  const storageId = kanjiReadingMode ? `kanji_reading_${lesson.id}` : `lesson_${lesson.id}`;
 
   // Generate 4-option multiple choice questions depending on direction
   const questions: QuestionItem[] = useMemo(() => {
@@ -87,7 +101,32 @@ export const JapaneseMultiChoiceMode: React.FC<JapaneseMultiChoiceModeProps> = (
         return c.reading && c.reading !== c.term ? `${c.reading} (${c.term})` : (c.reading || c.term);
       };
 
-      if (direction === 'vi-to-jp') {
+      if (kanjiReadingMode) {
+        // Chữ Hán ↔ cách đọc (kana); nghĩa tiếng Việt chỉ làm gợi ý nhỏ
+        const toKanji = direction === 'vi-to-jp';
+        const pick = (c: JapaneseVocabCard) => (toKanji ? c.term : c.reading || c.term);
+        questionText = toKanji ? targetCard.reading || targetCard.term : targetCard.term;
+        subText = targetCard.definition;
+        correctAnswerText = pick(targetCard);
+        const seen = new Set([correctAnswerText]);
+        distractors = [];
+        for (const c of shuffleArray(cards.filter((c) => c.id !== targetCard.id))) {
+          const v = pick(c);
+          if (!seen.has(v)) {
+            seen.add(v);
+            distractors.push(v);
+          }
+          if (distractors.length === 3) break;
+        }
+        const fallback = toKanji ? ['学生', '先生', '学校', '日本'] : ['がくせい', 'せんせい', 'がっこう', 'にほん'];
+        for (const fb of fallback) {
+          if (distractors.length >= 3) break;
+          if (!seen.has(fb)) {
+            seen.add(fb);
+            distractors.push(fb);
+          }
+        }
+      } else if (direction === 'vi-to-jp') {
         // Nghĩa -> Thuật ngữ (Việt -> Nhật)
         questionText = targetCard.definition;
         correctAnswerText = formatChoiceText(targetCard);
@@ -152,7 +191,7 @@ export const JapaneseMultiChoiceMode: React.FC<JapaneseMultiChoiceModeProps> = (
   const toggleDirection = (newDir?: 'vi-to-jp' | 'jp-to-vi') => {
     const next = newDir || (direction === 'vi-to-jp' ? 'jp-to-vi' : 'vi-to-jp');
     setDirection(next);
-    localStorage.setItem('multichoice_direction', next);
+    localStorage.setItem(directionKey, next);
     setSelectedOption(null);
     setCurrentIndex(0);
     setScore(0);
@@ -163,11 +202,11 @@ export const JapaneseMultiChoiceMode: React.FC<JapaneseMultiChoiceModeProps> = (
   // 1. Restore previous session progress on mount
   useEffect(() => {
     const saved = getMultiChoiceProgress(storageId);
-    if (saved && typeof saved.currentIndex === 'number' && saved.currentIndex > 0 && saved.currentIndex < lesson.cards.length) {
-      if (saved.cardIds && saved.cardIds.length === lesson.cards.length) {
-        const idMap = new Map<string, JapaneseVocabCard>(lesson.cards.map((c) => [c.id, c] as [string, JapaneseVocabCard]));
+    if (saved && typeof saved.currentIndex === 'number' && saved.currentIndex > 0 && saved.currentIndex < sourceCards.length) {
+      if (saved.cardIds && saved.cardIds.length === sourceCards.length) {
+        const idMap = new Map<string, JapaneseVocabCard>(sourceCards.map((c) => [c.id, c] as [string, JapaneseVocabCard]));
         const reordered = saved.cardIds.map((id) => idMap.get(id)).filter(Boolean) as JapaneseVocabCard[];
-        if (reordered.length === lesson.cards.length) {
+        if (reordered.length === sourceCards.length) {
           setCards(reordered);
         }
       }
@@ -227,7 +266,7 @@ export const JapaneseMultiChoiceMode: React.FC<JapaneseMultiChoiceModeProps> = (
 
   // Auto speech for new question in jp-to-vi mode
   useEffect(() => {
-    if (autoSpeechEnabled && currentQ && direction === 'jp-to-vi' && !isCompleted) {
+    if (autoSpeechEnabled && currentQ && (kanjiReadingMode ? direction === 'vi-to-jp' : direction === 'jp-to-vi') && !isCompleted) {
       speakJapanese(currentQ.card.reading || currentQ.card.term);
     }
   }, [currentIndex, autoSpeechEnabled, direction, isCompleted, currentQ]);
@@ -303,7 +342,7 @@ export const JapaneseMultiChoiceMode: React.FC<JapaneseMultiChoiceModeProps> = (
 
   // RESTORE ACTION (Khôi phục / Bắt đầu lại)
   const handleRestore = () => {
-    setCards(lesson.cards);
+    setCards(sourceCards);
     setCurrentIndex(0);
     setScore(0);
     setStreak(0);
@@ -344,7 +383,7 @@ export const JapaneseMultiChoiceMode: React.FC<JapaneseMultiChoiceModeProps> = (
             title="Nhấn để đổi chiều: Thuật ngữ ↔ Định nghĩa"
           >
             <span className="text-[11px] font-black uppercase text-cyan-400 tracking-wider">
-              {direction === 'vi-to-jp' ? 'VIỆT → NHẬT' : 'NHẬT → VIỆT'}
+              {dirLabel}
             </span>
             <ArrowLeftRight className="w-3.5 h-3.5 text-cyan-400 group-hover:rotate-180 transition-transform" />
           </button>
@@ -436,7 +475,11 @@ export const JapaneseMultiChoiceMode: React.FC<JapaneseMultiChoiceModeProps> = (
                   <div className="flex items-center gap-2">
                     <ArrowLeftRight className="w-4 h-4 text-indigo-400" />
                     <span>
-                      {direction === 'vi-to-jp'
+                      {kanjiReadingMode
+                        ? direction === 'jp-to-vi'
+                          ? '漢 Chữ Hán → あ Cách đọc'
+                          : 'あ Cách đọc → 漢 Chữ Hán'
+                        : direction === 'vi-to-jp'
                         ? '🇻🇳 Nghĩa → 🇯🇵 Thuật ngữ'
                         : '🇯🇵 Thuật ngữ → 🇻🇳 Nghĩa'}
                     </span>
@@ -582,6 +625,7 @@ export const JapaneseMultiChoiceMode: React.FC<JapaneseMultiChoiceModeProps> = (
         <div className="max-w-xl mx-auto w-full my-auto py-6 space-y-6">
           {/* Question Card */}
           <div className="p-8 sm:p-10 rounded-3xl bg-slate-900 border-2 border-slate-800 text-center relative shadow-2xl space-y-4">
+            {!(kanjiReadingMode && direction === 'jp-to-vi' && selectedOption === null) && (
             <button
               type="button"
               onClick={() => speakJapanese(currentQ.card.reading || currentQ.card.term)}
@@ -590,13 +634,20 @@ export const JapaneseMultiChoiceMode: React.FC<JapaneseMultiChoiceModeProps> = (
             >
               <Volume2 className="w-4 h-4" />
             </button>
+            )}
 
             <span className="text-[11px] font-bold tracking-wider uppercase text-indigo-400 block">
-              {direction === 'vi-to-jp' ? 'CHỌN TỪ VỰNG TIẾNG NHẬT' : 'CHỌN NGHĨA TIẾNG VIỆT'}
+              {kanjiReadingMode
+                ? direction === 'jp-to-vi'
+                  ? 'CHỌN CÁCH ĐỌC ĐÚNG'
+                  : 'CHỌN CHỮ HÁN ĐÚNG'
+                : direction === 'vi-to-jp'
+                ? 'CHỌN TỪ VỰNG TIẾNG NHẬT'
+                : 'CHỌN NGHĨA TIẾNG VIỆT'}
             </span>
 
             <div className="py-2">
-              <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-white leading-tight">
+              <h2 className={`font-black text-white leading-tight ${kanjiReadingMode ? 'text-5xl sm:text-6xl md:text-7xl font-japanese' : 'text-3xl sm:text-4xl md:text-5xl'}`}>
                 {currentQ.questionText}
               </h2>
               {currentQ.subText && (
@@ -633,7 +684,7 @@ export const JapaneseMultiChoiceMode: React.FC<JapaneseMultiChoiceModeProps> = (
                   disabled={selectedOption !== null}
                   className={`p-4 rounded-2xl border-2 text-left font-bold text-base transition-all duration-150 cursor-pointer flex items-center justify-between min-h-[72px] active:scale-[0.98] ${btnStyle}`}
                 >
-                  <span className="leading-snug">{option}</span>
+                  <span className={`leading-snug ${kanjiReadingMode ? 'font-japanese text-xl sm:text-2xl' : ''}`}>{option}</span>
                   {selectedOption !== null && isCorrect && (
                     <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 ml-2" />
                   )}

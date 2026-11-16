@@ -413,6 +413,7 @@ export const JapaneseKanjiSection: React.FC<Props> = ({
     return (
       <JapaneseMultiChoiceMode
         lesson={virtualLessonForVocab}
+        kanjiReadingMode
         onExit={() => setActiveStudyMode('none')}
         onCardMastered={(id) => handleToggleVocabMastered(id)}
       />
