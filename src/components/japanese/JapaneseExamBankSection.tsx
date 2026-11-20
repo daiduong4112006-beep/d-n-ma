@@ -301,11 +301,27 @@ export const JapaneseExamBankSection: React.FC<{
       .then((m) => {
         if (!alive) return;
         const raw = ((m.default || m) as unknown as BankData);
-        const byHtml = new Map<string, BankQuestion>();
+        // Chuẩn hóa nội dung câu để nhận ra các câu chỉ khác whitespace / br / prefix
+        const normalize = (html: string) => {
+          let t = (html || '')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/&nbsp;|&zwj;|&zwnj;/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+          t = t.replace(/^chọn trong a,\s*b,\s*c,\s*d đáp án thích hợp để điền vào chỗ trống\s*/, '');
+          t = t.replace(/^các từ trong ngoặc \[\s*\] dưới đây có chữ hán tương ứng như thế nào\?\s*hãy chọn đáp án đúng trong a, b, c, d:?\s*/, '');
+          return t;
+        };
+        const byKey = new Map<string, BankQuestion>();
         const merged: BankQuestion[] = [];
         for (const q of raw.questions) {
-          const key = (q.html || '').replace(/\s+/g, ' ').trim();
-          const existing = byHtml.get(key);
+          const key = normalize(q.html);
+          if (!key) { merged.push(q); continue; }
+          const existing = byKey.get(key);
           if (existing) {
             const seen = new Set(existing.sources.map((s) => s.file + '|' + s.page));
             for (const s of q.sources) {
@@ -314,7 +330,7 @@ export const JapaneseExamBankSection: React.FC<{
             }
             continue;
           }
-          byHtml.set(key, q);
+          byKey.set(key, q);
           merged.push(q);
         }
         setData({ ...raw, questions: merged });
