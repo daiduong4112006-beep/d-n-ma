@@ -318,16 +318,19 @@ export const JapaneseExamBankSection: React.FC<{
             .replace(/　/g, ' ').replace(/：/g, ':').replace(/／/g, '/')
             .replace(/～|〜/g, '~');
           t = t.replace(/_+/g, '_');
+          // bỏ các kí tự trang trí hay bị PDF OCR chèn vào: ellipsis, placeholder, dấu nhân, etc.
+          t = t.replace(/[\u2026\u22EF\u25CB\u25EF\u2B1C\u2715\u203E\u2217*]/g, '');
+          t = t.replace(/[\u201C\u201D\u2018\u2019"']/g, '');
           // bỏ TOÀN BỘ whitespace để "A ___ B" và "A___B" khớp nhau
           t = t.replace(/\s+/g, '').toLowerCase();
           // bỏ các prefix dẫn chung thường gặp
           t = t
-            .replace(/^chọntronga,b,c,dđápánthíchhợpđểđiềnvàochỗtrống/, '')
-            .replace(/^cáctừtrongngoặc\[\]dướiđâycóchữhántươngứngnhưthếnào\?hãychọnđápánđúng(trong)?(a,b,c,d)?:?/, '')
-            .replace(/^cácchữhántrongngoặc\[\]cócáchđọctươngứngnhưthếnào\?hãychọnđápánđúng(trong)?(a,b,c,d)?:?/, '')
-            .replace(/^chọnphươngándịchđúngnhấttronga,b,c,d:?/, '')
-            .replace(/^chọnnghĩatiếngviệttươngứngcủatừsau:?/, '')
-            .replace(/^từnàocóýnghĩakhôngcùngnhómvớicáctừcònlại\.?/, '');
+            .replace(/^chọntronga,b,c,dđápánthíchhợpđểđiềnvàochỗtrống[\.\:;]?/, '')
+            .replace(/^cáctừtrongngoặc\[\]dướiđâycóchữhántươngứngnhưthếnào\?hãychọnđápánđúng(trong)?(a,b,c,d)?[\.\:;]?/, '')
+            .replace(/^cácchữhántrongngoặc\[\]cócáchđọctươngứngnhưthếnào\?hãychọnđápánđúng(trong)?(a,b,c,d)?[\.\:;]?/, '')
+            .replace(/^chọnphươngándịchđúngnhấttronga,b,c,d[\.\:;]?/, '')
+            .replace(/^chọnnghĩatiếngviệttươngứngcủatừsau[\.\:;]?/, '')
+            .replace(/^từnàocóýnghĩakhôngcùngnhómvớicáctừcònlại[\.\:;]?/, '');
           return t;
         };
         // Lấy phần "đề bài" (trước khối lựa chọn) để nhận câu cùng đề nhưng đảo trật tự A/B/C/D
