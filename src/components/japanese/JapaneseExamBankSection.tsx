@@ -301,25 +301,53 @@ export const JapaneseExamBankSection: React.FC<{
       .then((m) => {
         if (!alive) return;
         const raw = ((m.default || m) as unknown as BankData);
-        // Chuẩn hóa nội dung câu để nhận ra các câu chỉ khác whitespace / br / prefix
-        const normalize = (html: string) => {
-          let t = (html || '')
+        // Dọn bề mặt văn bản: strip tag, gộp whitespace, chuẩn hóa kí tự hẹp/rộng,
+        // bỏ các prefix dẫn chung ("Chọn trong A, B, C, D..." / "Các từ trong ngoặc [ ] ...").
+        const CLEAN = (raw: string) => {
+          let t = (raw || '')
             .replace(/<[^>]+>/g, ' ')
-            .replace(/&nbsp;|&zwj;|&zwnj;/g, ' ')
+            .replace(/&nbsp;|&zwj;|&zwnj;|&#xa0;/gi, ' ')
             .replace(/&amp;/g, '&')
             .replace(/&lt;/g, '<')
             .replace(/&gt;/g, '>')
-            .replace(/\s+/g, ' ')
-            .trim()
-            .toLowerCase();
-          t = t.replace(/^chọn trong a,\s*b,\s*c,\s*d đáp án thích hợp để điền vào chỗ trống\s*/, '');
-          t = t.replace(/^các từ trong ngoặc \[\s*\] dưới đây có chữ hán tương ứng như thế nào\?\s*hãy chọn đáp án đúng trong a, b, c, d:?\s*/, '');
+            .replace(/Chọm/g, 'Chọn').replace(/chọm/g, 'chọn');
+          // full-width → half-width cho các dấu phổ biến
+          t = t
+            .replace(/（/g, '(').replace(/）/g, ')')
+            .replace(/［|【/g, '[').replace(/］|】/g, ']')
+            .replace(/　/g, ' ').replace(/：/g, ':').replace(/／/g, '/')
+            .replace(/～|〜/g, '~');
+          t = t.replace(/_+/g, '_');
+          // bỏ TOÀN BỘ whitespace để "A ___ B" và "A___B" khớp nhau
+          t = t.replace(/\s+/g, '').toLowerCase();
+          // bỏ các prefix dẫn chung thường gặp
+          t = t
+            .replace(/^chọntronga,b,c,dđápánthíchhợpđểđiềnvàochỗtrống/, '')
+            .replace(/^cáctừtrongngoặc\[\]dướiđâycóchữhántươngứngnhưthếnào\?hãychọnđápánđúng(trong)?(a,b,c,d)?:?/, '')
+            .replace(/^cácchữhántrongngoặc\[\]cócáchđọctươngứngnhưthếnào\?hãychọnđápánđúng(trong)?(a,b,c,d)?:?/, '')
+            .replace(/^chọnphươngándịchđúngnhấttronga,b,c,d:?/, '')
+            .replace(/^chọnnghĩatiếngviệttươngứngcủatừsau:?/, '')
+            .replace(/^từnàocóýnghĩakhôngcùngnhómvớicáctừcònlại\.?/, '');
           return t;
+        };
+        // Lấy phần "đề bài" (trước khối lựa chọn) để nhận câu cùng đề nhưng đảo trật tự A/B/C/D
+        const STEM = (html: string) => {
+          const m = /<div class="q-options"/i.exec(html || '');
+          let part = m ? html.slice(0, m.index) : html;
+          if (!m) {
+            // Dạng plain "A. x<br>B. y...": cắt trước chữ A đầu tiên sau <br> / đầu chuỗi
+            const sp = part.split(/(?:<br\s*\/?>|^)\s*A[\.\)\:：]/i);
+            if (sp.length > 1) part = sp[0];
+          }
+          return CLEAN(part);
         };
         const byKey = new Map<string, BankQuestion>();
         const merged: BankQuestion[] = [];
         for (const q of raw.questions) {
-          const key = normalize(q.html);
+          const stem = STEM(q.html || '');
+          const ansText = CLEAN(q.answer?.text || '');
+          // Gộp CÙNG đề + CÙNG đáp án đúng; nếu chưa có đáp án thì so sánh toàn bộ câu
+          const key = stem && ansText ? `S|${stem}|A|${ansText}` : `F|${CLEAN(q.html || '')}`;
           if (!key) { merged.push(q); continue; }
           const existing = byKey.get(key);
           if (existing) {
