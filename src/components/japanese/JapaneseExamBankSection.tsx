@@ -69,7 +69,8 @@ const QuestionCard: React.FC<{
   picked?: string;
   onToggleMark: () => void;
   onPick: (key: string) => void;
-}> = ({ q, index, marked, forceOpen, picked, onToggleMark, onPick }) => {
+  onReset?: () => void;
+}> = ({ q, index, marked, forceOpen, picked, onToggleMark, onPick, onReset }) => {
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const A = q.answer || {};
@@ -80,6 +81,38 @@ const QuestionCard: React.FC<{
   useEffect(() => {
     const root = ref.current;
     if (!root) return;
+    // Nếu câu hỏi để các đáp án dưới dạng "A. と<br>B. は..." trong q-block,
+    // chuyển chúng thành các .q-option để bấm chọn được.
+    if (!root.querySelector('.q-option')) {
+      const blocks = Array.from(root.querySelectorAll<HTMLElement>('.q-block, div, p'));
+      for (const b of blocks) {
+        const html = b.innerHTML;
+        // Yêu cầu có đủ cặp A. / B. / C. / D. cách nhau bởi <br>
+        if (!/(?:^|<br\s*\/?>)\s*A[\.\):：]/i.test(html)) continue;
+        if (!/(?:^|<br\s*\/?>)\s*B[\.\):：]/i.test(html)) continue;
+        const m = html.split(/<br\s*\/?>(?=\s*[A-D][\.\):：])/);
+        if (m.length < 2) continue;
+        const prefix = m[0];
+        const picks = m.slice(1).map((chunk) => chunk.match(/^\s*([A-D])[\.\):：]\s*(.*)$/is)).filter(Boolean) as RegExpMatchArray[];
+        if (picks.length < 2) continue;
+        const wrap = document.createElement('div');
+        wrap.className = 'q-options';
+        for (const pm of picks) {
+          const opt = document.createElement('div');
+          opt.className = 'q-option';
+          const bEl = document.createElement('b');
+          bEl.textContent = pm[1];
+          const sEl = document.createElement('span');
+          sEl.innerHTML = pm[2];
+          opt.appendChild(bEl);
+          opt.appendChild(sEl);
+          wrap.appendChild(opt);
+        }
+        b.innerHTML = prefix;
+        b.parentElement!.insertBefore(wrap, b.nextSibling);
+        break;
+      }
+    }
     const opts = Array.from(root.querySelectorAll<HTMLElement>('.q-option'));
     opts.forEach((el) => {
       const key = (el.querySelector('b')?.textContent || '').trim();
@@ -169,7 +202,21 @@ const QuestionCard: React.FC<{
               ? `Chưa đúng – bạn chọn ${picked}`
               : 'Đáp án & giải thích'}
           </span>
-          {reveal ? <EyeOff className="w-4 h-4 text-slate-400" /> : <Eye className="w-4 h-4 text-slate-400" />}
+          <span className="flex items-center gap-2">
+            {picked && onReset && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => { e.stopPropagation(); onReset(); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onReset(); } }}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-200 hover:bg-indigo-500 hover:text-white dark:bg-slate-800 dark:hover:bg-indigo-500 text-slate-700 dark:text-slate-200 text-[11px] font-bold cursor-pointer transition-colors"
+                title="Bỏ lựa chọn và làm lại câu này"
+              >
+                <RotateCcw className="w-3 h-3" /> Làm lại
+              </span>
+            )}
+            {reveal ? <EyeOff className="w-4 h-4 text-slate-400" /> : <Eye className="w-4 h-4 text-slate-400" />}
+          </span>
         </button>
         {reveal && (
           <div className="px-4 pb-4 space-y-2 text-sm">
@@ -251,7 +298,27 @@ export const JapaneseExamBankSection: React.FC<{
   useEffect(() => {
     let alive = true;
     import('../../data/jpd123ExamBank.json')
-      .then((m) => alive && setData((m.default || m) as unknown as BankData))
+      .then((m) => {
+        if (!alive) return;
+        const raw = ((m.default || m) as unknown as BankData);
+        const byHtml = new Map<string, BankQuestion>();
+        const merged: BankQuestion[] = [];
+        for (const q of raw.questions) {
+          const key = (q.html || '').replace(/\s+/g, ' ').trim();
+          const existing = byHtml.get(key);
+          if (existing) {
+            const seen = new Set(existing.sources.map((s) => s.file + '|' + s.page));
+            for (const s of q.sources) {
+              const k = s.file + '|' + s.page;
+              if (!seen.has(k)) { existing.sources.push(s); seen.add(k); }
+            }
+            continue;
+          }
+          byHtml.set(key, q);
+          merged.push(q);
+        }
+        setData({ ...raw, questions: merged });
+      })
       .catch(() => alive && setError('Không tải được ngân hàng câu hỏi.'));
     return () => {
       alive = false;
@@ -333,6 +400,16 @@ export const JapaneseExamBankSection: React.FC<{
       } catch {}
       return next;
     });
+  };
+
+  const resetPick = (q: BankQuestion) => {
+    setPicks((prev) => {
+      const next = { ...prev };
+      delete next[q.id];
+      try { saveAccountState(PICK_KEY, next); } catch {}
+      return next;
+    });
+    sound.playClick();
   };
 
   const resetPicks = () => {
@@ -551,6 +628,7 @@ export const JapaneseExamBankSection: React.FC<{
               picked={picks[cur.id]}
               onToggleMark={() => toggleMark(cur.id)}
               onPick={(k) => pick(cur, k)}
+              onReset={() => resetPick(cur)}
             />
             <div className="flex items-center justify-between gap-2">
               <button
@@ -634,6 +712,7 @@ export const JapaneseExamBankSection: React.FC<{
                 picked={picks[q.id]}
                 onToggleMark={() => toggleMark(q.id)}
                 onPick={(k) => pick(q, k)}
+                onReset={() => resetPick(q)}
               />
             ))}
           </div>
