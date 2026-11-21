@@ -413,6 +413,16 @@ export const QuizPage: React.FC<QuizPageProps> = ({
     return () => clearInterval(timer);
   }, [timeLeft, currentOptions.mode, submitExam]);
 
+  const handleResetAnswer = () => {
+    if (!currentQuestion) return;
+    setUserAnswers((prev) => {
+      const next = { ...prev };
+      delete next[currentQuestion.id];
+      return next;
+    });
+    sound.playClick();
+  };
+
   const handleAnswerSelect = (selectedIndex: number | number[]) => {
     if (!currentQuestion) return;
     setUserAnswers((prev) => ({
@@ -599,6 +609,7 @@ export const QuizPage: React.FC<QuizPageProps> = ({
                   isAnswered={userAnswers[currentQuestion.id] !== undefined}
                   isExamMode={false}
                   instantFeedback={true}
+                  onResetAnswer={handleResetAnswer}
                   quizId={quiz.id}
                   quizTitle={quiz.title}
                 />

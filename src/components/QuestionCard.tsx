@@ -6,7 +6,7 @@ import { NoteBox } from './NoteBox';
 import { DifficultyBadge } from './DifficultyBadge';
 import { ClickableText } from './ClickableText';
 import { AiQuestionModal } from './AiQuestionModal';
-import { CheckCircle2, XCircle, ArrowRight, ArrowLeft, Sparkles, AlertCircle, Check, HelpCircle } from 'lucide-react';
+import { CheckCircle2, XCircle, ArrowRight, ArrowLeft, Sparkles, AlertCircle, Check, HelpCircle, RotateCcw } from 'lucide-react';
 import { sound } from '../utils/audio';
 
 interface QuestionCardProps {
@@ -15,6 +15,7 @@ interface QuestionCardProps {
   totalQuestions: number;
   onAnswerSelected: (selectedIndex: number | number[]) => void;
   onNextQuestion: () => void;
+  onResetAnswer?: () => void;
   onPrevQuestion?: () => void;
   isLastQuestion: boolean;
   selectedAnswer: number | number[] | null;
@@ -31,6 +32,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
   totalQuestions,
   onAnswerSelected,
   onNextQuestion,
+  onResetAnswer,
   onPrevQuestion,
   isLastQuestion,
   selectedAnswer,
@@ -401,14 +403,27 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
               </button>
             ) : <div />}
 
-            <button
-              type="button"
-              onClick={onNextQuestion}
-              className="inline-flex items-center gap-2 px-6 py-3 font-semibold text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 rounded-xl shadow-md hover:shadow-lg transition-all active:scale-[0.98] cursor-pointer"
-            >
-              <span>{isLastQuestion ? 'Hoàn thành bài học' : 'Câu tiếp theo'}</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              {onResetAnswer && (
+                <button
+                  type="button"
+                  onClick={onResetAnswer}
+                  className="inline-flex items-center gap-1.5 px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-xl transition-all cursor-pointer shadow-xs active:scale-[0.98]"
+                  title="Bỏ lựa chọn và làm lại câu này"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>Làm lại</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onNextQuestion}
+                className="inline-flex items-center gap-2 px-6 py-3 font-semibold text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 rounded-xl shadow-md hover:shadow-lg transition-all active:scale-[0.98] cursor-pointer"
+              >
+                <span>{isLastQuestion ? 'Hoàn thành bài học' : 'Câu tiếp theo'}</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       )}
