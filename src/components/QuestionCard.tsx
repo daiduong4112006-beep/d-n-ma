@@ -6,7 +6,8 @@ import { NoteBox } from './NoteBox';
 import { DifficultyBadge } from './DifficultyBadge';
 import { ClickableText } from './ClickableText';
 import { AiQuestionModal } from './AiQuestionModal';
-import { CheckCircle2, XCircle, ArrowRight, ArrowLeft, Sparkles, AlertCircle, Check, HelpCircle, RotateCcw } from 'lucide-react';
+import { callAiApi } from '../utils/aiClient';
+import { CheckCircle2, XCircle, ArrowRight, ArrowLeft, Sparkles, AlertCircle, Check, HelpCircle, RotateCcw, Languages } from 'lucide-react';
 import { sound } from '../utils/audio';
 
 interface QuestionCardProps {
@@ -44,6 +45,9 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
 }) => {
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiTargetOptionIndex, setAiTargetOptionIndex] = useState<number | null>(null);
+  const [translation, setTranslation] = useState<{question: string; options: string[]} | null>(null);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translateError, setTranslateError] = useState('');
 
   const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
   const correctList = useMemo(() => {
@@ -72,6 +76,11 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
     }
   }, [question.id, selectedAnswer]);
 
+  useEffect(() => {
+    setTranslation(null);
+    setTranslateError('');
+  }, [question.id]);
+
   const selArr = useMemo(() => {
     if (Array.isArray(selectedAnswer)) return selectedAnswer;
     if (typeof selectedAnswer === 'number') return [selectedAnswer];
@@ -82,6 +91,45 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
     if (selArr.length === 0) return false;
     return selArr.length === correctList.length && correctList.every((c) => selArr.includes(c));
   }, [selArr, correctList]);
+
+  const handleTranslate = async () => {
+    if (translation || isTranslating) return;
+    setIsTranslating(true);
+    setTranslateError('');
+    try {
+      const prompt = [
+        'Hãy dịch câu hỏi trắc nghiệm sau và 4 đáp án sang tiếng Việt chuẩn, giữ nguyên code/công thức/tên hàm/kí hiệu. Chỉ trả về JSON hợp lệ, không giải thích thêm.',
+        'Định dạng chính xác: {"question":"<Việt>","options":["<A Việt>","<B Việt>","<C Việt>","<D Việt>"]}',
+        '',
+        `Câu hỏi: ${question.question}`,
+        ...question.options.map((o, i) => `${String.fromCharCode(65 + i)}. ${o}`),
+      ].join('\n');
+      const data = await callAiApi<any>({
+        endpoint: '/api/ai/translate',
+        payload: {
+          questionText: question.question,
+          options: question.options,
+          targetLang: 'vi',
+          userPrompt: prompt,
+        },
+        systemPromptFallback: 'Bạn là người dịch chính xác Anh-Việt cho tài liệu kỹ thuật. Chỉ trả về JSON như yêu cầu.',
+        userPromptFallback: prompt,
+      });
+      const text = (data?.reply || data?.text || '').trim();
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('AI trả về không đúng định dạng.');
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (!parsed.question || !Array.isArray(parsed.options)) throw new Error('Thiếu trường question/options.');
+      setTranslation({
+        question: String(parsed.question).trim(),
+        options: parsed.options.slice(0, question.options.length).map((o: any) => String(o).trim()),
+      });
+    } catch (e: any) {
+      setTranslateError(e?.needsApiKey ? 'Cần Google Gemini API Key. Bấm 🔑 ở Hỏi AI để nhập.' : 'Không dịch được lúc này.');
+    } finally {
+      setIsTranslating(false);
+    }
+  };
 
   const handleOpenAiForOption = (optionIdx: number | null) => {
     setAiTargetOptionIndex(optionIdx);
@@ -372,17 +420,51 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
               </div>
             </div>
 
-            {selArr.length > 0 && selArr[0] >= 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {selArr.length > 0 && selArr[0] >= 0 && (
+                <button
+                  type="button"
+                  onClick={() => handleOpenAiForOption(selArr[0])}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs font-extrabold hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-all shadow-xs cursor-pointer hover:scale-105"
+                >
+                  <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  <span>Hỏi AI vì sao đáp án này {isCorrect ? 'ĐÚNG' : 'SAI'}</span>
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => handleOpenAiForOption(selArr[0])}
-                className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs font-extrabold hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-all shadow-xs cursor-pointer hover:scale-105"
+                onClick={handleTranslate}
+                disabled={isTranslating || !!translation}
+                className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs font-extrabold hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-all shadow-xs cursor-pointer hover:scale-105 disabled:opacity-60 disabled:cursor-not-allowed"
+                title="Dùng AI để dịch câu hỏi và 4 đáp án sang tiếng Việt"
               >
-                <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                <span>Hỏi AI vì sao đáp án này {isCorrect ? 'ĐÚNG' : 'SAI'}</span>
+                <Languages className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span>{isTranslating ? 'Đang dịch…' : translation ? 'Đã dịch' : 'Dịch tiếng Việt'}</span>
               </button>
-            )}
+            </div>
           </div>
+          {(translation || translateError) && (
+            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-4 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+              <div className="flex items-center gap-2 text-xs font-extrabold text-emerald-700 dark:text-emerald-300">
+                <Languages className="w-3.5 h-3.5" /> Bản dịch tiếng Việt
+              </div>
+              {translateError ? (
+                <p className="text-xs text-rose-600 dark:text-rose-400">{translateError}</p>
+              ) : translation ? (
+                <div className="text-sm text-slate-800 dark:text-slate-100 space-y-1.5">
+                  <p className="font-bold">{translation.question}</p>
+                  <ul className="pl-0 space-y-1 text-[13px]">
+                    {translation.options.map((o, i) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="font-bold text-emerald-700 dark:text-emerald-300 shrink-0">{String.fromCharCode(65 + i)}.</span>
+                        <span>{o}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          )}
 
           {/* Explanation & Note */}
           <div className="grid grid-cols-1 gap-3">
